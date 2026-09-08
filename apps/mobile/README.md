@@ -132,9 +132,10 @@ iOS later: set variable `ENABLE_IOS_IPA=true` and ASC secrets. Do not buy Apple 
 
 1. Pay $25, create app `SocietyHub`, id `com.societyhub.societyhub_mobile`, enable Play App Signing.
 2. Upload the CI (or local) AAB to the **internal** track first.
-3. Privacy policy URL: `https://app.societyhub.in/privacy` (or your hosted Client App `/privacy`).
+3. Privacy policy URL: `https://societyhub-client.onrender.com/privacy`.
 4. Data safety: account, phone, photos/videos for complaints.
-5. Production after smoke; staged rollout 20% → 100%.
+5. Store listing files: [`store/`](store/) (icon, feature graphic, 4 phone screenshots). Copy in [Go-Live §7.2a](../../docs/10-Go-Live.md).
+6. Production after smoke; staged rollout 20% → 100%.
 
 ## Next: iOS (not this phase)
 

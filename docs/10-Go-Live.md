@@ -326,6 +326,37 @@ Local debug: [apps/mobile/README.md](../apps/mobile/README.md) and [08-Local-Dev
    - Play: `SocietyHub` / application id `com.societyhub.societyhub_mobile`
    - App Store Connect: bundle `com.societyhub.societyhubMobile`
 
+### 7.2a Default store listing (en-IN)
+
+Assets live in [`apps/mobile/store/`](../apps/mobile/store/).
+
+| Field | Value |
+|---|---|
+| App name | SocietyHub |
+| Short description | Raise and track housing society complaints from your phone. |
+| Full description | See below |
+| App icon | `apps/mobile/store/icon-512.png` |
+| Feature graphic | `apps/mobile/store/feature-graphic-1024x500.png` |
+| Phone screenshots | `screenshot-01` … `screenshot-04` in the same folder |
+| Video | empty |
+| Website | `https://societyhub-client.onrender.com` |
+| Privacy | `https://societyhub-client.onrender.com/privacy` |
+| Delete-data URL | same privacy URL |
+
+Full description:
+
+```
+SocietyHub helps housing-society residents raise and track complaints in one place.
+
+You must already be onboarded by your society admin. Sign in with mobile OTP, Google, email, or a PIN. Then submit a complaint, add optional photos or video, and follow the ticket until it is resolved.
+
+Committee members can review the queue, update status, and add a short note or evidence photos.
+
+This app is for society operations. It is not a substitute for emergency services.
+
+Privacy policy: https://societyhub-client.onrender.com/privacy
+```
+
 ### 7.2 Local builds (no store)
 
 ```bash
