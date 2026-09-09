@@ -20,7 +20,7 @@ on:
         type: boolean
         default: false
       upload_play:
-        description: Upload AAB to Play internal (requires ENABLE_PLAY_UPLOAD + PLAY_SERVICE_ACCOUNT_JSON)
+        description: Upload AAB and roll out Play internal (requires ENABLE_PLAY_UPLOAD + PLAY_SERVICE_ACCOUNT_JSON)
         type: boolean
         default: false
 
@@ -135,7 +135,7 @@ jobs:
           retention-days: 30
 
   play-internal:
-    name: Play internal (draft)
+    name: Play internal
     needs: android-aab
     if: >
       vars.ENABLE_PLAY_UPLOAD == 'true' &&
@@ -169,7 +169,7 @@ jobs:
           packageName: com.societyhub.societyhub_mobile
           releaseFiles: ${{ steps.aab.outputs.path }}
           track: internal
-          status: draft
+          status: completed
 
   ios-ipa:
     name: iOS IPA

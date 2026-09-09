@@ -12,7 +12,7 @@ GitHub Actions workflow "Mobile CI" (.github/workflows/mobile.yml).
 CI can:
   1) flutter analyze + test
   2) Sign a release AAB (upload keystore in GitHub secrets)
-  3) Upload that AAB as a DRAFT on the Play INTERNAL track
+  3) Upload that AAB and roll out the Play INTERNAL track (testers can install)
 
 CI never publishes Production. Production stays a Play Console click.
 New personal Play accounts also need Closed testing: 12 testers for 14 days
@@ -107,7 +107,8 @@ GitHub → Actions → Mobile CI → Run workflow
 
 Result:
   Artifact societyhub-android-aab
-  Play Console → Internal testing → a DRAFT release (you still click Review)
+  Play Console → Internal testing → release is live for opted-in testers
+  Closed testing testers and Production stay Console clicks.
 
 Local AAB (same signing), if CI is down:
   apps/mobile/build/app/outputs/bundle/release/app-release.aab
