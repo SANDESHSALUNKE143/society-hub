@@ -17,10 +17,25 @@ class AccountPage extends ConsumerStatefulWidget {
   ConsumerState<AccountPage> createState() => _AccountPageState();
 }
 
+class _VehicleLine {
+  _VehicleLine(this.kind, {String? plate, this.parkingPurchased = false}) {
+    registration.text = plate ?? '';
+  }
+  final String kind;
+  final registration = TextEditingController();
+  bool parkingPurchased = false;
+  void dispose() => registration.dispose();
+}
+
 class _AccountPageState extends ConsumerState<AccountPage> {
   final _pin = TextEditingController();
   final _emergency = TextEditingController();
-  final _vehicle = TextEditingController();
+  final _adults = TextEditingController(text: '0');
+  final _children = TextEditingController(text: '0');
+  final _seniors = TextEditingController(text: '0');
+  final List<_VehicleLine> _twoWheelers = [];
+  final List<_VehicleLine> _fourWheelers = [];
+  bool _pngGas = false;
   ResidentProfileDto? _profile;
   bool _busy = false;
   bool _profileBusy = false;
@@ -39,8 +54,46 @@ class _AccountPageState extends ConsumerState<AccountPage> {
   void dispose() {
     _pin.dispose();
     _emergency.dispose();
-    _vehicle.dispose();
+    _adults.dispose();
+    _children.dispose();
+    _seniors.dispose();
+    for (final v in [..._twoWheelers, ..._fourWheelers]) {
+      v.dispose();
+    }
     super.dispose();
+  }
+
+  int _remainingForUser(int household, int mine, int included) {
+    final others = household - mine;
+    final left = included - (others < 0 ? 0 : others);
+    return left < 0 ? 0 : left;
+  }
+
+  void _applyVehicles(ResidentProfileDto profile) {
+    for (final v in [..._twoWheelers, ..._fourWheelers]) {
+      v.dispose();
+    }
+    _twoWheelers.clear();
+    _fourWheelers.clear();
+    final vehicles = profile.vehicles;
+    if (vehicles.isEmpty && (profile.vehicleNumber ?? '').isNotEmpty) {
+      _fourWheelers.add(
+        _VehicleLine('four_wheeler', plate: profile.vehicleNumber),
+      );
+      return;
+    }
+    for (final v in vehicles) {
+      final line = _VehicleLine(
+        v.kind,
+        plate: v.registrationNumber,
+        parkingPurchased: v.parkingPurchased,
+      );
+      if (v.kind == 'two_wheeler') {
+        _twoWheelers.add(line);
+      } else {
+        _fourWheelers.add(line);
+      }
+    }
   }
 
   Future<void> _loadProfile() async {
@@ -50,7 +103,11 @@ class _AccountPageState extends ConsumerState<AccountPage> {
       setState(() {
         _profile = profile;
         _emergency.text = profile.emergencyContact ?? '';
-        _vehicle.text = profile.vehicleNumber ?? '';
+        _pngGas = profile.flat?.pngGasConnection ?? false;
+        _adults.text = '${profile.flat?.adultCount ?? 0}';
+        _children.text = '${profile.flat?.childCount ?? 0}';
+        _seniors.text = '${profile.flat?.seniorCitizenCount ?? 0}';
+        _applyVehicles(profile);
       });
     } on ApiException {
       // Profile is optional for staff without a residents row.
@@ -83,17 +140,47 @@ class _AccountPageState extends ConsumerState<AccountPage> {
       _profileMessage = null;
     });
     try {
+      final flat = _profile?.flat;
+      List<Map<String, Object?>>? vehicles;
+      if (flat != null) {
+        final myTwo = _profile!.vehicles.where((v) => v.kind == 'two_wheeler').length;
+        final myFour = _profile!.vehicles.where((v) => v.kind == 'four_wheeler').length;
+        final remainingTw = _remainingForUser(flat.twoWheelerCount, myTwo, 2);
+        final remainingFw = _remainingForUser(flat.fourWheelerCount, myFour, 1);
+        vehicles = [];
+        void collect(List<_VehicleLine> rows, String kind, int included) {
+          for (var i = 0; i < rows.length; i++) {
+            final plate = rows[i].registration.text.trim().toUpperCase();
+            vehicles!.add({
+              'kind': kind,
+              'registrationNumber': plate.length >= 4 ? plate : null,
+              'parkingPurchased': i >= included ? rows[i].parkingPurchased : false,
+            });
+          }
+        }
+
+        collect(_twoWheelers, 'two_wheeler', remainingTw);
+        collect(_fourWheelers, 'four_wheeler', remainingFw);
+      }
       final next = await ref.read(apiProvider).updateProfile(
             emergencyContact: _emergency.text.trim().isEmpty
                 ? null
                 : _emergency.text.trim(),
-            vehicleNumber: _vehicle.text.trim().isEmpty
-                ? null
-                : _vehicle.text.trim().toUpperCase(),
+            pngGasConnection: flat == null ? null : _pngGas,
+            adultCount: flat == null ? null : int.tryParse(_adults.text.trim()) ?? 0,
+            childCount: flat == null ? null : int.tryParse(_children.text.trim()) ?? 0,
+            seniorCitizenCount:
+                flat == null ? null : int.tryParse(_seniors.text.trim()) ?? 0,
+            vehicles: vehicles,
           );
       if (!mounted) return;
       setState(() {
         _profile = next;
+        _pngGas = next.flat?.pngGasConnection ?? _pngGas;
+        _adults.text = '${next.flat?.adultCount ?? 0}';
+        _children.text = '${next.flat?.childCount ?? 0}';
+        _seniors.text = '${next.flat?.seniorCitizenCount ?? 0}';
+        _applyVehicles(next);
         _profileMessage = 'Profile updated';
       });
     } on ApiException catch (e) {
@@ -101,6 +188,37 @@ class _AccountPageState extends ConsumerState<AccountPage> {
     } finally {
       if (mounted) setState(() => _profileBusy = false);
     }
+  }
+
+  List<Widget> _vehicleEditors(List<_VehicleLine> rows, int included) {
+    return [
+      for (var i = 0; i < rows.length; i++) ...[
+        TextField(
+          controller: rows[i].registration,
+          textCapitalization: TextCapitalization.characters,
+          decoration: InputDecoration(
+            labelText: i >= included ? 'Registration (extra, optional)' : 'Registration (optional)',
+          ),
+        ),
+        if (i >= included)
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Purchased parking'),
+            value: rows[i].parkingPurchased,
+            onChanged: (v) => setState(() => rows[i].parkingPurchased = v ?? false),
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: () => setState(() {
+              rows[i].dispose();
+              rows.removeAt(i);
+            }),
+            child: const Text('Remove'),
+          ),
+        ),
+      ],
+    ];
   }
 
   Widget _flatField(String label, String value, {Key? key}) {
@@ -229,10 +347,24 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                       ),
                     ),
                     SizedBox(
+                      width: 140,
+                      child: _flatField(
+                        'PNG gas',
+                        flat.pngGasConnection ? 'Taken' : 'Not taken',
+                      ),
+                    ),
+                    SizedBox(
                       width: 280,
                       child: _flatField(
                         'Occupancy',
                         flat.isOwner ? 'Owner' : 'Tenant / occupant',
+                      ),
+                    ),
+                    SizedBox(
+                      width: 280,
+                      child: _flatField(
+                        'Family members',
+                        '${flat.adultCount} adult${flat.adultCount == 1 ? '' : 's'}, ${flat.childCount} child${flat.childCount == 1 ? '' : 'ren'}, ${flat.seniorCitizenCount} senior citizen${flat.seniorCitizenCount == 1 ? '' : 's'}',
                       ),
                     ),
                   ],
@@ -269,16 +401,95 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                   hintText: 'Name & phone number',
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                key: AppKeys.accountVehicleNumber,
-                controller: _vehicle,
-                textCapitalization: TextCapitalization.characters,
-                decoration: const InputDecoration(
-                  labelText: 'Vehicle number',
-                  hintText: 'MH12AB1234',
+              if (flat != null) ...[
+                const SizedBox(height: 12),
+                const Text('PNG gas connection'),
+                RadioListTile<bool>(
+                  key: AppKeys.accountPngYes,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Taken'),
+                  value: true,
+                  groupValue: _pngGas,
+                  onChanged: (v) => setState(() => _pngGas = v ?? false),
                 ),
-              ),
+                RadioListTile<bool>(
+                  key: AppKeys.accountPngNo,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Not taken'),
+                  value: false,
+                  groupValue: _pngGas,
+                  onChanged: (v) => setState(() => _pngGas = v ?? false),
+                ),
+                const SizedBox(height: 8),
+                const Text('Family members in this flat'),
+                const SizedBox(height: 8),
+                TextField(
+                  key: AppKeys.accountAdults,
+                  controller: _adults,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Adults'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  key: AppKeys.accountChildren,
+                  controller: _children,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Children'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  key: AppKeys.accountSeniors,
+                  controller: _seniors,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Senior citizens'),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Two-wheelers (${_remainingForUser(flat.twoWheelerCount, _profile?.vehicles.where((v) => v.kind == 'two_wheeler').length ?? 0, 2)} included slots left)',
+                ),
+                ..._vehicleEditors(
+                  _twoWheelers,
+                  _remainingForUser(
+                    flat.twoWheelerCount,
+                    _profile?.vehicles.where((v) => v.kind == 'two_wheeler').length ?? 0,
+                    2,
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () =>
+                        setState(() => _twoWheelers.add(_VehicleLine('two_wheeler'))),
+                    child: const Text('Add two-wheeler'),
+                  ),
+                ),
+                Text(
+                  'Four-wheelers (${_remainingForUser(flat.fourWheelerCount, _profile?.vehicles.where((v) => v.kind == 'four_wheeler').length ?? 0, 1)} included slots left)',
+                ),
+                ..._vehicleEditors(
+                  _fourWheelers,
+                  _remainingForUser(
+                    flat.fourWheelerCount,
+                    _profile?.vehicles.where((v) => v.kind == 'four_wheeler').length ?? 0,
+                    1,
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () =>
+                        setState(() => _fourWheelers.add(_VehicleLine('four_wheeler'))),
+                    child: const Text('Add four-wheeler'),
+                  ),
+                ),
+              ] else
+                const Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: Text(
+                    'PNG, family counts, and vehicles can be updated after an admin links a flat.',
+                    style: TextStyle(color: Colors.black54, fontSize: 14),
+                  ),
+                ),
               const SizedBox(height: 12),
               ShPrimaryButton(
                 label: 'Save profile',

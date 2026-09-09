@@ -122,6 +122,7 @@
       "name": "@society-hub/validation",
       "version": "0.0.1",
       "dependencies": {
+        "@society-hub/types": "workspace:*",
         "zod": "^3.25.67",
       },
     },

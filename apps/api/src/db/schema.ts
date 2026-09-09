@@ -79,6 +79,11 @@ export const flats = mysqlTable(
     floor: int("floor"),
     /** Primary parking slot label linked to this flat (optional). */
     parkingSlot: varchar("parking_slot", { length: 32 }),
+    /** Whether this flat has taken a PNG gas connection. */
+    pngGasConnection: boolean("png_gas_connection").notNull().default(false),
+    adultCount: int("adult_count").notNull().default(0),
+    childCount: int("child_count").notNull().default(0),
+    seniorCitizenCount: int("senior_citizen_count").notNull().default(0),
     /** Extensible JSON bag for society-specific flat attributes. */
     detailsJson: text("details_json"),
     ...timestamps,
@@ -321,6 +326,24 @@ export const residentProfiles = mysqlTable(
   },
   (t) => [
     uniqueIndex("resident_profiles_tenant_user_uidx").on(t.tenantId, t.userId),
+  ],
+);
+
+export const residentVehicles = mysqlTable(
+  "resident_vehicles",
+  {
+    id: id(),
+    tenantId: tenantId(),
+    userId: char("user_id", { length: 36 }).notNull(),
+    kind: mysqlEnum("kind", ["two_wheeler", "four_wheeler"]).notNull(),
+    registrationNumber: varchar("registration_number", { length: 32 }),
+    parkingPurchased: boolean("parking_purchased").notNull().default(false),
+    parkingSlot: varchar("parking_slot", { length: 32 }),
+    sortOrder: int("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    index("resident_vehicles_tenant_user_idx").on(t.tenantId, t.userId),
   ],
 );
 

@@ -127,18 +127,30 @@ class SocietyHubApi {
 
   ApiException _mapError(DioException e) {
     final data = e.response?.data;
-    if (data is Map<String, dynamic>) {
+    if (data is Map) {
+      final map = Map<String, dynamic>.from(data);
+      final apiMessage = map['message'] as String?;
+      if (apiMessage != null && apiMessage.trim().isNotEmpty) {
+        return ApiException(
+          code: map['code'] as String? ?? 'http_error',
+          message: apiMessage,
+          statusCode: e.response?.statusCode,
+          details: map['details'],
+        );
+      }
+    }
+    final status = e.response?.statusCode;
+    if (status == 404 || status == 502 || status == 503) {
       return ApiException(
-        code: data['code'] as String? ?? 'http_error',
-        message: data['message'] as String? ?? e.message ?? 'Request failed',
-        statusCode: e.response?.statusCode,
-        details: data['details'],
+        code: 'http_error',
+        message: 'Cannot reach the SocietyHub server.',
+        statusCode: status,
       );
     }
     return ApiException(
       code: 'http_error',
       message: e.message ?? 'Request failed',
-      statusCode: e.response?.statusCode,
+      statusCode: status,
     );
   }
 
@@ -341,13 +353,23 @@ class SocietyHubApi {
   Future<ResidentProfileDto> updateProfile({
     String? emergencyContact,
     String? vehicleNumber,
+    bool? pngGasConnection,
+    int? adultCount,
+    int? childCount,
+    int? seniorCitizenCount,
+    List<Map<String, Object?>>? vehicles,
   }) {
     return _request(
       '/v1/profile',
       method: 'PATCH',
       data: {
         'emergencyContact': emergencyContact,
-        'vehicleNumber': vehicleNumber,
+        if (vehicleNumber != null) 'vehicleNumber': vehicleNumber,
+        if (pngGasConnection != null) 'pngGasConnection': pngGasConnection,
+        if (adultCount != null) 'adultCount': adultCount,
+        if (childCount != null) 'childCount': childCount,
+        if (seniorCitizenCount != null) 'seniorCitizenCount': seniorCitizenCount,
+        if (vehicles != null) 'vehicles': vehicles,
       },
       parse: (json) =>
           ResidentProfileDto.fromJson(json as Map<String, dynamic>),
@@ -440,6 +462,15 @@ class SocietyHubApi {
     required String phone,
     required String flatId,
     String? email,
+    int? floor,
+    String? parkingSlot,
+    bool isOwner = true,
+    String? emergencyContact,
+    bool? pngGasConnection,
+    int? adultCount,
+    int? childCount,
+    int? seniorCitizenCount,
+    List<Map<String, Object?>>? vehicles,
   }) {
     return _request(
       '/v1/admin/residents',
@@ -449,6 +480,16 @@ class SocietyHubApi {
         'phone': phone,
         'flatId': flatId,
         if (email != null && email.isNotEmpty) 'email': email,
+        if (floor != null) 'floor': floor,
+        if (parkingSlot != null && parkingSlot.isNotEmpty) 'parkingSlot': parkingSlot,
+        'isOwner': isOwner,
+        if (emergencyContact != null && emergencyContact.isNotEmpty)
+          'emergencyContact': emergencyContact,
+        if (pngGasConnection != null) 'pngGasConnection': pngGasConnection,
+        if (adultCount != null) 'adultCount': adultCount,
+        if (childCount != null) 'childCount': childCount,
+        if (seniorCitizenCount != null) 'seniorCitizenCount': seniorCitizenCount,
+        if (vehicles != null) 'vehicles': vehicles,
       },
       parse: (json) {
         final map = json as Map<String, dynamic>;

@@ -113,7 +113,7 @@ Use Swagger for live schemas. This Markdown guide is the **narrative + inventory
 
 **Rules**
 
-1. Platform users manage societies and **add people to a society team** via Manage (`POST /v1/manage/societies/:id/team`).
+1. Platform users manage societies and **list, add, and remove a society team** via Manage (`GET` / `POST` / `DELETE /v1/manage/societies/:id/team`).
 2. Manage platform employees (`superadmin`) may also sign in to the **Client App** and use **Admin mode** on any society by default (same Client Admin APIs as society staff).
 3. Society staff use **Client App Admin** for bills, notices, complaints triage, structure, etc.
 4. Residents use **Client App Resident** for their flat’s complaints, dues, notices, profile, visitors/bookings.
@@ -132,7 +132,8 @@ Allowed role enum values:
 1. `POST /v1/auth/password/login` as `superadmin@societyhub.local`
 2. `POST /v1/societies` — create society (+ optional chairperson fields)
 3. `POST /v1/manage/societies/{societyId}/team` — ensure a SocietyHub user is on the society staff team
-4. Chairperson signs in via OTP / password and uses Client App Admin
+4. `GET /v1/manage/societies/{societyId}/team` — list current society staff (shown on Manage society detail)
+5. Chairperson signs in via OTP / password and uses Client App Admin
 
 `POST /v1/societies` body example:
 
@@ -160,7 +161,7 @@ Save `id` as `societyId` / `tenantId`.
 
 ### C. Onboard a resident and raise a complaint
 
-1. Staff: `POST /v1/admin/residents` with `name`, `phone`, `email`, `flatId`
+1. Staff: `GET /v1/admin/residents` lists onboarded people (multiple rows may share a flat); `POST /v1/admin/residents` with `name`, `phone`, `flatId`, plus optional `email` and the same onboard fields as CSV (`floor`, `parkingSlot`, `isOwner`, `emergencyContact`, `vehicles`, `pngGasConnection`, `adultCount`, `childCount`, `seniorCitizenCount`). Match existing people by **phone**. Email must be unique if set. CSV `twoWheelers` / `fourWheelers` may be counts without registration numbers. Family counts (`adults`, `children`, `seniorCitizens`) are per flat.
 2. Resident: OTP verify with that phone
 3. `POST /v1/complaints` (resident uses linked flat; staff must pass `flatId`)
 4. Staff: `PATCH /v1/complaints/{id}/status`, `POST /v1/complaints/{id}/comments`
@@ -230,22 +231,24 @@ Auth required unless noted. **Staff** = society staff roles. **Platform** = `sup
 | GET | `/me` | Yes | Current user DTO |
 | GET | `/memberships` | Yes | Societies the user can enter |
 | POST | `/select-tenant` | Yes | `{ tenantId }` → new tokens |
-| PATCH | `/profile` | Yes | Alias of profile upsert (SDK) |
+| PATCH | `/profile` | Yes | Alias of `PATCH /v1/profile` (SDK) |
 
 ### 6.3 Profile — `/v1/profile`
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/` | Yes | `{ userId, emergencyContact, vehicleNumber }` |
-| PATCH | `/` | Yes | Partial upsert |
+| GET | `/` | Yes | Profile + linked flat (PNG, family counts, household vehicle counts) + this user's vehicles |
+| PATCH | `/` | Yes | Partial upsert: emergency contact, vehicles, PNG, `adultCount` / `childCount` / `seniorCitizenCount`. Household fields need a linked flat (`400 no_flat` otherwise). |
 
 ### 6.4 Manage (platform) — `/v1/manage/societies`
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
+| GET | `/:id/team` | Platform | List society staff (`TeamMemberDto[]`). 404 if society missing |
 | POST | `/:id/team` | Platform | Add/update society staff membership |
+| DELETE | `/:id/team/:userId` | Platform | Soft-remove staff roles (cannot remove self) |
 
-Body: `{ email? , phone?, name?, role }` — email **or** phone required. Role defaults to `chairperson`.
+Body (POST): `{ email? , phone?, name?, role }` — email **or** phone required. Role defaults to `chairperson`.
 
 ### 6.5 Societies & structure
 
@@ -269,16 +272,17 @@ Body: `{ email? , phone?, name?, role }` — email **or** phone required. Role d
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/v1/admin/flats` | Staff | Flat picker |
+| GET | `/v1/admin/flats` | Staff | Flat picker (includes household `twoWheelerCount` / `fourWheelerCount`) |
 | GET | `/v1/admin/structure` | Staff | Nested buildings→wings→flats |
 | GET | `/v1/admin/team` | Staff | Society team |
 | POST | `/v1/team` | Staff | Add team member `{ email?, phone?, name?, role }` — email or phone required |
 | PATCH | `/v1/team/:userId` | Staff | Update name / email / mobile / role |
 | DELETE | `/v1/team/:userId` | Staff | Soft-remove staff roles (cannot remove self) |
 | POST | `/v1/admin/invites` | Staff | Same as invitations create |
-| GET | `/v1/admin/flats` | Staff | Flats with floor + parking |
-| POST | `/v1/admin/residents` | Staff | Onboard one resident |
-| POST | `/v1/admin/residents/import` | Staff | Bulk CSV rows (`name,phone,email,flatNumber,…`) with validation |
+| GET | `/v1/admin/flats` | Staff | Flats with floor, parking, PNG, household vehicle counts |
+| GET | `/v1/admin/residents` | Staff | List onboarded residents (name, phone, email, flat) |
+| POST | `/v1/admin/residents` | Staff | Onboard one resident (same fields as CSV row + `flatId`) |
+| POST | `/v1/admin/residents/import` | Staff | Bulk CSV rows (`name,phone,email,flatNumber,wingName,floor,parkingSlot,isOwner,emergencyContact,vehicleNumber,twoWheelers,fourWheelers,pngGasConnection,adults,children,seniorCitizens`). `twoWheelers` / `fourWheelers` may be a **count** (`2`) or registration list (`MH12TW0001;MH12TW0002`). Plates optional. Family counts are per flat. |
 | POST | `/v1/invitations` | Staff | Invite via email and/or WhatsApp (Gupshup adapter; stub without keys) |
 | GET | `/v1/team` | Staff | Society team list |
 
@@ -462,6 +466,9 @@ Then `POST /v1/notices/{id}/publish`.
   "role": "secretary"
 }
 ```
+
+`GET /v1/manage/societies/{societyId}/team` returns the current staff list.  
+`DELETE /v1/manage/societies/{societyId}/team/{userId}` removes staff access (cannot remove yourself).
 
 Society Admin can also manage the current society's team:
 

@@ -18,6 +18,7 @@ import { VisitorsPage } from "./pages/VisitorsPage";
 import { ParkingPage } from "./pages/ParkingPage";
 import { BookingsPage } from "./pages/BookingsPage";
 import { OnboardPage } from "./pages/OnboardPage";
+import { ResidentsPage } from "./pages/ResidentsPage";
 import { InvitesPage } from "./pages/InvitesPage";
 import { TeamPage } from "./pages/TeamPage";
 import { AuditPage } from "./pages/AuditPage";
@@ -72,6 +73,7 @@ export function App() {
         <Route path="visitors" element={<VisitorsPage />} />
         <Route path="parking" element={<ParkingPage />} />
         <Route path="bookings" element={<BookingsPage />} />
+        <Route path="residents" element={<ResidentsPage />} />
         <Route path="onboard" element={<OnboardPage />} />
         <Route path="invites" element={<InvitesPage />} />
         <Route path="team" element={<TeamPage />} />

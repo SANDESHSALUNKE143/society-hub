@@ -111,8 +111,69 @@ export type FlatDto = {
   wingId?: string;
   floor?: number | null;
   parkingSlot?: string | null;
+  pngGasConnection?: boolean;
+  twoWheelerCount?: number;
+  fourWheelerCount?: number;
+  adultCount?: number;
+  childCount?: number;
+  seniorCitizenCount?: number;
   details?: Record<string, string> | null;
 };
+
+/** Included parking per flat until society settings override this (FR-ONB-7). */
+export const INCLUDED_TWO_WHEELER_PARKING = 2;
+export const INCLUDED_FOUR_WHEELER_PARKING = 1;
+
+export type ResidentVehicleKind = "two_wheeler" | "four_wheeler";
+
+export type ResidentVehicleDto = {
+  kind: ResidentVehicleKind;
+  registrationNumber: string | null;
+  parkingPurchased: boolean;
+  parkingSlot: string | null;
+};
+
+/** Expand a CSV/API count into vehicle rows (no plates). Extras are purchased. */
+export function vehiclesFromKindCount(
+  kind: ResidentVehicleKind,
+  count: number,
+): Array<{
+  kind: ResidentVehicleKind;
+  registrationNumber: null;
+  parkingPurchased: boolean;
+}> {
+  const n = Math.max(0, Math.floor(count));
+  const included =
+    kind === "two_wheeler"
+      ? INCLUDED_TWO_WHEELER_PARKING
+      : INCLUDED_FOUR_WHEELER_PARKING;
+  return Array.from({ length: n }, (_, i) => ({
+    kind,
+    registrationNumber: null,
+    parkingPurchased: i >= included,
+  }));
+}
+
+export function vehicleParkingQuotaMessage(
+  vehicles: Array<{
+    kind: ResidentVehicleKind;
+    parkingPurchased?: boolean;
+  }>,
+): string | null {
+  const two = vehicles.filter((v) => v.kind === "two_wheeler");
+  const four = vehicles.filter((v) => v.kind === "four_wheeler");
+  for (let i = 0; i < two.length; i++) {
+    if (i >= INCLUDED_TWO_WHEELER_PARKING && !two[i]!.parkingPurchased) {
+      return `Two-wheeler ${i + 1} needs purchased parking (first ${INCLUDED_TWO_WHEELER_PARKING} included)`;
+    }
+  }
+  for (let i = 0; i < four.length; i++) {
+    if (i >= INCLUDED_FOUR_WHEELER_PARKING && !four[i]!.parkingPurchased) {
+      return `Four-wheeler ${i + 1} needs purchased parking (first ${INCLUDED_FOUR_WHEELER_PARKING} included)`;
+    }
+  }
+  return null;
+}
 
 export type Paginated<T> = {
   items: T[];
@@ -175,6 +236,7 @@ export type ResidentProfileDto = {
   userId: string;
   emergencyContact: string | null;
   vehicleNumber: string | null;
+  vehicles: ResidentVehicleDto[];
   societyName: string | null;
   flat: {
     id: string;
@@ -183,6 +245,12 @@ export type ResidentProfileDto = {
     buildingName: string | null;
     floor: number | null;
     parkingSlot: string | null;
+    pngGasConnection: boolean;
+    adultCount: number;
+    childCount: number;
+    seniorCitizenCount: number;
+    twoWheelerCount: number;
+    fourWheelerCount: number;
     isOwner: boolean;
   } | null;
 };
@@ -322,6 +390,17 @@ export type TeamMemberDto = {
   email: string | null;
   phone: string | null;
   role: Role;
+};
+
+export type SocietyResidentDto = {
+  userId: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  flatId: string;
+  flatNumber: string;
+  wingName: string | null;
+  isOwner: boolean;
 };
 
 export type VisitorDto = {

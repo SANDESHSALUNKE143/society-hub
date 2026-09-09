@@ -111,9 +111,87 @@ describe("validation schemas", () => {
         name: "Ravi",
         phone: "7777777777",
         flatId,
-        email: "ravi@example.com",
+        adultCount: 2,
+        childCount: 1,
+        seniorCitizenCount: 1,
+      }),
+    ).toMatchObject({
+      adultCount: 2,
+      childCount: 1,
+      seniorCitizenCount: 1,
+    });
+    expect(
+      onboardResidentSchema.parse({
+        name: "Ravi",
+        phone: "7777777777",
+        flatId,
+        email: "",
       }).email,
-    ).toBe("ravi@example.com");
+    ).toBeNull();
+    expect(
+      onboardResidentSchema.parse({
+        name: "Ravi",
+        phone: "7777777777",
+        flatId,
+        vehicles: [{ kind: "two_wheeler" }, { kind: "two_wheeler" }],
+      }).vehicles,
+    ).toEqual([
+      {
+        kind: "two_wheeler",
+        registrationNumber: null,
+        parkingPurchased: false,
+        parkingSlot: undefined,
+      },
+      {
+        kind: "two_wheeler",
+        registrationNumber: null,
+        parkingPurchased: false,
+        parkingSlot: undefined,
+      },
+    ]);
+    expect(
+      onboardResidentSchema.parse({
+        name: "Ravi",
+        phone: "7777777777",
+        flatId,
+        email: "ravi@example.com",
+        pngGasConnection: true,
+        vehicles: [
+          { kind: "two_wheeler", registrationNumber: "MH12TW0001" },
+          { kind: "two_wheeler", registrationNumber: "MH12TW0002" },
+          {
+            kind: "two_wheeler",
+            registrationNumber: "MH12TW0003",
+            parkingPurchased: true,
+          },
+        ],
+      }).vehicles,
+    ).toHaveLength(3);
+    expect(() =>
+      onboardResidentSchema.parse({
+        name: "Ravi",
+        phone: "7777777777",
+        flatId,
+        email: "ravi@example.com",
+        vehicles: [
+          { kind: "two_wheeler", registrationNumber: "MH12TW0001" },
+          { kind: "two_wheeler", registrationNumber: "MH12TW0002" },
+          { kind: "two_wheeler", registrationNumber: "MH12TW0003" },
+        ],
+      }),
+    ).toThrow();
+    expect(() =>
+      onboardResidentSchema.parse({
+        name: "Ravi",
+        phone: "7777777777",
+        flatId,
+        email: "ravi@example.com",
+        vehicles: [
+          { kind: "four_wheeler", registrationNumber: "MH12FW0001" },
+          { kind: "four_wheeler", registrationNumber: "MH12FW0002" },
+        ],
+      }),
+    ).toThrow();
   });
 
   test("createComplaintSchema and status update", () => {
@@ -207,6 +285,16 @@ describe("validation schemas", () => {
       updateResidentProfileSchema.parse({ vehicleNumber: "MH12AB1234" })
         .vehicleNumber,
     ).toBe("MH12AB1234");
+    const household = updateResidentProfileSchema.parse({
+      pngGasConnection: true,
+      adultCount: 2,
+      childCount: 1,
+      seniorCitizenCount: 0,
+      vehicles: [{ kind: "two_wheeler" }, { kind: "two_wheeler" }],
+    });
+    expect(household.adultCount).toBe(2);
+    expect(household.vehicles).toHaveLength(2);
+    expect(household.vehicles?.[0]?.registrationNumber).toBeNull();
   });
 
   test("residentImportSchema validates bulk rows", () => {
@@ -227,6 +315,22 @@ describe("validation schemas", () => {
     });
     expect(ok.rows).toHaveLength(1);
     expect(ok.rows[0]!.isOwner).toBe(false);
+    expect(
+      residentImportSchema.parse({
+        rows: [
+          {
+            name: "Asha",
+            phone: "9999999999",
+            flatNumber: "101",
+            vehicles: [
+              { kind: "two_wheeler" },
+              { kind: "two_wheeler" },
+              { kind: "four_wheeler" },
+            ],
+          },
+        ],
+      }).rows[0]!.vehicles,
+    ).toHaveLength(3);
     expect(() =>
       residentImportSchema.parse({
         rows: [{ name: "X", phone: "1", flatNumber: "1" }],

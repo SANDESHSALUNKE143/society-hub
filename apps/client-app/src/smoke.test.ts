@@ -10,6 +10,9 @@ import { PaymentsPage } from "./pages/PaymentsPage";
 import { NoticesPage } from "./pages/NoticesPage";
 import { LegalPage } from "./pages/LegalPage";
 import { TeamPage } from "./pages/TeamPage";
+import { ResidentsPage } from "./pages/ResidentsPage";
+import { AccountPage } from "./pages/AccountPage";
+import { OnboardPage } from "./pages/OnboardPage";
 
 describe("web smoke unit", () => {
   it("placeholder passes", () => {
@@ -29,6 +32,9 @@ describe("web smoke unit", () => {
       NoticesPage,
       LegalPage,
       TeamPage,
+      ResidentsPage,
+      AccountPage,
+      OnboardPage,
     ]) {
       expect(typeof component).toBe("function");
     }

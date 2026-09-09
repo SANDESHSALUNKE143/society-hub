@@ -12,9 +12,16 @@ describe("Client App staff onboard resident (Admin mode)", () => {
     cy.wait("@flats");
 
     cy.contains("h1", "Onboard resident").should("be.visible");
+    cy.contains("Several people").should("be.visible");
     cy.get('[data-testid="onboard-society-name"]').should("be.disabled");
 
-    cy.get("#onboard-email:invalid").should("exist");
+    cy.get("#onboard-email").should("not.have.attr", "required");
+    cy.get('[data-testid="onboard-png-no"]').should("exist");
+    cy.get('[data-testid="onboard-adults"]').should("be.visible");
+    cy.get('[data-testid="onboard-children"]').should("be.visible");
+    cy.get('[data-testid="onboard-seniors"]').should("be.visible");
+    cy.get('[data-testid="onboard-add-two_wheeler"]').should("be.visible");
+    cy.get('[data-testid="onboard-add-four_wheeler"]').should("be.visible");
 
     cy.intercept("POST", "**/v1/admin/residents", {
       statusCode: 200,
@@ -23,7 +30,6 @@ describe("Client App staff onboard resident (Admin mode)", () => {
 
     cy.get("#name").type("Test Resident");
     cy.get("#phone").type("9999999999");
-    cy.get("#onboard-email").type("resident@example.com");
     cy.get('[data-testid="onboard-submit"]').click();
 
     cy.wait("@onboard");

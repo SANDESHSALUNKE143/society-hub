@@ -1,4 +1,11 @@
+import type { ResidentVehicleKind } from "@society-hub/types";
+import {
+  vehicleParkingQuotaMessage,
+  vehiclesFromKindCount,
+} from "@society-hub/types";
+
 /** Parse a simple CSV (header row required). Supports quoted fields. */
+
 export function parseCsv(text: string): Record<string, string>[] {
   const lines = text
     .replace(/^\uFEFF/, "")
@@ -68,6 +75,34 @@ const HEADER_ALIASES: Record<string, string> = {
   vehicle: "vehicleNumber",
   vehiclenumber: "vehicleNumber",
   vehicle_no: "vehicleNumber",
+  twowheelers: "twoWheelers",
+  twowheeler: "twoWheelers",
+  bikes: "twoWheelers",
+  twowheelercount: "twoWheelerCount",
+  bikecount: "twoWheelerCount",
+  noofbikes: "twoWheelerCount",
+  fourwheelers: "fourWheelers",
+  fourwheeler: "fourWheelers",
+  cars: "fourWheelers",
+  fourwheelercount: "fourWheelerCount",
+  carcount: "fourWheelerCount",
+  noofcars: "fourWheelerCount",
+  pnggasconnection: "pngGasConnection",
+  png: "pngGasConnection",
+  pnggas: "pngGasConnection",
+  adults: "adultCount",
+  adult: "adultCount",
+  adultcount: "adultCount",
+  noofadults: "adultCount",
+  children: "childCount",
+  child: "childCount",
+  childcount: "childCount",
+  kids: "childCount",
+  seniorcitizens: "seniorCitizenCount",
+  seniorcitizen: "seniorCitizenCount",
+  senior: "seniorCitizenCount",
+  seniors: "seniorCitizenCount",
+  elderly: "seniorCitizenCount",
 };
 
 function parseBool(value: string | undefined): boolean | undefined {
@@ -89,6 +124,16 @@ export type ResidentCsvRow = {
   isOwner?: boolean;
   emergencyContact?: string | null;
   vehicleNumber?: string | null;
+  vehicles?: Array<{
+    kind: ResidentVehicleKind;
+    registrationNumber: string | null;
+    parkingPurchased: boolean;
+    parkingSlot?: string | null;
+  }>;
+  pngGasConnection?: boolean;
+  adultCount?: number;
+  childCount?: number;
+  seniorCitizenCount?: number;
 };
 
 export type ResidentCsvParseResult = {
@@ -156,8 +201,120 @@ export function mapResidentCsvRows(
     if (mapped.vehicleNumber !== undefined && mapped.vehicleNumber !== "") {
       row.vehicleNumber = mapped.vehicleNumber;
     }
+    const pngGasConnection = parseBool(mapped.pngGasConnection);
+    if (pngGasConnection !== undefined) {
+      row.pngGasConnection = pngGasConnection;
+    }
+    const adults = parseFamilyCount(mapped.adultCount, "Adult");
+    if (adults.error) {
+      errors.push({ row: rowNum, message: adults.error });
+      return;
+    }
+    if (adults.value !== undefined) row.adultCount = adults.value;
+    const children = parseFamilyCount(mapped.childCount, "Child");
+    if (children.error) {
+      errors.push({ row: rowNum, message: children.error });
+      return;
+    }
+    if (children.value !== undefined) row.childCount = children.value;
+    const seniors = parseFamilyCount(mapped.seniorCitizenCount, "Senior citizen");
+    if (seniors.error) {
+      errors.push({ row: rowNum, message: seniors.error });
+      return;
+    }
+    if (seniors.value !== undefined) row.seniorCitizenCount = seniors.value;
+    const two = parseVehicleField(
+      mapped.twoWheelers,
+      mapped.twoWheelerCount,
+      "two_wheeler",
+    );
+    if (two.error) {
+      errors.push({ row: rowNum, message: two.error });
+      return;
+    }
+    const four = parseVehicleField(
+      mapped.fourWheelers,
+      mapped.fourWheelerCount,
+      "four_wheeler",
+    );
+    if (four.error) {
+      errors.push({ row: rowNum, message: four.error });
+      return;
+    }
+    const vehicles = [...two.vehicles, ...four.vehicles];
+    if (vehicles.length === 0 && row.vehicleNumber) {
+      vehicles.push({
+        kind: "four_wheeler",
+        registrationNumber: row.vehicleNumber,
+        parkingPurchased: false,
+      });
+    }
+    if (vehicles.length) {
+      const quotaError = vehicleParkingQuotaMessage(vehicles);
+      if (quotaError) {
+        errors.push({ row: rowNum, message: quotaError });
+        return;
+      }
+      row.vehicles = vehicles;
+    }
     rows.push(row);
   });
 
   return { rows, errors };
+}
+
+function parseFamilyCount(
+  raw: string | undefined,
+  label: string,
+): { value?: number; error?: string } {
+  if (!raw?.trim()) return {};
+  const n = Number(raw.trim());
+  if (!Number.isInteger(n) || n < 0 || n > 50) {
+    return { error: `${label} count must be a whole number from 0 to 50` };
+  }
+  return { value: n };
+}
+
+function parseCount(raw: string | undefined): number | null {
+  if (!raw?.trim()) return null;
+  if (!/^\d+$/.test(raw.trim())) return null;
+  return Number(raw.trim());
+}
+
+function parseVehicleField(
+  listOrCount: string | undefined,
+  countOnly: string | undefined,
+  kind: ResidentVehicleKind,
+): { vehicles: NonNullable<ResidentCsvRow["vehicles"]>; error?: string } {
+  const plates = parseVehicleList(listOrCount, kind);
+  if (plates.length) return { vehicles: plates };
+  const count = parseCount(countOnly) ?? parseCount(listOrCount);
+  if (count == null) return { vehicles: [] };
+  if (count > 20) {
+    return {
+      vehicles: [],
+      error: `${kind === "two_wheeler" ? "Two-wheeler" : "Four-wheeler"} count cannot exceed 20`,
+    };
+  }
+  return { vehicles: vehiclesFromKindCount(kind, count) };
+}
+
+function parseVehicleList(
+  raw: string | undefined,
+  kind: ResidentVehicleKind,
+): NonNullable<ResidentCsvRow["vehicles"]> {
+  if (!raw?.trim() || parseCount(raw) != null) return [];
+  const out: NonNullable<ResidentCsvRow["vehicles"]> = [];
+  for (const part of raw.split(";")) {
+    const [plateRaw, flagRaw] = part.split("|").map((s) => s.trim());
+    const plate = (plateRaw ?? "").replace(/\s+/g, "").toUpperCase();
+    if (plate.length < 4) continue;
+    const flag = (flagRaw ?? "").toLowerCase();
+    out.push({
+      kind,
+      registrationNumber: plate,
+      parkingPurchased: ["purchased", "yes", "true", "extra", "1"].includes(flag),
+    });
+  }
+  return out;
 }
