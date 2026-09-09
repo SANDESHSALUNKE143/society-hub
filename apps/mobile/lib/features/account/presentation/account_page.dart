@@ -8,6 +8,9 @@ import '../../../api/models.dart';
 import '../../../auth/session.dart';
 import '../../../core/app_keys.dart';
 import '../../../core/theme.dart';
+import '../../../shared/household_people.dart';
+import '../../../shared/household_tabs.dart';
+import '../../../shared/parking_picker.dart';
 import '../../../shared/widgets.dart';
 
 class AccountPage extends ConsumerStatefulWidget {
@@ -39,10 +42,25 @@ class _AccountPageState extends ConsumerState<AccountPage> {
   ResidentProfileDto? _profile;
   bool _busy = false;
   bool _profileBusy = false;
+  bool _familyBusy = false;
   String? _message;
   String? _error;
   String? _profileMessage;
   String? _profileError;
+  String? _familyMessage;
+  String? _familyError;
+  List<SocietyResidentDto> _household = [];
+  SocietyResidentDto? _editingFamily;
+  bool _showFamilyForm = false;
+  final _familyName = TextEditingController();
+  final _familyPhone = TextEditingController();
+  final _familyEmail = TextEditingController();
+  final _parking = TextEditingController();
+  String _section = 'flat';
+  String _tab = 'owner';
+  List<ParkingSlotDto> _parkings = [];
+  String _parkingKind = 'puzzle';
+  String? _parkingId;
 
   @override
   void initState() {
@@ -57,6 +75,10 @@ class _AccountPageState extends ConsumerState<AccountPage> {
     _adults.dispose();
     _children.dispose();
     _seniors.dispose();
+    _familyName.dispose();
+    _familyPhone.dispose();
+    _familyEmail.dispose();
+    _parking.dispose();
     for (final v in [..._twoWheelers, ..._fourWheelers]) {
       v.dispose();
     }
@@ -96,9 +118,35 @@ class _AccountPageState extends ConsumerState<AccountPage> {
     }
   }
 
+  void _applyParking(ResidentProfileDto profile, List<ParkingSlotDto> lots) {
+    final flat = profile.flat;
+    ParkingSlotDto? assigned;
+    if (flat != null) {
+      for (final p in lots) {
+        if (p.flatId == flat.id) assigned = p;
+      }
+      assigned ??= () {
+        for (final p in lots) {
+          if (p.slotNumber == flat.parkingSlot) return p;
+        }
+        return null;
+      }();
+    }
+    _parkings = lots;
+    _parkingKind = preferredParkingKind(lots, assigned, flat?.id, assigned?.id);
+    _parking.text = assigned?.slotNumber ?? flat?.parkingSlot ?? '';
+    _parkingId = assigned?.id;
+  }
+
   Future<void> _loadProfile() async {
     try {
       final profile = await ref.read(apiProvider).getProfile();
+      var lots = <ParkingSlotDto>[];
+      try {
+        lots = await ref.read(apiProvider).listResidentParkings();
+      } on ApiException {
+        lots = [];
+      }
       if (!mounted) return;
       setState(() {
         _profile = profile;
@@ -108,9 +156,124 @@ class _AccountPageState extends ConsumerState<AccountPage> {
         _children.text = '${profile.flat?.childCount ?? 0}';
         _seniors.text = '${profile.flat?.seniorCitizenCount ?? 0}';
         _applyVehicles(profile);
+        _applyParking(profile, lots);
       });
+      if (profile.flat != null) {
+        try {
+          final people = await ref.read(apiProvider).listHouseholdMembers();
+          if (mounted) {
+            setState(() {
+              _household = people;
+              _familyError = null;
+            });
+          }
+        } on ApiException catch (e) {
+          if (mounted) {
+            setState(() {
+              _household = [];
+              _familyError = e.message;
+            });
+          }
+        }
+      }
     } on ApiException {
       // Profile is optional for staff without a residents row.
+    }
+  }
+
+  void _openAddFamily() {
+    setState(() {
+      _editingFamily = null;
+      _showFamilyForm = true;
+      _familyName.clear();
+      _familyPhone.clear();
+      _familyEmail.clear();
+      _familyError = null;
+    });
+  }
+
+  void _openEditFamily(SocietyResidentDto person) {
+    setState(() {
+      _editingFamily = person;
+      _showFamilyForm = true;
+      _familyName.text = person.name ?? '';
+      _familyPhone.text = person.phone ?? '';
+      _familyEmail.text = person.email ?? '';
+      _familyError = null;
+    });
+  }
+
+  Future<void> _saveFamilyMember() async {
+    setState(() {
+      _familyBusy = true;
+      _familyError = null;
+      _familyMessage = null;
+    });
+    try {
+      final editing = _editingFamily;
+      final user = editing == null
+          ? await ref.read(apiProvider).addHouseholdMember(
+                name: _familyName.text.trim(),
+                phone: _familyPhone.text.trim(),
+                email: _familyEmail.text.trim().isEmpty
+                    ? null
+                    : _familyEmail.text.trim(),
+              )
+          : await ref.read(apiProvider).updateHouseholdMember(
+                userId: editing.userId,
+                name: _familyName.text.trim(),
+                phone: _familyPhone.text.trim(),
+                email: _familyEmail.text.trim().isEmpty
+                    ? null
+                    : _familyEmail.text.trim(),
+              );
+      var people = _household;
+      try {
+        people = await ref.read(apiProvider).listHouseholdMembers();
+      } on ApiException {
+        // Keep previous list if refresh fails.
+      }
+      if (!mounted) return;
+      setState(() {
+        _household = people;
+        _familyName.clear();
+        _familyPhone.clear();
+        _familyEmail.clear();
+        _editingFamily = null;
+        _showFamilyForm = false;
+        _familyMessage =
+            '${editing == null ? 'Added' : 'Updated'} ${user.name ?? user.phone}. They can log in with this number and raise complaints.';
+      });
+    } on ApiException catch (e) {
+      setState(() => _familyError = e.message);
+    } finally {
+      if (mounted) setState(() => _familyBusy = false);
+    }
+  }
+
+  Future<void> _deleteFamilyMember(SocietyResidentDto person) async {
+    setState(() {
+      _familyBusy = true;
+      _familyError = null;
+      _familyMessage = null;
+    });
+    try {
+      await ref.read(apiProvider).removeHouseholdMember(person.userId);
+      var people = _household;
+      try {
+        people = await ref.read(apiProvider).listHouseholdMembers();
+      } on ApiException {
+        people = _household.where((row) => row.userId != person.userId).toList();
+      }
+      if (!mounted) return;
+      setState(() {
+        _household = people;
+        _familyMessage = 'Removed ${person.displayName}';
+      });
+    } on ApiException catch (e) {
+      setState(() => _familyError = e.message);
+    } finally {
+      if (mounted) setState(() => _familyBusy = false);
     }
   }
 
@@ -171,6 +334,8 @@ class _AccountPageState extends ConsumerState<AccountPage> {
             childCount: flat == null ? null : int.tryParse(_children.text.trim()) ?? 0,
             seniorCitizenCount:
                 flat == null ? null : int.tryParse(_seniors.text.trim()) ?? 0,
+            parkingSlot: flat == null ? null : _parking.text.trim(),
+            parkingSlotId: _parkingId,
             vehicles: vehicles,
           );
       if (!mounted) return;
@@ -181,6 +346,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
         _children.text = '${next.flat?.childCount ?? 0}';
         _seniors.text = '${next.flat?.seniorCitizenCount ?? 0}';
         _applyVehicles(next);
+        _applyParking(next, _parkings);
         _profileMessage = 'Profile updated';
       });
     } on ApiException catch (e) {
@@ -219,6 +385,49 @@ class _AccountPageState extends ConsumerState<AccountPage> {
         ),
       ],
     ];
+  }
+
+  Widget _chip(String id, String label, Key key, String selected, ValueChanged<String> onPick) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        key: key,
+        label: Text(label),
+        selected: selected == id,
+        onSelected: (_) => onPick(id),
+      ),
+    );
+  }
+
+  Widget _accountTab(String id, String label, Key key) {
+    return _chip(id, label, key, _tab, (next) => setState(() => _tab = next));
+  }
+
+  Widget _sectionTab(String id, String label, Key key) {
+    return _chip(id, label, key, _section, (next) => setState(() => _section = next));
+  }
+
+  String get _parkingSelectValue {
+    final current = _parkingId;
+    if (current == null || current.isEmpty) return '';
+    for (final p in assignableParkingSlots(
+      _parkings,
+      _parkingKind,
+      _profile?.flat?.id,
+      _parkingId,
+    )) {
+      if (p.id == current) return current;
+    }
+    return '';
+  }
+
+  String get _saveLabel => householdSubmitLabel(_tab);
+
+  SocietyResidentDto? get _ownerOnFlat {
+    for (final person in _household) {
+      if (person.isOwner) return person;
+    }
+    return null;
   }
 
   Widget _flatField(String label, String value, {Key? key}) {
@@ -285,6 +494,22 @@ class _AccountPageState extends ConsumerState<AccountPage> {
           ),
         ),
         const SizedBox(height: 8),
+        Material(
+          color: Colors.transparent,
+          child: SingleChildScrollView(
+            key: AppKeys.accountSectionTabs,
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _sectionTab('flat', 'My flat', AppKeys.accountSectionFlat),
+                _sectionTab('household', 'Household', AppKeys.accountSectionHousehold),
+                _sectionTab('security', 'Security', AppKeys.accountSectionSecurity),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (_section == 'flat')
         ShCard(
           key: AppKeys.accountFlatDetails,
           child: Column(
@@ -378,53 +603,129 @@ class _AccountPageState extends ConsumerState<AccountPage> {
             ],
           ),
         ),
+        if (_section == 'household') ...[
         const SizedBox(height: 16),
         ShCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'Profile',
+                'Household',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               const Text(
-                'Helpful for security and society records.',
+                'Same tabs as Onboard resident: Owner, Family, Parking Details, vehicles, and Gas.',
                 style: TextStyle(color: Colors.black54, fontSize: 14),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                key: AppKeys.accountEmergencyContact,
-                controller: _emergency,
-                decoration: const InputDecoration(
-                  labelText: 'Emergency contact',
-                  hintText: 'Name & phone number',
-                ),
               ),
               if (flat != null) ...[
                 const SizedBox(height: 12),
-                const Text('PNG gas connection'),
-                RadioGroup<bool>(
-                  groupValue: _pngGas,
-                  onChanged: (v) => setState(() => _pngGas = v ?? false),
-                  child: Column(
+                SingleChildScrollView(
+                  key: AppKeys.accountTabs,
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
                     children: [
-                      RadioListTile<bool>(
-                        key: AppKeys.accountPngYes,
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Taken'),
-                        value: true,
+                      _accountTab('owner', 'Owner', AppKeys.accountTabOwner),
+                      _accountTab('family', 'Family', AppKeys.accountTabFamily),
+                      _accountTab('parking', 'Parking Details', AppKeys.accountTabParking),
+                      _accountTab(
+                        'two_wheeler',
+                        'Two-wheelers',
+                        AppKeys.accountTabTwoWheeler,
                       ),
-                      RadioListTile<bool>(
-                        key: AppKeys.accountPngNo,
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Not taken'),
-                        value: false,
+                      _accountTab(
+                        'four_wheeler',
+                        'Four-wheelers',
+                        AppKeys.accountTabFourWheeler,
                       ),
+                      _accountTab('gas', 'Gas', AppKeys.accountTabGas),
                     ],
                   ),
                 ),
-                const SizedBox(height: 8),
+              ],
+              const SizedBox(height: 12),
+              if (flat == null || _tab == 'owner') ...[
+                if (flat != null) ...[
+                  Text(
+                    'Owner name: ${_ownerOnFlat?.displayName ?? user?.name ?? '—'}',
+                  ),
+                  Text(
+                    'Contact: ${_ownerOnFlat?.phone ?? user?.phone ?? '—'}',
+                  ),
+                  Text(
+                    'Email: ${_ownerOnFlat?.email ?? user?.email ?? '—'}',
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                TextField(
+                  key: AppKeys.accountEmergencyContact,
+                  controller: _emergency,
+                  decoration: const InputDecoration(
+                    labelText: 'Emergency contact',
+                    hintText: 'Name & phone number',
+                  ),
+                ),
+              ],
+              if (flat != null && _tab == 'family') ...[
+                Column(
+                  key: AppKeys.accountFamilyMembers,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    HouseholdPeopleList(
+                      people: _household,
+                      canEdit: flat.isOwner,
+                      busy: _familyBusy,
+                      onAdd: _openAddFamily,
+                      onEdit: _openEditFamily,
+                      onDelete: _deleteFamilyMember,
+                    ),
+                    if (flat.isOwner) ...[
+                      const SizedBox(height: 8),
+                      TextField(
+                        key: AppKeys.accountFamilyName,
+                        controller: _familyName,
+                        decoration: const InputDecoration(labelText: 'Name'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        key: AppKeys.accountFamilyPhone,
+                        controller: _familyPhone,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(labelText: 'Contact number'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _familyEmail,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(labelText: 'Email'),
+                      ),
+                      const SizedBox(height: 12),
+                      ShPrimaryButton(
+                        key: AppKeys.accountAddFamily,
+                        label: _editingFamily == null
+                            ? 'Add family member'
+                            : 'Update family member',
+                        busy: _familyBusy,
+                        onPressed: _saveFamilyMember,
+                      ),
+                    ],
+                    if (_familyMessage != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _familyMessage!,
+                        style: const TextStyle(color: Color(0xFF2E7D32)),
+                      ),
+                    ],
+                    if (_familyError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _familyError!,
+                        style: const TextStyle(color: AppColors.danger),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 12),
                 const Text('Family members in this flat'),
                 const SizedBox(height: 8),
                 TextField(
@@ -447,7 +748,89 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'Senior citizens'),
                 ),
-                const SizedBox(height: 12),
+              ],
+              if (flat != null && _tab == 'parking') ...[
+                if (_parkings.isNotEmpty) ...[
+                  DropdownButtonFormField<String>(
+                    value: _parkingKind,
+                    decoration: const InputDecoration(labelText: 'Parking type'),
+                    items: const [
+                      DropdownMenuItem(value: 'puzzle', child: Text('Puzzle')),
+                      DropdownMenuItem(value: 'open', child: Text('Open')),
+                    ],
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() {
+                        _parkingKind = v;
+                        final first = assignableParkingSlots(
+                          _parkings,
+                          v,
+                          flat.id,
+                          null,
+                        );
+                        _parking.text =
+                            first.isNotEmpty ? first.first.slotNumber : '';
+                        _parkingId = first.isNotEmpty ? first.first.id : null;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: _parkingSelectValue,
+                    decoration: const InputDecoration(labelText: 'Parking number'),
+                    items: [
+                      const DropdownMenuItem(value: '', child: Text('None')),
+                      ...assignableParkingSlots(
+                        _parkings,
+                        _parkingKind,
+                        flat.id,
+                        _parkingId,
+                      ).map(
+                        (p) => DropdownMenuItem(
+                          value: p.id,
+                          child: Text(p.label),
+                        ),
+                      ),
+                    ],
+                    onChanged: (v) => setState(() {
+                      _parkingId = v == null || v.isEmpty ? null : v;
+                      ParkingSlotDto? picked;
+                      if (_parkingId != null) {
+                        for (final p in _parkings) {
+                          if (p.id == _parkingId) picked = p;
+                        }
+                      }
+                      _parking.text = picked?.slotNumber ?? '';
+                    }),
+                  ),
+                ] else
+                  TextField(
+                    controller: _parking,
+                    decoration: const InputDecoration(
+                      labelText: 'Parking number',
+                      hintText: 'Add parking in Manage first, or type a slot',
+                    ),
+                  ),
+                if (parkingNumberHint(
+                      _parkings,
+                      _parkingKind,
+                      flat.id,
+                      _parkingId,
+                    ) !=
+                    null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    parkingNumberHint(
+                      _parkings,
+                      _parkingKind,
+                      flat.id,
+                      _parkingId,
+                    )!,
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                ],
+              ],
+              if (flat != null && _tab == 'two_wheeler') ...[
                 Text(
                   'Two-wheelers (${_remainingForUser(flat.twoWheelerCount, _profile?.vehicles.where((v) => v.kind == 'two_wheeler').length ?? 0, 2)} included slots left)',
                 ),
@@ -467,6 +850,8 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                     child: const Text('Add two-wheeler'),
                   ),
                 ),
+              ],
+              if (flat != null && _tab == 'four_wheeler') ...[
                 Text(
                   'Four-wheelers (${_remainingForUser(flat.fourWheelerCount, _profile?.vehicles.where((v) => v.kind == 'four_wheeler').length ?? 0, 1)} included slots left)',
                 ),
@@ -486,17 +871,41 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                     child: const Text('Add four-wheeler'),
                   ),
                 ),
-              ] else
+              ],
+              if (flat != null && _tab == 'gas') ...[
+                const Text('PNG gas connection'),
+                RadioGroup<bool>(
+                  groupValue: _pngGas,
+                  onChanged: (v) => setState(() => _pngGas = v ?? false),
+                  child: Column(
+                    children: [
+                      RadioListTile<bool>(
+                        key: AppKeys.accountPngYes,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Taken'),
+                        value: true,
+                      ),
+                      RadioListTile<bool>(
+                        key: AppKeys.accountPngNo,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Not taken'),
+                        value: false,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              if (flat == null)
                 const Padding(
-                  padding: EdgeInsets.only(top: 12),
+                  padding: EdgeInsets.only(top: 4),
                   child: Text(
-                    'PNG, family counts, and vehicles can be updated after an admin links a flat.',
+                    'PNG, family counts, parking, and vehicles can be updated after an admin links a flat.',
                     style: TextStyle(color: Colors.black54, fontSize: 14),
                   ),
                 ),
               const SizedBox(height: 12),
               ShPrimaryButton(
-                label: 'Save profile',
+                label: _saveLabel,
                 busy: _profileBusy,
                 onPressed: _saveProfile,
               ),
@@ -517,6 +926,8 @@ class _AccountPageState extends ConsumerState<AccountPage> {
             ],
           ),
         ),
+        ],
+        if (_section == 'security') ...[
         const SizedBox(height: 16),
         ShCard(
           child: Column(
@@ -577,6 +988,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
             ],
           ),
         ),
+        ],
         const SizedBox(height: 16),
         OutlinedButton(
           onPressed: () async {

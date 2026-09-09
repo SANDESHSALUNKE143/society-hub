@@ -384,6 +384,28 @@ export type ResidentImportResultDto = {
   errors: ResidentImportRowError[];
 };
 
+export type SocietyFlatInput = {
+  wing: string;
+  floor: number;
+  flatNumber: string;
+};
+
+export type ParkingKind = "puzzle" | "open";
+
+export type SocietyParkingInput = {
+  kind: ParkingKind;
+  wing: string | null;
+  floor: number | null;
+  slotNumber: string;
+};
+
+export type SocietyFlatImportResultDto = {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: ResidentImportRowError[];
+};
+
 export type TeamMemberDto = {
   userId: string;
   name: string | null;
@@ -423,6 +445,9 @@ export type ParkingSlotDto = {
   slotNumber: string;
   vehicleNumber: string | null;
   type: string;
+  kind: ParkingKind;
+  wing: string | null;
+  floor: number | null;
   createdAt: string;
 };
 

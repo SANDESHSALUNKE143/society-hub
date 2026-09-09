@@ -23,8 +23,10 @@ import {
   requireSocietyStaff,
 } from "../../lib/auth-context";
 import { onboardResidentIntoTenant } from "./onboard-resident";
+import { removeResidentFromTenant } from "./remove-resident";
 import { importResidentsCsvRows } from "./import-residents";
 import { listResidentsForTenant } from "./list-residents";
+import { listSocietyParkings } from "../manage/parking-service";
 
 function parseDetails(raw: string | null): Record<string, string> | null {
   if (!raw) return null;
@@ -176,6 +178,11 @@ export const adminRoutes = new Elysia({ prefix: "/v1/admin" })
       ),
     );
   })
+  .get("/parkings", async ({ auth }) => {
+    const claims = requireAuth(auth);
+    requireSocietyStaff(claims);
+    return listSocietyParkings(claims.tenantId);
+  })
   .get("/structure", async ({ auth }) => {
     const claims = requireAuth(auth);
     requireSocietyStaff(claims);
@@ -243,7 +250,10 @@ export const adminRoutes = new Elysia({ prefix: "/v1/admin" })
       flatId: parsed.flatId,
       floor: parsed.floor,
       parkingSlot: parsed.parkingSlot,
+      parkingSlotId: parsed.parkingSlotId,
       isOwner: parsed.isOwner,
+      editOwner: parsed.editOwner,
+      editUserId: parsed.editUserId,
       emergencyContact: parsed.emergencyContact,
       vehicleNumber: parsed.vehicleNumber,
       vehicles: parsed.vehicles,
@@ -259,4 +269,13 @@ export const adminRoutes = new Elysia({ prefix: "/v1/admin" })
     // Validate early so bad payloads return 400 before import loop.
     residentImportSchema.parse(body);
     return importResidentsCsvRows(claims.tenantId, claims.sub, body);
+  })
+  .delete("/residents/:userId", async ({ auth, params }) => {
+    const claims = requireAuth(auth);
+    requireSocietyStaff(claims);
+    return removeResidentFromTenant({
+      tenantId: claims.tenantId,
+      actorUserId: claims.sub,
+      userId: params.userId,
+    });
   });

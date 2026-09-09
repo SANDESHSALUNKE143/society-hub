@@ -211,7 +211,7 @@ export async function importResidentsCsvRows(
         phone: row.phone,
         email: row.email ?? null,
         flatId: flat.id,
-        isOwner: row.isOwner ?? true,
+        isOwner: row.isOwner,
         emergencyContact: row.emergencyContact,
         vehicleNumber: row.vehicleNumber,
         vehicles: row.vehicles,

@@ -83,6 +83,8 @@ void main() {
     expect(find.byKey(AppKeys.complaintsList), findsOneWidget);
     expect(find.text('Gate issue'), findsOneWidget);
     expect(find.text('Water leak'), findsOneWidget);
+    expect(find.text('Ticket ID'), findsWidgets);
+    expect(find.text('Flat 101'), findsOneWidget);
 
     await tester.enterText(find.byKey(AppKeys.complaintsSearch), 'gate');
     await tester.pumpAndSettle();

@@ -21,6 +21,10 @@ export function newVehicle(): VehicleDraft {
   };
 }
 
+export function emptyVehicleRows(count: number): VehicleDraft[] {
+  return Array.from({ length: Math.max(0, count) }, () => newVehicle());
+}
+
 export function remainingIncluded(used: number | undefined, included: number) {
   return Math.max(0, included - (used ?? 0));
 }

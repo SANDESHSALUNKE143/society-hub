@@ -102,6 +102,9 @@ function toParkingDto(
     slotNumber: row.slotNumber,
     vehicleNumber: row.vehicleNumber,
     type: row.type,
+    kind: row.kind,
+    wing: row.wing,
+    floor: row.floor,
     createdAt: row.createdAt,
   };
 }

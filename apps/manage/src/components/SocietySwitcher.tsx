@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { MembershipDto } from "@society-hub/types";
+import { uniqueMembershipsBySociety } from "@society-hub/ui";
 import { useAuth } from "../auth";
 import { Icon } from "./icons";
 
@@ -15,8 +16,9 @@ export function SocietySwitcher() {
     client
       .listMemberships()
       .then((rows) => {
-        setMemberships(rows);
-        const mine = rows.find((r) => r.tenantId === user?.tenantId);
+        const unique = uniqueMembershipsBySociety(rows);
+        setMemberships(unique);
+        const mine = unique.find((r) => r.tenantId === user?.tenantId);
         if (mine) setCurrentName(mine.societyName);
       })
       .catch(() => {

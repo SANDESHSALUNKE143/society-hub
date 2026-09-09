@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { STATUS_LABELS, TYPE_LABELS, statusBadgeClass } from "./complaint-labels";
+import { STATUS_LABELS, TYPE_LABELS, statusBadgeClass, statusTone } from "./complaint-labels";
 
 describe("complaint labels", () => {
   test("maps friendly status copy", () => {
@@ -11,5 +11,8 @@ describe("complaint labels", () => {
   test("statusBadgeClass marks open as danger", () => {
     expect(statusBadgeClass("open")).toContain("badge-danger");
     expect(statusBadgeClass("resolved")).toContain("badge-success");
+    expect(statusBadgeClass("in_progress")).toContain("badge-progress");
+    expect(statusTone("open")).toBe("open");
+    expect(statusTone("in_progress")).toBe("progress");
   });
 });

@@ -5,6 +5,7 @@ import { flats, residents, users, wings } from "../../db/schema";
 
 export async function listResidentsForTenant(
   tenantId: string,
+  flatId?: string,
 ): Promise<SocietyResidentDto[]> {
   const rows = await db
     .select({
@@ -27,6 +28,7 @@ export async function listResidentsForTenant(
         eq(residents.isDeleted, false),
         eq(users.isDeleted, false),
         eq(flats.isDeleted, false),
+        ...(flatId ? [eq(residents.flatId, flatId)] : []),
       ),
     )
     .orderBy(asc(flats.number), asc(users.name));

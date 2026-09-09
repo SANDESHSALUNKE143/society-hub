@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   canUseAdminMode,
+  collapseMembershipsByTenant,
   hashToken,
   isPlatformRole,
   isResidentLikeRole,
@@ -37,7 +38,33 @@ describe("auth-helpers", () => {
     expect(normalizeRole("admin")).toBe("chairperson");
     expect(pickDefaultRole(["chairperson", "superadmin"])).toBe("superadmin");
     expect(pickDefaultRole(["resident", "chairperson"])).toBe("chairperson");
+    expect(pickDefaultRole(["committee", "chairperson"])).toBe("chairperson");
+    expect(pickDefaultRole(["committee", "admin"])).toBe("chairperson");
     expect(pickDefaultRole(["resident"])).toBe("resident");
+    expect(pickDefaultRole([])).toBeUndefined();
+  });
+
+  test("collapseMembershipsByTenant keeps one row per society", () => {
+    const rows = collapseMembershipsByTenant([
+      {
+        tenantId: "t1",
+        societyName: "Keshav Heights",
+        role: "committee" as const,
+      },
+      {
+        tenantId: "t1",
+        societyName: "Keshav Heights",
+        role: "chairperson" as const,
+      },
+      {
+        tenantId: "t2",
+        societyName: "Other Society",
+        role: "resident" as const,
+      },
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ tenantId: "t1", role: "chairperson" });
+    expect(rows[1]).toMatchObject({ tenantId: "t2", role: "resident" });
   });
 
   test("requireAuth throws when missing", () => {

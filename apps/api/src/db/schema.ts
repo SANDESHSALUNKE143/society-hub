@@ -151,7 +151,7 @@ export const residents = mysqlTable(
     tenantId: tenantId(),
     userId: char("user_id", { length: 36 }).notNull(),
     flatId: char("flat_id", { length: 36 }).notNull(),
-    isOwner: boolean("is_owner").notNull().default(true),
+    isOwner: boolean("is_owner").notNull().default(false),
     ...timestamps,
   },
   (t) => [
@@ -525,6 +525,9 @@ export const parkingSlots = mysqlTable(
     slotNumber: varchar("slot_number", { length: 32 }).notNull(),
     vehicleNumber: varchar("vehicle_number", { length: 32 }),
     type: varchar("type", { length: 32 }).notNull().default("car"),
+    kind: mysqlEnum("kind", ["puzzle", "open"]).notNull().default("open"),
+    wing: varchar("wing", { length: 32 }),
+    floor: int("floor"),
     ...timestamps,
   },
   (t) => [index("parking_slots_tenant_idx").on(t.tenantId)],

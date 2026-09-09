@@ -27,6 +27,7 @@ import type {
   VendorDto,
   EventDto,
   ResidentImportResultDto,
+  SocietyFlatImportResultDto,
   DashboardStatsDto,
   ResidentProfileDto,
 } from "@society-hub/types";
@@ -190,6 +191,8 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
       adultCount?: number;
       childCount?: number;
       seniorCitizenCount?: number;
+      parkingSlot?: string | null;
+      parkingSlotId?: string | null;
       vehicles?: Array<{
         kind: "two_wheeler" | "four_wheeler";
         registrationNumber?: string | null;
@@ -202,7 +205,35 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         body: JSON.stringify(body),
       }),
     listFlats: () => request<FlatDto[]>("/v1/admin/flats"),
+    listParkings: () => request<ParkingSlotDto[]>("/v1/admin/parkings"),
     listResidents: () => request<SocietyResidentDto[]>("/v1/admin/residents"),
+    listHouseholdMembers: () =>
+      request<SocietyResidentDto[]>("/v1/household/members"),
+    addHouseholdMember: (body: {
+      name: string;
+      phone: string;
+      email?: string | null;
+    }) =>
+      request<{ user: UserDto }>("/v1/household/members", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    updateHouseholdMember: (
+      userId: string,
+      body: { name: string; phone: string; email?: string | null },
+    ) =>
+      request<{ user: UserDto }>(`/v1/household/members/${userId}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    removeHouseholdMember: (userId: string) =>
+      request<{ ok: true }>(`/v1/household/members/${userId}`, {
+        method: "DELETE",
+      }),
+    removeResident: (userId: string) =>
+      request<{ ok: true }>(`/v1/admin/residents/${userId}`, {
+        method: "DELETE",
+      }),
     onboardResident: (body: {
       name: string;
       phone: string;
@@ -210,7 +241,10 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
       email?: string | null;
       floor?: number | null;
       parkingSlot?: string | null;
+      parkingSlotId?: string | null;
       isOwner?: boolean;
+      editOwner?: boolean;
+      editUserId?: string;
       emergencyContact?: string | null;
       vehicleNumber?: string | null;
       vehicles?: Array<{
@@ -346,6 +380,94 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
       request<{ ok: true }>(`/v1/manage/societies/${societyId}/team/${userId}`, {
         method: "DELETE",
       }),
+    listManageSocietyFlats: (societyId: string) =>
+      request<FlatDto[]>(`/v1/manage/societies/${societyId}/flats`),
+    addManageSocietyFlat: (
+      societyId: string,
+      body: { wing: string; floor: number; flatNumber: string },
+    ) =>
+      request<FlatDto>(`/v1/manage/societies/${societyId}/flats`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    importManageSocietyFlats: (
+      societyId: string,
+      rows: Array<{ wing: string; floor: number; flatNumber: string }>,
+    ) =>
+      request<SocietyFlatImportResultDto>(
+        `/v1/manage/societies/${societyId}/flats/import`,
+        {
+          method: "POST",
+          body: JSON.stringify({ rows }),
+        },
+      ),
+    updateManageSocietyFlat: (
+      societyId: string,
+      flatId: string,
+      body: { wing: string; floor: number; flatNumber: string },
+    ) =>
+      request<FlatDto>(`/v1/manage/societies/${societyId}/flats/${flatId}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    deleteManageSocietyFlat: (societyId: string, flatId: string) =>
+      request<{ ok: true }>(
+        `/v1/manage/societies/${societyId}/flats/${flatId}`,
+        { method: "DELETE" },
+      ),
+    listManageSocietyParkings: (societyId: string) =>
+      request<ParkingSlotDto[]>(`/v1/manage/societies/${societyId}/parkings`),
+    addManageSocietyParking: (
+      societyId: string,
+      body: {
+        kind: "puzzle" | "open";
+        wing?: string | null;
+        floor?: number | null;
+        slotNumber: string;
+      },
+    ) =>
+      request<ParkingSlotDto>(`/v1/manage/societies/${societyId}/parkings`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    importManageSocietyParkings: (
+      societyId: string,
+      rows: Array<{
+        kind: "puzzle" | "open";
+        wing?: string | null;
+        floor?: number | null;
+        slotNumber: string;
+      }>,
+    ) =>
+      request<SocietyFlatImportResultDto>(
+        `/v1/manage/societies/${societyId}/parkings/import`,
+        {
+          method: "POST",
+          body: JSON.stringify({ rows }),
+        },
+      ),
+    updateManageSocietyParking: (
+      societyId: string,
+      parkingId: string,
+      body: {
+        kind: "puzzle" | "open";
+        wing?: string | null;
+        floor?: number | null;
+        slotNumber: string;
+      },
+    ) =>
+      request<ParkingSlotDto>(
+        `/v1/manage/societies/${societyId}/parkings/${parkingId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        },
+      ),
+    deleteManageSocietyParking: (societyId: string, parkingId: string) =>
+      request<{ ok: true }>(
+        `/v1/manage/societies/${societyId}/parkings/${parkingId}`,
+        { method: "DELETE" },
+      ),
 
     listPlatformUsers: (q?: string) => {
       const query = q?.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";

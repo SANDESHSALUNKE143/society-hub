@@ -29,6 +29,32 @@ describe("Complaint raise and office flow", () => {
         closingNote: null,
       },
     }).as("create");
+    cy.intercept("GET", "**/v1/complaints/c-new", {
+      statusCode: 200,
+      body: {
+        id: "c-new",
+        ticketNumber: "C-12345678",
+        title: "Lift stuck",
+        type: "lift",
+        typeOtherText: null,
+        description: "Lift not moving between floors",
+        status: "open",
+        flatId: mockResident.flatId,
+        flatNumber: "A-101",
+        residentName: mockResident.name,
+        assignedToUserId: null,
+        slaDueAt: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        queuePosition: 2,
+        openAheadCount: 1,
+        queueHint: "About 1 ticket ahead of yours in the queue.",
+        attachments: [],
+        comments: [],
+        statusEvents: [],
+        closingNote: null,
+      },
+    }).as("created");
 
     cy.visit("/complaints/new");
     cy.get('[data-testid="complaint-title"]').type("Lift stuck");

@@ -21,7 +21,9 @@ import { notificationRoutes } from "./modules/notifications/routes";
 import { dashboardRoutes } from "./modules/dashboard/routes";
 import { auditAliasRoutes, auditRoutes } from "./modules/audit/routes";
 import { profileRoutes } from "./modules/profile/routes";
+import { householdRoutes } from "./modules/profile/household-routes";
 import { manageTeamRoutes } from "./modules/manage/team-routes";
+import { manageStructureRoutes } from "./modules/manage/structure-routes";
 import {
   manageActivityRoutes,
   manageUserRoutes,
@@ -105,6 +107,7 @@ export function createApp() {
     .use(mediaRoutes)
     .use(societyRoutes)
     .use(manageTeamRoutes)
+    .use(manageStructureRoutes)
     .use(manageUserRoutes)
     .use(manageActivityRoutes)
     .use(buildingRoutes)
@@ -119,6 +122,7 @@ export function createApp() {
     .use(auditRoutes)
     .use(auditAliasRoutes)
     .use(profileRoutes)
+    .use(householdRoutes)
     .use(visitorRoutes)
     .use(parkingRoutes)
     .use(bookingRoutes)

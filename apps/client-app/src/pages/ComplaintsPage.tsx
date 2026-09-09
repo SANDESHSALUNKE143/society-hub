@@ -4,7 +4,12 @@ import type { ComplaintDto } from "@society-hub/types";
 import { useAuth } from "../auth";
 import { canUseAdminMode, useAppMode } from "../app-mode";
 import { Icon } from "../components/icons";
-import { STATUS_LABELS, statusBadgeClass } from "@society-hub/ui";
+import {
+  ComplaintListCard,
+  complaintFlatLabel,
+  complaintQueueLine,
+  formatComplaintWhen,
+} from "@society-hub/ui";
 
 export function ComplaintsPage() {
   const { client, user } = useAuth();
@@ -33,30 +38,35 @@ export function ComplaintsPage() {
   }, [items, search, staffView]);
 
   return (
-    <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+    <div className="sh-complaint-page">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-xl sm:text-2xl">
-            {staffView ? "Complaint queue" : "My complaints"}
+          <h1 className="font-display text-3xl text-[var(--leaf-dark)]">
+            {staffView ? "Complaint queue" : "Complaints"}
           </h1>
-          <p className="text-sm text-black/55">
+          <p className="mt-1 text-sm text-black/55">
             {staffView
               ? "Acknowledge when you can — leave untouched tickets in the queue."
               : "Track ticket numbers and progress"}
           </p>
         </div>
-        <Link to="/complaints/new" className="btn btn-primary" data-testid="new-complaint-link">
+        <Link
+          to="/complaints/new"
+          className="btn btn-primary rounded-full px-4"
+          data-testid="new-complaint-link"
+        >
+          <Icon name="plus" className="h-4 w-4" />
           Raise complaint
         </Link>
       </div>
 
-      <div className="relative mb-3">
+      <div className="relative">
         <Icon
           name="search"
           className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35"
         />
         <input
-          className="input pl-9"
+          className="input rounded-full pl-9"
           placeholder={staffView ? "Search ticket, title or flat…" : "Search your tickets…"}
           data-testid="complaints-search"
           value={search}
@@ -64,31 +74,29 @@ export function ComplaintsPage() {
         />
       </div>
 
-      {error && <p className="mb-4 text-[var(--danger)]">{error}</p>}
+      {error && <p className="text-[var(--danger)]">{error}</p>}
 
       {filtered.length === 0 ? (
-        <div className="empty-state" data-testid="complaints-empty">
+        <div className="empty-state sh-complaint-list" data-testid="complaints-empty">
           No complaints yet.
         </div>
       ) : (
-        <div className="space-y-3" data-testid="complaints-list">
+        <div className="sh-complaint-list" data-testid="complaints-list">
           {filtered.map((c) => (
-            <Link
-              key={c.id}
-              to={`/complaints/${c.id}`}
-              className="card flex flex-wrap items-center justify-between gap-2 p-4 hover:border-[var(--leaf)]"
-            >
-              <div>
-                <p className="font-medium">{c.title}</p>
-                <p className="text-sm text-black/50">
-                  {c.ticketNumber} · {c.type}
-                  {staffView ? ` · Flat ${c.flatNumber}` : ""}
-                  {c.queuePosition != null && c.status === "open"
-                    ? ` · Queue #${c.queuePosition}`
-                    : ""}
-                </p>
-              </div>
-              <span className={statusBadgeClass(c.status)}>{STATUS_LABELS[c.status]}</span>
+            <Link key={c.id} to={`/complaints/${c.id}`} className="block">
+              <ComplaintListCard
+                type={c.type}
+                title={c.title}
+                location={complaintFlatLabel(c.flatNumber)}
+                when={formatComplaintWhen(c.createdAt)}
+                ticketNumber={c.ticketNumber}
+                status={c.status}
+                queueLine={complaintQueueLine({
+                  status: c.status,
+                  queuePosition: c.queuePosition,
+                  queueHint: c.queueHint,
+                })}
+              />
             </Link>
           ))}
         </div>

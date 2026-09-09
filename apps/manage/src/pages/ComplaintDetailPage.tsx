@@ -1,14 +1,27 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ComplaintDto, ComplaintStatus } from "@society-hub/types";
+import {
+  CommitteeNoteCard,
+  ComplaintMetaRow,
+  ComplaintStatusPill,
+  ComplaintTimeline,
+  STATUS_LABELS,
+  TYPE_LABELS,
+} from "@society-hub/ui";
 import { useAuth } from "../auth";
 
 const STATUSES: ComplaintStatus[] = [
   "open",
+  "assigned",
   "in_progress",
   "resolved",
   "closed",
 ];
+
+function accessToken() {
+  return localStorage.getItem("sh_access") ?? "";
+}
 
 export function ComplaintDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -37,66 +50,90 @@ export function ComplaintDetailPage() {
   if (error) return <p className="text-[var(--danger)]">{error}</p>;
   if (!complaint) return <p>Loading…</p>;
 
+  const typeLabel =
+    complaint.type === "other" && complaint.typeOtherText
+      ? complaint.typeOtherText
+      : TYPE_LABELS[complaint.type];
+  const canUpdate = user?.role === "admin" || user?.role === "superadmin";
+
   return (
-    <div className="max-w-2xl">
-      <Link to="/complaints" className="text-sm text-[var(--leaf)]">
-        ← Back
+    <div className="sh-complaint-page">
+      <Link to="/complaints" className="sh-complaint-back">
+        ← Back to complaints
       </Link>
-      <div className="card mt-3 p-6">
-        <h1 className="font-display text-2xl">{complaint.title}</h1>
-        <p className="mt-1 text-sm text-black/55">
-          {complaint.ticketNumber} · Flat {complaint.flatNumber} · {complaint.type}
-          {complaint.residentName ? ` · ${complaint.residentName}` : ""}
-        </p>
-        <p className="mt-4 whitespace-pre-wrap">{complaint.description}</p>
 
-        <p className="mt-4 text-sm">
-          Status:{" "}
-          <span
-            className={`badge ${complaint.status === "open" ? "badge-danger" : ""}`}
-            data-testid="complaint-status"
-          >
-            {complaint.status.replace("_", " ")}
+      <header>
+        <p className="sh-complaint-ticket-display">{complaint.ticketNumber}</p>
+        <h1 className="sh-complaint-heading">{complaint.title}</h1>
+        <div className="mt-3">
+          <span data-testid="complaint-status">
+            <ComplaintStatusPill status={complaint.status} outline />
           </span>
-        </p>
-
-        {user?.role === "admin" || user?.role === "superadmin" ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {STATUSES.map((s) => (
-              <button
-                key={s}
-                type="button"
-                className={`btn btn-sm ${
-                  complaint.status === s ? "btn-primary" : "btn-ghost"
-                }`}
-                onClick={() => updateStatus(s)}
-              >
-                {s.replace("_", " ")}
-              </button>
-            ))}
-          </div>
+        </div>
+        {complaint.residentName ? (
+          <p className="mt-2 text-sm text-black/50">Raised by {complaint.residentName}</p>
         ) : null}
+      </header>
 
-        {complaint.attachments.length > 0 && (
-          <div className="mt-6">
-            <h2 className="font-semibold">Attachments</h2>
-            <ul className="mt-2 space-y-2">
-              {complaint.attachments.map((a) => (
-                <li key={a.id}>
-                  <a
-                    className="text-[var(--leaf)] underline"
-                    href={`${a.url}?access_token=${localStorage.getItem("sh_access") ?? ""}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {a.contentKind} ({Math.round(a.byteSize / 1024)} KB)
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
+      <ComplaintMetaRow
+        flatNumber={complaint.flatNumber}
+        createdAt={complaint.createdAt}
+        typeLabel={typeLabel}
+      />
+
+      <p className="sh-complaint-copy whitespace-pre-wrap">{complaint.description}</p>
+
+      <ComplaintTimeline events={complaint.statusEvents} />
+
+      {complaint.closingNote ? <CommitteeNoteCard note={complaint.closingNote} /> : null}
+
+      {complaint.attachments.length > 0 && (
+        <section>
+          <h2 className="sh-complaint-block-title">
+            {complaint.attachments.length === 1
+              ? "Photo (1)"
+              : `Photos (${complaint.attachments.length})`}
+          </h2>
+          <ul className="sh-complaint-photos">
+            {complaint.attachments.map((a, index) => (
+              <li key={a.id}>
+                <a
+                  className="sh-complaint-photo block"
+                  href={`${a.url}?access_token=${accessToken()}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {a.contentKind === "image" ? (
+                    <img src={`${a.url}?access_token=${accessToken()}`} alt="" />
+                  ) : (
+                    <p className="p-3 text-xs text-[var(--leaf)]">
+                      Video · {Math.round(a.byteSize / 1024)} KB
+                    </p>
+                  )}
+                  <span className="sh-complaint-photo-count">
+                    {index + 1}/{complaint.attachments.length}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {canUpdate ? (
+        <div className="flex flex-wrap gap-2">
+          {STATUSES.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={`btn btn-sm ${complaint.status === s ? "btn-primary" : "btn-ghost"}`}
+              onClick={() => updateStatus(s)}
+            >
+              {STATUS_LABELS[s]}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

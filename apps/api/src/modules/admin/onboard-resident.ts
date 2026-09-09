@@ -13,6 +13,7 @@ import {
 import { AppError } from "../../lib/errors";
 import { buildUserDto } from "../../lib/auth-context";
 import { upsertProfile } from "../profile/upsert-profile";
+import { resolveIsOwnerForFlat } from "./flat-owner";
 
 export type OnboardVehicleInput = {
   kind: ResidentVehicleKind;
@@ -30,7 +31,10 @@ export type OnboardResidentInput = {
   flatId: string;
   floor?: number | null;
   parkingSlot?: string | null;
+  parkingSlotId?: string | null;
   isOwner?: boolean;
+  editOwner?: boolean;
+  editUserId?: string;
   emergencyContact?: string | null;
   vehicleNumber?: string | null;
   vehicles?: OnboardVehicleInput[];
@@ -69,6 +73,7 @@ export async function onboardResidentIntoTenant(
     flat,
     floor: input.floor,
     parkingSlot: input.parkingSlot,
+    parkingSlotId: input.parkingSlotId,
     pngGasConnection: input.pngGasConnection,
     adultCount: input.adultCount,
     childCount: input.childCount,
@@ -79,60 +84,205 @@ export async function onboardResidentIntoTenant(
   const email = input.email?.toLowerCase()?.trim() || null;
   const phone = input.phone.replace(/\D/g, "");
 
-  const [existing] = await db
-    .select()
-    .from(users)
-    .where(and(eq(users.phone, phone), eq(users.isDeleted, false)))
+  const [currentOwner] = await db
+    .select({ userId: residents.userId })
+    .from(residents)
+    .where(
+      and(
+        eq(residents.tenantId, input.tenantId),
+        eq(residents.flatId, input.flatId),
+        eq(residents.isDeleted, false),
+        eq(residents.isOwner, true),
+      ),
+    )
+    .orderBy(asc(residents.createdAt), asc(residents.id))
     .limit(1);
 
-  if (email) {
-    const [emailOwner] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(and(eq(users.email, email), eq(users.isDeleted, false)))
-      .limit(1);
-    if (emailOwner && emailOwner.id !== existing?.id) {
-      throw new AppError(
-        409,
-        "email_taken",
-        "This email is already used by another person. Family members each need their own email, or leave it blank.",
-      );
-    }
-  }
-
-  let userId = existing?.id;
+  let userId: string | undefined;
   let created = false;
   let updated = false;
 
-  if (!userId) {
-    userId = crypto.randomUUID();
-    await db.insert(users).values({
-      id: userId,
-      phone,
-      name: input.name,
-      email,
-      createdBy: input.actorUserId,
-      updatedBy: input.actorUserId,
-    });
-    created = true;
-  } else {
-    const nextEmail = email ?? existing?.email ?? null;
-    const nextPhone = phone || existing?.phone || phone;
-    const nameChanged = existing?.name !== input.name;
-    const emailChanged = (existing?.email ?? null) !== nextEmail;
-    const phoneChanged = (existing?.phone ?? null) !== nextPhone;
+  if (input.editUserId && !input.editOwner) {
+    const [link] = await db
+      .select()
+      .from(residents)
+      .where(
+        and(
+          eq(residents.tenantId, input.tenantId),
+          eq(residents.userId, input.editUserId),
+          eq(residents.flatId, input.flatId),
+          eq(residents.isDeleted, false),
+        ),
+      )
+      .limit(1);
+    if (!link) {
+      throw new AppError(404, "resident_not_found", "Family member not found on this flat");
+    }
+    const [target] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.id, input.editUserId), eq(users.isDeleted, false)))
+      .limit(1);
+    if (!target) {
+      throw new AppError(404, "resident_not_found", "Family member not found on this flat");
+    }
+    const [phoneUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.phone, phone), eq(users.isDeleted, false)))
+      .limit(1);
+    if (phoneUser && phoneUser.id !== target.id) {
+      throw new AppError(
+        409,
+        "phone_taken",
+        "This mobile is already used by another person.",
+      );
+    }
+    if (email) {
+      const [emailOwner] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.email, email), eq(users.isDeleted, false)))
+        .limit(1);
+      if (emailOwner && emailOwner.id !== target.id) {
+        throw new AppError(
+          409,
+          "email_taken",
+          "This email is already used by another person. Family members each need their own email, or leave it blank.",
+        );
+      }
+    }
+    userId = target.id;
+    const nameChanged = target.name !== input.name;
+    const emailChanged = (target.email ?? null) !== email;
+    const phoneChanged = (target.phone ?? null) !== phone;
     if (nameChanged || emailChanged || phoneChanged) {
       await db
         .update(users)
         .set({
           name: input.name,
-          email: nextEmail,
-          phone: nextPhone,
+          email,
+          phone,
           updatedBy: input.actorUserId,
         })
         .where(eq(users.id, userId));
       updated = true;
     }
+  } else if (input.editOwner) {
+    if (!currentOwner) {
+      throw new AppError(
+        400,
+        "owner_required",
+        "This flat has no owner to edit",
+      );
+    }
+    const [ownerUser] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.id, currentOwner.userId), eq(users.isDeleted, false)))
+      .limit(1);
+    if (!ownerUser) {
+      throw new AppError(404, "owner_not_found", "Owner account was not found");
+    }
+    const [phoneUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.phone, phone), eq(users.isDeleted, false)))
+      .limit(1);
+    if (phoneUser && phoneUser.id !== ownerUser.id) {
+      throw new AppError(
+        409,
+        "phone_taken",
+        "This mobile is already used by another person.",
+      );
+    }
+    if (email) {
+      const [emailOwner] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.email, email), eq(users.isDeleted, false)))
+        .limit(1);
+      if (emailOwner && emailOwner.id !== ownerUser.id) {
+        throw new AppError(
+          409,
+          "email_taken",
+          "This email is already used by another person. Family members each need their own email, or leave it blank.",
+        );
+      }
+    }
+    userId = ownerUser.id;
+    const nameChanged = ownerUser.name !== input.name;
+    const emailChanged = (ownerUser.email ?? null) !== email;
+    const phoneChanged = (ownerUser.phone ?? null) !== phone;
+    if (nameChanged || emailChanged || phoneChanged) {
+      await db
+        .update(users)
+        .set({
+          name: input.name,
+          email,
+          phone,
+          updatedBy: input.actorUserId,
+        })
+        .where(eq(users.id, userId));
+      updated = true;
+    }
+  } else {
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.phone, phone), eq(users.isDeleted, false)))
+      .limit(1);
+
+    if (email) {
+      const [emailOwner] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.email, email), eq(users.isDeleted, false)))
+        .limit(1);
+      if (emailOwner && emailOwner.id !== existing?.id) {
+        throw new AppError(
+          409,
+          "email_taken",
+          "This email is already used by another person. Family members each need their own email, or leave it blank.",
+        );
+      }
+    }
+
+    userId = existing?.id;
+    if (!userId) {
+      userId = crypto.randomUUID();
+      await db.insert(users).values({
+        id: userId,
+        phone,
+        name: input.name,
+        email,
+        createdBy: input.actorUserId,
+        updatedBy: input.actorUserId,
+      });
+      created = true;
+    } else {
+      const nextEmail = email ?? existing?.email ?? null;
+      const nextPhone = phone || existing?.phone || phone;
+      const nameChanged = existing?.name !== input.name;
+      const emailChanged = (existing?.email ?? null) !== nextEmail;
+      const phoneChanged = (existing?.phone ?? null) !== nextPhone;
+      if (nameChanged || emailChanged || phoneChanged) {
+        await db
+          .update(users)
+          .set({
+            name: input.name,
+            email: nextEmail,
+            phone: nextPhone,
+            updatedBy: input.actorUserId,
+          })
+          .where(eq(users.id, userId));
+        updated = true;
+      }
+    }
+  }
+
+  if (!userId) {
+    throw new AppError(500, "user_required", "Could not resolve the resident account");
   }
 
   const [role] = await db
@@ -172,7 +322,13 @@ export async function onboardResidentIntoTenant(
     )
     .limit(1);
 
-  const isOwner = input.isOwner ?? true;
+  const isOwner = input.editOwner
+    ? true
+    : resolveIsOwnerForFlat({
+        requested: input.isOwner,
+        existingOwnerUserId: currentOwner?.userId ?? null,
+        userId,
+      });
   if (!res) {
     await db.insert(residents).values({
       id: crypto.randomUUID(),
@@ -249,22 +405,49 @@ export async function syncFlatParkingSlot(opts: {
   tenantId: string;
   flatId: string;
   parkingSlot: string | null | undefined;
+  parkingSlotId?: string | null;
   actorUserId: string;
 }) {
   const slot = opts.parkingSlot?.trim();
+  const parkingSlotId = opts.parkingSlotId?.trim();
+  if (!slot && !parkingSlotId) return;
+
+  if (parkingSlotId) {
+    const [byId] = await db
+      .select()
+      .from(parkingSlots)
+      .where(
+        and(
+          eq(parkingSlots.id, parkingSlotId),
+          eq(parkingSlots.tenantId, opts.tenantId),
+          eq(parkingSlots.isDeleted, false),
+        ),
+      )
+      .limit(1);
+    if (byId) {
+      await db
+        .update(parkingSlots)
+        .set({ flatId: opts.flatId, updatedBy: opts.actorUserId })
+        .where(eq(parkingSlots.id, byId.id));
+      return;
+    }
+  }
+
   if (!slot) return;
 
-  const [existing] = await db
+  const matches = await db
     .select()
     .from(parkingSlots)
     .where(
-      and(
-        eq(parkingSlots.tenantId, opts.tenantId),
-        eq(parkingSlots.slotNumber, slot),
-        eq(parkingSlots.isDeleted, false),
-      ),
-    )
-    .limit(1);
+      and(eq(parkingSlots.tenantId, opts.tenantId), eq(parkingSlots.isDeleted, false)),
+    );
+  const sameNumber = matches.filter(
+    (row) => row.slotNumber.trim().toLowerCase() === slot.toLowerCase(),
+  );
+  const existing =
+    sameNumber.find((row) => row.flatId === opts.flatId) ??
+    sameNumber.find((row) => !row.flatId) ??
+    sameNumber[0];
 
   if (existing) {
     await db
@@ -369,6 +552,7 @@ export async function syncFlatOnboardFields(opts: {
   flat: typeof flats.$inferSelect;
   floor?: number | null;
   parkingSlot?: string | null;
+  parkingSlotId?: string | null;
   pngGasConnection?: boolean;
   adultCount?: number;
   childCount?: number;
@@ -397,7 +581,15 @@ export async function syncFlatOnboardFields(opts: {
     nextAdults !== opts.flat.adultCount ||
     nextChildren !== opts.flat.childCount ||
     nextSeniors !== opts.flat.seniorCitizenCount;
-  if (!floorChanged && !parkingChanged && !pngChanged && !familyChanged) return;
+  if (
+    !floorChanged &&
+    !parkingChanged &&
+    !opts.parkingSlotId &&
+    !pngChanged &&
+    !familyChanged
+  ) {
+    return;
+  }
 
   await db
     .update(flats)
@@ -411,11 +603,12 @@ export async function syncFlatOnboardFields(opts: {
       updatedBy: opts.actorUserId,
     })
     .where(eq(flats.id, opts.flat.id));
-  if (parkingChanged) {
+  if (parkingChanged || opts.parkingSlotId) {
     await syncFlatParkingSlot({
       tenantId: opts.tenantId,
       flatId: opts.flat.id,
       parkingSlot: nextParking,
+      parkingSlotId: opts.parkingSlotId,
       actorUserId: opts.actorUserId,
     });
   }

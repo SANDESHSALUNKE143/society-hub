@@ -604,6 +604,27 @@ describe("api integration", () => {
       true,
     );
 
+    const extraOwner = await fetch(`${base}/v1/admin/residents`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Would Be Second Owner",
+        phone: `89${String(Date.now()).slice(-8)}`,
+        flatId: familyFlat.id,
+        isOwner: true,
+      }),
+    });
+    expect(extraOwner.ok).toBe(true);
+    const afterExtra = await fetch(`${base}/v1/admin/residents`, { headers: auth });
+    const afterRows = (await afterExtra.json()) as {
+      phone: string | null;
+      flatId: string;
+      isOwner: boolean;
+    }[];
+    const owners = afterRows.filter((r) => r.flatId === familyFlat.id && r.isOwner);
+    expect(owners).toHaveLength(1);
+    expect(owners[0]!.phone).toBe(phoneA);
+
     const emailClash = await fetch(`${base}/v1/admin/residents`, {
       method: "POST",
       headers: { ...auth, "Content-Type": "application/json" },
@@ -631,6 +652,195 @@ describe("api integration", () => {
     expect(quota.status).toBe(400);
     const quotaBody = (await quota.json()) as { code: string };
     expect(quotaBody.code).toBe("parking_quota");
+
+    const newOwnerPhone = `87${String(Date.now()).slice(-8)}`;
+    const edited = await fetch(`${base}/v1/admin/residents`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Owner Renamed",
+        phone: newOwnerPhone,
+        flatId: familyFlat.id,
+        email: `owner-edit-${Date.now()}@example.com`,
+        isOwner: true,
+        editOwner: true,
+      }),
+    });
+    expect(edited.ok).toBe(true);
+    const afterEdit = await fetch(`${base}/v1/admin/residents`, { headers: auth });
+    const afterEditRows = (await afterEdit.json()) as {
+      phone: string | null;
+      name: string | null;
+      flatId: string;
+      isOwner: boolean;
+    }[];
+    const ownersAfterEdit = afterEditRows.filter(
+      (r) => r.flatId === familyFlat.id && r.isOwner,
+    );
+    expect(ownersAfterEdit).toHaveLength(1);
+    expect(ownersAfterEdit[0]!.phone).toBe(newOwnerPhone);
+    expect(ownersAfterEdit[0]!.name).toBe("Owner Renamed");
+    expect(
+      afterEditRows.some((r) => r.flatId === familyFlat.id && r.phone === phoneB),
+    ).toBe(true);
+
+    const phoneClash = await fetch(`${base}/v1/admin/residents`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Owner Renamed",
+        phone: phoneB,
+        flatId: familyFlat.id,
+        isOwner: true,
+        editOwner: true,
+      }),
+    });
+    expect(phoneClash.status).toBe(409);
+    const clashPhone = (await phoneClash.json()) as { code: string };
+    expect(clashPhone.code).toBe("phone_taken");
+
+    const listedForIds = await fetch(`${base}/v1/admin/residents`, { headers: auth });
+    const idRows = (await listedForIds.json()) as {
+      userId: string;
+      phone: string | null;
+      flatId: string;
+      isOwner: boolean;
+      name: string | null;
+    }[];
+    const familyOnFlat = idRows.find(
+      (r) => r.flatId === familyFlat.id && r.phone === phoneB,
+    );
+    expect(familyOnFlat).toBeTruthy();
+    const ownerRow = idRows.find((r) => r.flatId === familyFlat.id && r.isOwner);
+    expect(ownerRow).toBeTruthy();
+
+    const renamedFamily = await fetch(`${base}/v1/admin/residents`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Family Member B Updated",
+        phone: phoneB,
+        flatId: familyFlat.id,
+        isOwner: false,
+        editUserId: familyOnFlat!.userId,
+      }),
+    });
+    expect(renamedFamily.ok).toBe(true);
+
+    const removeOwner = await fetch(
+      `${base}/v1/admin/residents/${ownerRow!.userId}`,
+      { method: "DELETE", headers: auth },
+    );
+    expect(removeOwner.status).toBe(409);
+    const removeOwnerBody = (await removeOwner.json()) as { code: string };
+    expect(removeOwnerBody.code).toBe("cannot_remove_owner");
+
+    const removed = await fetch(
+      `${base}/v1/admin/residents/${familyOnFlat!.userId}`,
+      { method: "DELETE", headers: auth },
+    );
+    expect(removed.ok).toBe(true);
+    const afterDelete = await fetch(`${base}/v1/admin/residents`, { headers: auth });
+    const afterDeleteRows = (await afterDelete.json()) as {
+      userId: string;
+      flatId: string;
+    }[];
+    expect(
+      afterDeleteRows.some(
+        (r) => r.flatId === familyFlat.id && r.userId === familyOnFlat!.userId,
+      ),
+    ).toBe(false);
+  });
+
+  test("flat owner adds a family member who can raise a complaint", async () => {
+    const staff = await otpLogin("9999999999");
+    const staffAuth = { Authorization: `Bearer ${staff.tokens.accessToken}` };
+    const me = await fetch(`${base}/v1/auth/me`, { headers: staffAuth });
+    const staffUser = (await me.json()) as { tenantId: string };
+    const buildings = await fetch(
+      `${base}/v1/societies/${staffUser.tenantId}/buildings`,
+      { headers: staffAuth },
+    );
+    const buildingList = (await buildings.json()) as { id: string }[];
+    const wings = await fetch(
+      `${base}/v1/buildings/${buildingList[0]!.id}/wings`,
+      { headers: staffAuth },
+    );
+    const wingList = (await wings.json()) as { id: string }[];
+    const createFlat = await fetch(`${base}/v1/wings/${wingList[0]!.id}/flats`, {
+      method: "POST",
+      headers: { ...staffAuth, "Content-Type": "application/json" },
+      body: JSON.stringify({ number: `H-${Date.now().toString().slice(-6)}` }),
+    });
+    expect(createFlat.ok).toBe(true);
+    const flat = (await createFlat.json()) as { id: string };
+
+    const ownerPhone = `85${String(Date.now()).slice(-8)}`;
+    const ownerRes = await fetch(`${base}/v1/admin/residents`, {
+      method: "POST",
+      headers: { ...staffAuth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Flat Owner",
+        phone: ownerPhone,
+        flatId: flat.id,
+        isOwner: true,
+      }),
+    });
+    expect(ownerRes.ok).toBe(true);
+
+    const owner = await otpLogin(ownerPhone);
+    const ownerAuth = { Authorization: `Bearer ${owner.tokens.accessToken}` };
+    const household = await fetch(`${base}/v1/household/members`, {
+      headers: ownerAuth,
+    });
+    expect(household.ok).toBe(true);
+    const householdRows = (await household.json()) as { phone: string | null }[];
+    expect(householdRows.some((r) => r.phone === ownerPhone)).toBe(true);
+
+    const familyPhone = `86${String(Date.now()).slice(-8)}`;
+    const added = await fetch(`${base}/v1/household/members`, {
+      method: "POST",
+      headers: { ...ownerAuth, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Son", phone: familyPhone }),
+    });
+    expect(added.ok).toBe(true);
+
+    const family = await otpLogin(familyPhone);
+    expect(family.user.flatId).toBe(flat.id);
+    const complaint = await fetch(`${base}/v1/complaints`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${family.tokens.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "Lift not working",
+        type: "lift",
+        description: "Stuck on ground floor this morning.",
+      }),
+    });
+    expect(complaint.ok).toBe(true);
+
+    const forbidden = await fetch(`${base}/v1/household/members`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${family.tokens.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: "Cousin", phone: `87${String(Date.now()).slice(-8)}` }),
+    });
+    expect(forbidden.status).toBe(403);
+  });
+
+  test("staff with a linked flat can list household members", async () => {
+    const staff = await otpLogin("9999999999");
+    const list = await fetch(`${base}/v1/household/members`, {
+      headers: { Authorization: `Bearer ${staff.tokens.accessToken}` },
+    });
+    expect(list.ok).toBe(true);
+    const rows = (await list.json()) as { flatNumber: string | null; isOwner: boolean }[];
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.some((r) => r.flatNumber === "101")).toBe(true);
   });
 
   test("CSV resident import upserts on re-upload", async () => {
@@ -899,6 +1109,76 @@ describe("api integration", () => {
     expect(selected.user.tenantId).toBe(list[0]!.tenantId);
   });
 
+  test("memberships collapse two roles in the same society", async () => {
+    const platform = await passwordLogin(
+      "superadmin@societyhub.local",
+      "Test@1234",
+    );
+    const societies = await fetch(`${base}/v1/societies`, {
+      headers: { Authorization: `Bearer ${platform.tokens.accessToken}` },
+    });
+    expect(societies.ok).toBe(true);
+    const list = (await societies.json()) as { id: string }[];
+    expect(list.length).toBeGreaterThan(0);
+    const tenantId = list[0]!.id;
+    const stamp = String(Date.now()).slice(-9);
+    const phone = `7${stamp}`;
+    const email = `dual.role.${stamp}@societyhub.local`;
+    const auth = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${platform.tokens.accessToken}`,
+    };
+
+    const committee = await fetch(`${base}/v1/manage/societies/${tenantId}/team`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({
+        email,
+        phone,
+        name: "Dual Role",
+        role: "committee",
+      }),
+    });
+    expect(committee.ok).toBe(true);
+
+    const chair = await fetch(`${base}/v1/manage/societies/${tenantId}/team`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({
+        email,
+        phone,
+        name: "Dual Role",
+        role: "chairperson",
+      }),
+    });
+    expect(chair.ok).toBe(true);
+
+    const session = await otpLogin(phone);
+    const memberships = await fetch(`${base}/v1/auth/memberships`, {
+      headers: { Authorization: `Bearer ${session.tokens.accessToken}` },
+    });
+    expect(memberships.ok).toBe(true);
+    const rows = (await memberships.json()) as {
+      tenantId: string;
+      role: string;
+    }[];
+    const forSociety = rows.filter((m) => m.tenantId === tenantId);
+    expect(forSociety).toHaveLength(1);
+    expect(forSociety[0]!.role).toBe("chairperson");
+
+    const select = await fetch(`${base}/v1/auth/select-tenant`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.tokens.accessToken}`,
+      },
+      body: JSON.stringify({ tenantId }),
+    });
+    expect(select.ok).toBe(true);
+    const selected = (await select.json()) as { user: { role: string } };
+    expect(selected.user.role).toBe("chairperson");
+  });
+
   test("platform user directory and activity trail", async () => {
     const session = await passwordLogin(
       "superadmin@societyhub.local",
@@ -973,6 +1253,349 @@ describe("api integration", () => {
       headers: { Authorization: `Bearer ${session.tokens.accessToken}` },
     });
     expect(getRes.ok).toBe(true);
+
+    const existingFlats = await fetch(
+      `${base}/v1/manage/societies/${society.id}/flats`,
+      { headers: { Authorization: `Bearer ${session.tokens.accessToken}` } },
+    );
+    expect(existingFlats.ok).toBe(true);
+    const seedFlats = (await existingFlats.json()) as { number: string }[];
+    expect(seedFlats.some((f) => f.number === "101")).toBe(true);
+
+    const addFlat = await fetch(
+      `${base}/v1/manage/societies/${society.id}/flats`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ wing: "A", floor: 3, flatNumber: "M-101" }),
+      },
+    );
+    expect(addFlat.ok).toBe(true);
+    const createdFlat = (await addFlat.json()) as {
+      number: string;
+      wingName: string | null;
+      floor: number | null;
+    };
+    expect(createdFlat.number).toBe("M-101");
+    expect(createdFlat.wingName).toBe("A");
+    expect(createdFlat.floor).toBe(3);
+
+    const sameAgain = await fetch(
+      `${base}/v1/manage/societies/${society.id}/flats`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ wing: "A", floor: 3, flatNumber: "M-101" }),
+      },
+    );
+    expect(sameAgain.ok).toBe(true);
+
+    const floorUpdate = await fetch(
+      `${base}/v1/manage/societies/${society.id}/flats`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ wing: "A", floor: 4, flatNumber: "M-101" }),
+      },
+    );
+    expect(floorUpdate.ok).toBe(true);
+    expect(((await floorUpdate.json()) as { floor: number }).floor).toBe(4);
+
+    const clash = await fetch(`${base}/v1/manage/societies/${society.id}/flats`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.tokens.accessToken}`,
+      },
+      body: JSON.stringify({ wing: "B", floor: 1, flatNumber: "M-101" }),
+    });
+    expect(clash.status).toBe(409);
+
+    const imported = await fetch(
+      `${base}/v1/manage/societies/${society.id}/flats/import`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({
+          rows: [
+            { wing: "B", floor: 1, flatNumber: "M-201" },
+            { wing: "A", floor: 4, flatNumber: "M-101" },
+            { wing: "C", floor: 2, flatNumber: "M-101" },
+          ],
+        }),
+      },
+    );
+    expect(imported.ok).toBe(true);
+    const importBody = (await imported.json()) as {
+      created: number;
+      updated: number;
+      skipped: number;
+      errors: { row: number }[];
+    };
+    expect(importBody.created).toBe(1);
+    expect(importBody.skipped).toBe(1);
+    expect(importBody.errors).toHaveLength(1);
+
+    const listed = (await (
+      await fetch(`${base}/v1/manage/societies/${society.id}/flats`, {
+        headers: { Authorization: `Bearer ${session.tokens.accessToken}` },
+      })
+    ).json()) as { id: string; number: string }[];
+    expect(listed.some((f) => f.number === "M-201")).toBe(true);
+
+    const m201 = listed.find((f) => f.number === "M-201")!;
+    const patched = await fetch(
+      `${base}/v1/manage/societies/${society.id}/flats/${m201.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ wing: "C", floor: 5, flatNumber: "M-205" }),
+      },
+    );
+    expect(patched.ok).toBe(true);
+    expect(((await patched.json()) as { number: string }).number).toBe("M-205");
+
+    const clashPatch = await fetch(
+      `${base}/v1/manage/societies/${society.id}/flats/${m201.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ wing: "A", floor: 1, flatNumber: "101" }),
+      },
+    );
+    expect(clashPatch.status).toBe(409);
+
+    const samePatch = await fetch(
+      `${base}/v1/manage/societies/${society.id}/flats/${m201.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ wing: "C", floor: 5, flatNumber: "M-205" }),
+      },
+    );
+    expect(samePatch.ok).toBe(true);
+
+    const removed = await fetch(
+      `${base}/v1/manage/societies/${society.id}/flats/${m201.id}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.tokens.accessToken}` },
+      },
+    );
+    expect(removed.ok).toBe(true);
+
+    const afterDelete = (await (
+      await fetch(`${base}/v1/manage/societies/${society.id}/flats`, {
+        headers: { Authorization: `Bearer ${session.tokens.accessToken}` },
+      })
+    ).json()) as { number: string }[];
+    expect(afterDelete.some((f) => f.number === "M-205")).toBe(false);
+
+    const revived = await fetch(
+      `${base}/v1/manage/societies/${society.id}/flats`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ wing: "C", floor: 5, flatNumber: "M-205" }),
+      },
+    );
+    expect(revived.ok).toBe(true);
+
+    const missingFlat = await fetch(
+      `${base}/v1/manage/societies/${society.id}/flats/${crypto.randomUUID()}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ wing: "A", floor: 1, flatNumber: "Z-9" }),
+      },
+    );
+    expect(missingFlat.status).toBe(404);
+
+    const missing = await fetch(
+      `${base}/v1/manage/societies/${crypto.randomUUID()}/flats`,
+      { headers: { Authorization: `Bearer ${session.tokens.accessToken}` } },
+    );
+    expect(missing.status).toBe(404);
+
+    const puzzle = await fetch(
+      `${base}/v1/manage/societies/${society.id}/parkings`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({
+          kind: "puzzle",
+          wing: "A",
+          slotNumber: "101",
+        }),
+      },
+    );
+    expect(puzzle.ok).toBe(true);
+    const puzzleSlot = (await puzzle.json()) as {
+      id: string;
+      kind: string;
+      wing: string | null;
+      slotNumber: string;
+    };
+    expect(puzzleSlot).toMatchObject({
+      kind: "puzzle",
+      wing: "A",
+      slotNumber: "101",
+    });
+
+    const openSlot = await fetch(
+      `${base}/v1/manage/societies/${society.id}/parkings`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ kind: "open", slotNumber: "OP-9" }),
+      },
+    );
+    expect(openSlot.ok).toBe(true);
+    const openBody = (await openSlot.json()) as { id: string };
+
+    const otherWing = await fetch(
+      `${base}/v1/manage/societies/${society.id}/parkings`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({
+          kind: "puzzle",
+          wing: "B",
+          slotNumber: "101",
+        }),
+      },
+    );
+    expect(otherWing.ok).toBe(true);
+
+    const parkingListRes = await fetch(
+      `${base}/v1/manage/societies/${society.id}/parkings`,
+      { headers: { Authorization: `Bearer ${session.tokens.accessToken}` } },
+    );
+    expect(parkingListRes.ok).toBe(true);
+    const parkingRows = (await parkingListRes.json()) as { slotNumber: string }[];
+    expect(parkingRows.some((p) => p.slotNumber === "101")).toBe(true);
+    expect(parkingRows.some((p) => p.slotNumber === "OP-9")).toBe(true);
+
+    const badPuzzle = await fetch(
+      `${base}/v1/manage/societies/${society.id}/parkings`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ kind: "puzzle", slotNumber: "X-1" }),
+      },
+    );
+    expect(badPuzzle.status).toBe(400);
+
+    const parkingImported = await fetch(
+      `${base}/v1/manage/societies/${society.id}/parkings/import`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({
+          rows: [
+            { kind: "puzzle", wing: "C", slotNumber: "601" },
+            { kind: "open", slotNumber: "OP-9" },
+          ],
+        }),
+      },
+    );
+    expect(parkingImported.ok).toBe(true);
+
+    const removedOpen = await fetch(
+      `${base}/v1/manage/societies/${society.id}/parkings/${openBody.id}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.tokens.accessToken}` },
+      },
+    );
+    expect(removedOpen.ok).toBe(true);
+
+    const staff = await otpLogin("9999999999");
+    const forbidden = await fetch(
+      `${base}/v1/manage/societies/${society.id}/flats`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${staff.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ wing: "C", floor: 2, flatNumber: "M-301" }),
+      },
+    );
+    expect(forbidden.status).toBe(403);
+
+    const forbiddenPatch = await fetch(
+      `${base}/v1/manage/societies/${society.id}/flats/${m201.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${staff.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ wing: "C", floor: 2, flatNumber: "M-301" }),
+      },
+    );
+    expect(forbiddenPatch.status).toBe(403);
+
+    const forbiddenDelete = await fetch(
+      `${base}/v1/manage/societies/${society.id}/flats/${m201.id}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${staff.tokens.accessToken}` },
+      },
+    );
+    expect(forbiddenDelete.status).toBe(403);
+
+    const inUse = await fetch(
+      `${base}/v1/manage/societies/11111111-1111-1111-1111-111111111111/flats/66666666-6666-6666-6666-666666666666`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.tokens.accessToken}` },
+      },
+    );
+    expect(inUse.status).toBe(409);
 
     // Platform Manage team may use Client Admin APIs in any society.
     const buildingsAsPlatform = await fetch(

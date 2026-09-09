@@ -193,7 +193,7 @@ export function mapResidentCsvRows(
       wingName: mapped.wingName || null,
       floor,
       parkingSlot: mapped.parkingSlot || null,
-      isOwner: isOwner ?? true,
+      isOwner,
     };
     if (mapped.emergencyContact !== undefined && mapped.emergencyContact !== "") {
       row.emergencyContact = mapped.emergencyContact;

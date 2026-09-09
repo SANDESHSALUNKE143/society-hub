@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { ComplaintDto, DashboardStatsDto } from "@society-hub/types";
+import {
+  ComplaintListCard,
+  complaintFlatLabel,
+  formatComplaintWhen,
+} from "@society-hub/ui";
 import { useAuth } from "../auth";
 import { canUseAdminMode, useAppMode } from "../app-mode";
 
@@ -66,16 +71,20 @@ export function DashboardPage() {
           {recent.length === 0 ? (
             <p className="text-sm text-black/50">No complaints yet.</p>
           ) : (
-            <ul className="divide-y divide-[var(--sand)]">
+            <div className="sh-complaint-list sh-complaint-list-inset">
               {recent.map((c) => (
-                <li key={c.id} className="py-3">
-                  <Link to={`/complaints/${c.id}`} className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm font-medium">{c.title}</span>
-                    <span className="badge shrink-0">{c.status.replace("_", " ")}</span>
-                  </Link>
-                </li>
+                <Link key={c.id} to={`/complaints/${c.id}`} className="block">
+                  <ComplaintListCard
+                    type={c.type}
+                    title={c.title}
+                    location={complaintFlatLabel(c.flatNumber)}
+                    when={formatComplaintWhen(c.createdAt)}
+                    ticketNumber={c.ticketNumber}
+                    status={c.status}
+                  />
+                </Link>
               ))}
-            </ul>
+            </div>
           )}
           <Link to="/complaints/new" className="btn btn-primary mt-4 w-full text-sm">
             Raise a complaint
