@@ -909,6 +909,29 @@ describe("api integration", () => {
     const published = (await account.json()) as { upiId: string };
     expect(published.upiId).toBe("keshav@upi");
 
+    const png = Uint8Array.from(
+      atob(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==",
+      ),
+      (c) => c.charCodeAt(0),
+    );
+    const qrForm = new FormData();
+    qrForm.append("file", new File([png], "qr.png", { type: "image/png" }));
+    const qrUpload = await fetch(`${base}/v1/payments/account/qr`, {
+      method: "POST",
+      headers: { Authorization: sAuth.Authorization },
+      body: qrForm,
+    });
+    expect(qrUpload.ok).toBe(true);
+    const withQr = (await qrUpload.json()) as { qrUrl: string | null };
+    expect(withQr.qrUrl).toBeTruthy();
+
+    const accountGet = await fetch(`${base}/v1/payments/account`, { headers: rAuth });
+    expect(accountGet.ok).toBe(true);
+
+    const qrGet = await fetch(`${base}/v1/payments/account/qr`, { headers: rAuth });
+    expect(qrGet.ok).toBe(true);
+
     const periodYm = uniquePeriodYm();
     await fetch(`${base}/v1/bills/generate`, {
       method: "POST",
@@ -921,12 +944,6 @@ describe("api integration", () => {
     const bill = bills.find((b) => b.periodYm === periodYm);
     expect(bill).toBeTruthy();
 
-    const png = Uint8Array.from(
-      atob(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==",
-      ),
-      (c) => c.charCodeAt(0),
-    );
     const form = new FormData();
     form.append("billId", bill!.id);
     form.append("file", new File([png], "proof.png", { type: "image/png" }));
@@ -943,6 +960,11 @@ describe("api integration", () => {
     };
     expect(pending.status).toBe("pending");
     expect(pending.method).toBe("upi");
+
+    const proof = await fetch(`${base}/v1/payments/${pending.id}/proof`, {
+      headers: { Authorization: sAuth.Authorization },
+    });
+    expect(proof.ok).toBe(true);
 
     const before = (await (
       await fetch(`${base}/v1/bills/${bill!.id}`, { headers: rAuth })
@@ -969,6 +991,40 @@ describe("api integration", () => {
       await fetch(`${base}/v1/bills/${bill!.id}`, { headers: rAuth })
     ).json()) as { status: string };
     expect(after.status).toBe("paid");
+
+    const rejectPeriod = uniquePeriodYm();
+    await fetch(`${base}/v1/bills/generate`, {
+      method: "POST",
+      headers: sAuth,
+      body: JSON.stringify({ periodYm: rejectPeriod, amountPaise: 15000 }),
+    });
+    const laterBills = (await (
+      await fetch(`${base}/v1/bills/mine`, { headers: rAuth })
+    ).json()) as { id: string; periodYm: string }[];
+    const rejectBill = laterBills.find((b) => b.periodYm === rejectPeriod);
+    expect(rejectBill).toBeTruthy();
+    const rejectForm = new FormData();
+    rejectForm.append("billId", rejectBill!.id);
+    rejectForm.append("file", new File([png], "proof2.png", { type: "image/png" }));
+    const rejectSubmit = await fetch(`${base}/v1/payments/offline`, {
+      method: "POST",
+      headers: rAuth,
+      body: rejectForm,
+    });
+    expect(rejectSubmit.ok).toBe(true);
+    const toReject = (await rejectSubmit.json()) as { id: string };
+    const rejected = await fetch(`${base}/v1/payments/${toReject.id}/reject`, {
+      method: "POST",
+      headers: sAuth,
+      body: JSON.stringify({ note: "Unclear screenshot" }),
+    });
+    expect(rejected.ok).toBe(true);
+    const rejectedBody = (await rejected.json()) as { status: string };
+    expect(rejectedBody.status).toBe("failed");
+    const stillUnpaid = (await (
+      await fetch(`${base}/v1/bills/${rejectBill!.id}`, { headers: rAuth })
+    ).json()) as { status: string };
+    expect(stillUnpaid.status).not.toBe("paid");
   });
 
   test("profile, notifications, team, and invitations", async () => {
@@ -1013,12 +1069,21 @@ describe("api integration", () => {
     const patchedRes = await fetch(`${base}/v1/team/${added.userId}`, {
       method: "PATCH",
       headers: { ...auth, "Content-Type": "application/json" },
-      body: JSON.stringify({ phone: movedPhone, name: "Renamed Staff" }),
+      body: JSON.stringify({
+        phone: movedPhone,
+        name: "Renamed Staff",
+        role: "treasurer",
+      }),
     });
     expect(patchedRes.ok).toBe(true);
-    const patched = (await patchedRes.json()) as { phone: string; name: string };
+    const patched = (await patchedRes.json()) as {
+      phone: string;
+      name: string;
+      role: string;
+    };
     expect(patched.phone).toBe(movedPhone);
     expect(patched.name).toBe("Renamed Staff");
+    expect(patched.role).toBe("treasurer");
     const patchedOtp = await otpLogin(movedPhone);
     expect(patchedOtp.user.id).toBe(added.userId);
 
@@ -1033,6 +1098,29 @@ describe("api integration", () => {
       headers: auth,
     });
     expect(removedRes.ok).toBe(true);
+
+    const restoredRes = await fetch(`${base}/v1/team`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: addEmail,
+        phone: movedPhone,
+        name: "New Staff",
+        role: "secretary",
+      }),
+    });
+    expect(restoredRes.ok).toBe(true);
+
+    const takenPhone = await fetch(`${base}/v1/team`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: addEmail,
+        phone: "8888888888",
+        role: "committee",
+      }),
+    });
+    expect(takenPhone.status).toBe(409);
 
     const resident = await otpLogin("8888888888");
     const residentAdd = await fetch(`${base}/v1/team`, {

@@ -89,6 +89,13 @@ describe("sdk client", () => {
       flatId: "66666666-6666-6666-6666-666666666666",
       email: "r@e.com",
     });
+    await client.importResidents({
+      rows: [{ name: "R", phone: "7777777777", flatNumber: "101" }],
+    });
+    await client.listPlatformUsers("ops");
+    await client.getPlatformUser("u1");
+    await client.listUserActivity("u1");
+    await client.listPlatformActivity();
     await client.listComplaints(1, 10);
     await client.getComplaint("c1");
     await client.createComplaint({
@@ -286,6 +293,9 @@ describe("sdk client", () => {
     await client.payBillMock("bill1");
     await client.getPaymentAccount();
     await client.updatePaymentAccount({ upiId: "society@upi" });
+    const screenshot = new File(["x"], "proof.png", { type: "image/png" });
+    await client.uploadPaymentQr(screenshot);
+    await client.submitOfflinePayment("bill1", screenshot);
     await client.acknowledgePayment("p1");
     await client.rejectPayment("p1", "Unclear screenshot");
     expect(true).toBe(true);
