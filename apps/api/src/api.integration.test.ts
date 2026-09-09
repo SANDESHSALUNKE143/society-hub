@@ -1654,7 +1654,7 @@ describe("api integration", () => {
     );
     expect(patchedPuzzle.ok).toBe(true);
 
-    const clash = await fetch(
+    const parkingClash = await fetch(
       `${base}/v1/manage/societies/${society.id}/parkings/${puzzleSlot.id}`,
       {
         method: "PATCH",
@@ -1662,9 +1662,9 @@ describe("api integration", () => {
         body: JSON.stringify({ kind: "puzzle", wing: "B", slotNumber: "101" }),
       },
     );
-    expect(clash.status).toBe(409);
-    const clashBody = (await clash.json()) as { message?: string };
-    expect(clashBody.message ?? "").toContain("already exists");
+    expect(parkingClash.status).toBe(409);
+    const parkingClashBody = (await parkingClash.json()) as { message?: string };
+    expect(parkingClashBody.message ?? "").toContain("already exists");
 
     const chair = await otpLogin(`7${String(suffix).slice(-9)}`);
     const revivedFlat = (await revived.json()) as { id: string };
@@ -1683,14 +1683,14 @@ describe("api integration", () => {
     });
     expect(parked.ok).toBe(true);
 
-    const inUse = await fetch(
+    const parkingInUse = await fetch(
       `${base}/v1/manage/societies/${society.id}/parkings/${revivedOpenBody.id}`,
       {
         method: "DELETE",
         headers: { Authorization: `Bearer ${session.tokens.accessToken}` },
       },
     );
-    expect(inUse.status).toBe(409);
+    expect(parkingInUse.status).toBe(409);
 
     const patchedAssigned = await fetch(
       `${base}/v1/manage/societies/${society.id}/parkings/${revivedOpenBody.id}`,
