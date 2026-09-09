@@ -324,19 +324,23 @@ class _OnboardPageState extends ConsumerState<OnboardPage> {
                 onChanged: (v) => setState(() => _isOwner = v ?? true),
               ),
               const Text('PNG gas connection'),
-              RadioListTile<bool>(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Taken'),
-                value: true,
+              RadioGroup<bool>(
                 groupValue: _pngGas,
                 onChanged: (v) => setState(() => _pngGas = v ?? false),
-              ),
-              RadioListTile<bool>(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Not taken'),
-                value: false,
-                groupValue: _pngGas,
-                onChanged: (v) => setState(() => _pngGas = v ?? false),
+                child: Column(
+                  children: [
+                    RadioListTile<bool>(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Taken'),
+                      value: true,
+                    ),
+                    RadioListTile<bool>(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Not taken'),
+                      value: false,
+                    ),
+                  ],
+                ),
               ),
               const Text(
                 'Family members in this flat',

@@ -404,21 +404,25 @@ class _AccountPageState extends ConsumerState<AccountPage> {
               if (flat != null) ...[
                 const SizedBox(height: 12),
                 const Text('PNG gas connection'),
-                RadioListTile<bool>(
-                  key: AppKeys.accountPngYes,
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Taken'),
-                  value: true,
+                RadioGroup<bool>(
                   groupValue: _pngGas,
                   onChanged: (v) => setState(() => _pngGas = v ?? false),
-                ),
-                RadioListTile<bool>(
-                  key: AppKeys.accountPngNo,
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Not taken'),
-                  value: false,
-                  groupValue: _pngGas,
-                  onChanged: (v) => setState(() => _pngGas = v ?? false),
+                  child: Column(
+                    children: [
+                      RadioListTile<bool>(
+                        key: AppKeys.accountPngYes,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Taken'),
+                        value: true,
+                      ),
+                      RadioListTile<bool>(
+                        key: AppKeys.accountPngNo,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Not taken'),
+                        value: false,
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 8),
                 const Text('Family members in this flat'),
