@@ -33,13 +33,30 @@ describe("Manage sidebar navigation", () => {
     cy.get('[data-testid="roadmap-users"]').should("be.visible");
   });
 
-  it("lists societies and opens a society detail with planned controls", () => {
+    it("lists societies and opens a society detail with the team and planned controls", () => {
+    cy.intercept("GET", "**/v1/manage/societies/*/team", {
+      statusCode: 200,
+      body: [
+        {
+          userId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          name: "Rekha Iyer",
+          email: "rekha@example.com",
+          phone: "9000000000",
+          role: "chairperson",
+        },
+      ],
+    }).as("societyTeam");
+
     cy.visit("/societies");
     cy.wait("@societies");
     cy.contains("h1", "Societies").should("be.visible");
     cy.contains("Keshav Heights").click();
 
     cy.url().should("include", "/societies/22222222-2222-2222-2222-222222222222");
+    cy.wait("@societyTeam");
+    cy.contains("h2", "Society team").should("be.visible");
+    cy.get('[data-testid="team-table"]').should("be.visible");
+    cy.get('[data-testid="team-table"]').contains("Rekha Iyer");
     cy.get('[data-testid="add-team-form"]').should("be.visible");
     cy.get('[data-testid="add-team-phone"]').should("be.visible");
     cy.get('[data-testid="society-planned-controls"]').should("be.visible");

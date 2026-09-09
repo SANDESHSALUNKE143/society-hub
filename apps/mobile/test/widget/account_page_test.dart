@@ -69,7 +69,7 @@ void main() {
   });
 
   testWidgets('saves profile fields', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    await tester.binding.setSurfaceSize(const Size(800, 2400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final bundle = MockApiBundle();
@@ -83,7 +83,11 @@ void main() {
         (server) => server.reply(200, {
           ...profileJson(),
           'emergencyContact': 'Dad 888',
-          'vehicleNumber': 'MH14XY9999',
+          'flat': {
+            ...profileJson()['flat'] as Map<String, dynamic>,
+            'adultCount': 3,
+            'pngGasConnection': true,
+          },
         }),
         data: Matchers.any,
       );
@@ -108,10 +112,8 @@ void main() {
       find.byKey(AppKeys.accountEmergencyContact),
       'Dad 888',
     );
-    await tester.enterText(
-      find.byKey(AppKeys.accountVehicleNumber),
-      'mh14xy9999',
-    );
+    await tester.enterText(find.byKey(AppKeys.accountAdults), '3');
+    await tester.ensureVisible(find.text('Save profile'));
     await tester.tap(find.text('Save profile'));
     await tester.pumpAndSettle();
 

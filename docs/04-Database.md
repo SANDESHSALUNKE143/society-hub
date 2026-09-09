@@ -37,6 +37,7 @@
 | `buildings` | Buildings within society |
 | `wings` | Wings within building |
 | `flats` | Flats within wing |
+| `resident_vehicles` | Registered two-wheelers / four-wheelers per resident (parking included vs purchased) |
 | `society_settings` | SLA days, billing defaults, notification prefs |
 
 ### Identity and residents
@@ -46,7 +47,7 @@
 | `users` | Login identity (phone, email, google subject) |
 | `otp_challenges` | OTP request/verify records |
 | `user_roles` | Role per user per tenant |
-| `residents` | Person linked to flat (owner/tenant flags, contacts) |
+| `residents` | Person linked to a flat (owner/occupant). **Many residents per flat** (family). Unique `(tenant_id, user_id)` — one membership per person per society, not one person per flat. |
 | `resident_documents` | Metadata + blob path for verification docs |
 
 ### Complaints
@@ -89,6 +90,7 @@ erDiagram
   societies ||--o| society_settings : has
   flats ||--o{ residents : occupied_by
   users ||--o{ residents : linked
+  users ||--o{ resident_vehicles : registers
   users ||--o{ user_roles : has
   residents ||--o{ complaints : raises
   complaints ||--o{ complaint_comments : has
@@ -103,6 +105,29 @@ erDiagram
 ```
 
 ## 5. Field-level notes (critical paths)
+
+### flats (onboard extras)
+
+- `floor` nullable int
+- `parking_slot` varchar — primary slot label for the flat
+- `png_gas_connection` boolean, default false — whether this flat has taken a PNG gas connection
+- `adult_count`, `child_count`, `senior_citizen_count` — household size by age group (non-negative ints, default 0)
+
+### resident_vehicles
+
+- `user_id` + `tenant_id` — the onboarded resident
+- `kind`: `two_wheeler` | `four_wheeler`
+- `registration_number` nullable — CSV count-only import may omit plates
+- `parking_purchased` — required true when this vehicle is beyond the included quota for the **flat** (2 two-wheelers and 1 four-wheeler, counted across all family members)
+- `parking_slot` optional label for that vehicle
+- `sort_order` — display / quota order (first N of each kind on the flat use included parking)
+
+### residents
+
+- Unique `(tenant_id, user_id)` so a person belongs to one flat in a society
+- Many rows may share the same `flat_id` (family members). Login identity is **mobile**; `users.email` is optional and unique when set.
+
+`resident_profiles.vehicle_number` remains a convenience copy of the first four-wheeler plate (else first two-wheeler) for older profile UI. Residents with a linked flat can update household PNG, family counts, and their `resident_vehicles` via `PATCH /v1/profile` (FR-ONB-10).
 
 ### complaints
 

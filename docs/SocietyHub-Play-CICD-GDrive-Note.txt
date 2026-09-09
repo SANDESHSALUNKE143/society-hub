@@ -85,7 +85,7 @@ Secrets (never commit, never paste in chat/Drive):
   PLAY_SERVICE_ACCOUNT_JSON          (play-upload key; repo + staging + prod)
 
 Variables:
-  MOBILE_API_BASE_URL                https://societyhub-api.onrender.com
+  MOBILE_API_BASE_URL                https://societyhub-api-ece6.onrender.com
   GOOGLE_SERVER_CLIENT_ID            (Web client ID above)
   PRIVACY_POLICY_URL                 https://societyhub-client.onrender.com/privacy
   ENABLE_PLAY_UPLOAD                 true
@@ -125,7 +125,7 @@ WHAT IS NOT AUTOMATED
 ============================================================
 RENDER (preview API the app talks to)
 ============================================================
-API:     https://societyhub-api.onrender.com
+API:     https://societyhub-api-ece6.onrender.com
 Client:  https://societyhub-client.onrender.com
 Manage:  https://societyhub-manage.onrender.com
 Hobby cold start can take ~60s. Mobile timeouts are 90s.

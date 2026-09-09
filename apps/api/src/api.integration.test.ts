@@ -293,8 +293,9 @@ describe("api integration", () => {
         body: JSON.stringify({ idToken: "good-google-jwt" }),
       });
       expect(ok.status).toBe(200);
-      const body = (await ok.json()) as { user: { email: string | null } };
-      expect(body.user.email).toBe("admin@keshav.local");
+      const body = (await ok.json()) as { user: { email: string | null; phone: string | null } };
+      // Seeded Google sub stays onboarded even if a later test moved that user's email.
+      expect(body.user.phone || body.user.email).toBeTruthy();
 
       const unknown = await fetch(`${base}/v1/auth/google`, {
         method: "POST",
@@ -344,6 +345,292 @@ describe("api integration", () => {
       }),
     });
     expect(onboard.ok).toBe(true);
+
+    const me = await fetch(`${base}/v1/auth/me`, {
+      headers: { Authorization: `Bearer ${admin.tokens.accessToken}` },
+    });
+    const meBody = (await me.json()) as { tenantId: string };
+    const buildings = await fetch(
+      `${base}/v1/societies/${meBody.tenantId}/buildings`,
+      { headers: { Authorization: `Bearer ${admin.tokens.accessToken}` } },
+    );
+    const buildingList = (await buildings.json()) as { id: string }[];
+    const wings = await fetch(
+      `${base}/v1/buildings/${buildingList[0]!.id}/wings`,
+      { headers: { Authorization: `Bearer ${admin.tokens.accessToken}` } },
+    );
+    const wingList = (await wings.json()) as { id: string }[];
+    const createVehicleFlat = await fetch(
+      `${base}/v1/wings/${wingList[0]!.id}/flats`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${admin.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ number: `V-${Date.now().toString().slice(-6)}` }),
+      },
+    );
+    expect(createVehicleFlat.ok).toBe(true);
+    const vehicleFlat = (await createVehicleFlat.json()) as { id: string };
+
+    const vehPhone = `8${String(Date.now()).slice(-9)}`;
+    const extraTw = await fetch(`${base}/v1/admin/residents`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${admin.tokens.accessToken}`,
+      },
+      body: JSON.stringify({
+        name: "Vehicle Resident",
+        phone: vehPhone,
+        flatId: vehicleFlat.id,
+        email: `veh-${Date.now()}@example.com`,
+        isOwner: true,
+        emergencyContact: "9111111111",
+        pngGasConnection: true,
+        vehicles: [
+          { kind: "two_wheeler", registrationNumber: "MH12TW0001" },
+          { kind: "two_wheeler", registrationNumber: "MH12TW0002" },
+          {
+            kind: "two_wheeler",
+            registrationNumber: "MH12TW0003",
+            parkingPurchased: true,
+            parkingSlot: "P-TW-X",
+          },
+          { kind: "four_wheeler", registrationNumber: "MH12FW0001" },
+        ],
+      }),
+    });
+    expect(extraTw.ok).toBe(true);
+
+    const vehicleUser = await otpLogin(vehPhone);
+    const profile = (await (
+      await fetch(`${base}/v1/profile`, {
+        headers: { Authorization: `Bearer ${vehicleUser.tokens.accessToken}` },
+      })
+    ).json()) as {
+      vehicles: { kind: string; parkingPurchased: boolean }[];
+      flat: { pngGasConnection: boolean } | null;
+    };
+    expect(profile.vehicles).toHaveLength(4);
+    expect(profile.vehicles.filter((v) => v.kind === "two_wheeler")).toHaveLength(3);
+    expect(profile.vehicles.some((v) => v.parkingPurchased)).toBe(true);
+    expect(profile.flat?.pngGasConnection).toBe(true);
+
+    const flatsAfterVehicles = await fetch(`${base}/v1/admin/flats`, {
+      headers: { Authorization: `Bearer ${admin.tokens.accessToken}` },
+    });
+    const counted = (await flatsAfterVehicles.json()) as {
+      id: string;
+      twoWheelerCount?: number;
+      fourWheelerCount?: number;
+    }[];
+    const countedFlat = counted.find((f) => f.id === vehicleFlat.id);
+    expect(countedFlat?.twoWheelerCount).toBe(3);
+    expect(countedFlat?.fourWheelerCount).toBe(1);
+
+    const blocked = await fetch(`${base}/v1/admin/residents`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${admin.tokens.accessToken}`,
+      },
+      body: JSON.stringify({
+        name: "Too Many Bikes",
+        phone: `7${String(Date.now()).slice(-9)}`,
+        flatId: vehicleFlat.id,
+        email: `bikes-${Date.now()}@example.com`,
+        vehicles: [
+          { kind: "two_wheeler", registrationNumber: "MH12TW1001" },
+          { kind: "two_wheeler", registrationNumber: "MH12TW1002" },
+          { kind: "two_wheeler", registrationNumber: "MH12TW1003" },
+        ],
+      }),
+    });
+    expect(blocked.status).toBe(400);
+
+    const listed = await fetch(`${base}/v1/admin/residents`, {
+      headers: { Authorization: `Bearer ${admin.tokens.accessToken}` },
+    });
+    expect(listed.ok).toBe(true);
+    const residents = (await listed.json()) as {
+      phone: string | null;
+      name: string | null;
+      flatNumber: string;
+    }[];
+    expect(residents.some((r) => r.phone === phone && r.name === "Coverage Resident")).toBe(
+      true,
+    );
+
+    const resident = await otpLogin("8888888888");
+    const forbidden = await fetch(`${base}/v1/admin/residents`, {
+      headers: { Authorization: `Bearer ${resident.tokens.accessToken}` },
+    });
+    expect(forbidden.status).toBe(403);
+
+    const householdPatch = await fetch(`${base}/v1/profile`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${vehicleUser.tokens.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        pngGasConnection: false,
+        adultCount: 3,
+        childCount: 2,
+        seniorCitizenCount: 1,
+        vehicles: [{ kind: "two_wheeler" }, { kind: "two_wheeler" }],
+      }),
+    });
+    expect(householdPatch.ok).toBe(true);
+    const household = (await householdPatch.json()) as {
+      vehicles: { kind: string }[];
+      flat: {
+        pngGasConnection: boolean;
+        adultCount: number;
+        childCount: number;
+        seniorCitizenCount: number;
+        twoWheelerCount: number;
+        fourWheelerCount: number;
+      } | null;
+    };
+    expect(household.flat?.pngGasConnection).toBe(false);
+    expect(household.flat?.adultCount).toBe(3);
+    expect(household.flat?.childCount).toBe(2);
+    expect(household.flat?.seniorCitizenCount).toBe(1);
+    expect(household.vehicles).toHaveLength(2);
+    expect(household.flat?.twoWheelerCount).toBe(2);
+    expect(household.flat?.fourWheelerCount).toBe(0);
+
+    const authAlias = await fetch(`${base}/v1/auth/profile`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${vehicleUser.tokens.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ adultCount: 4 }),
+    });
+    expect(authAlias.ok).toBe(true);
+    const aliased = (await authAlias.json()) as {
+      flat: { adultCount: number } | null;
+    };
+    expect(aliased.flat?.adultCount).toBe(4);
+
+    const overQuota = await fetch(`${base}/v1/profile`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${vehicleUser.tokens.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        vehicles: [
+          { kind: "two_wheeler" },
+          { kind: "two_wheeler" },
+          { kind: "two_wheeler" },
+        ],
+      }),
+    });
+    expect(overQuota.status).toBe(400);
+  });
+
+  test("admin onboards multiple family members on one flat", async () => {
+    const staff = await otpLogin("9999999999");
+    const auth = { Authorization: `Bearer ${staff.tokens.accessToken}` };
+    const me = await fetch(`${base}/v1/auth/me`, { headers: auth });
+    const user = (await me.json()) as { tenantId: string };
+
+    const buildings = await fetch(
+      `${base}/v1/societies/${user.tenantId}/buildings`,
+      { headers: auth },
+    );
+    const buildingList = (await buildings.json()) as { id: string }[];
+    const wings = await fetch(
+      `${base}/v1/buildings/${buildingList[0]!.id}/wings`,
+      { headers: auth },
+    );
+    const wingList = (await wings.json()) as { id: string }[];
+    const createFlat = await fetch(`${base}/v1/wings/${wingList[0]!.id}/flats`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ number: `F-${Date.now().toString().slice(-6)}` }),
+    });
+    expect(createFlat.ok).toBe(true);
+    const familyFlat = (await createFlat.json()) as { id: string };
+
+    const phoneA = `81${String(Date.now()).slice(-8)}`;
+    const emailA = `fam-a-${Date.now()}@example.com`;
+    const first = await fetch(`${base}/v1/admin/residents`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Family Member A",
+        phone: phoneA,
+        flatId: familyFlat.id,
+        email: emailA,
+        isOwner: true,
+        vehicles: [
+          { kind: "two_wheeler", registrationNumber: "MH12FM0001" },
+          { kind: "two_wheeler", registrationNumber: "MH12FM0002" },
+        ],
+      }),
+    });
+    expect(first.ok).toBe(true);
+
+    const phoneB = `82${String(Date.now()).slice(-8)}`;
+    const second = await fetch(`${base}/v1/admin/residents`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Family Member B",
+        phone: phoneB,
+        flatId: familyFlat.id,
+        isOwner: false,
+      }),
+    });
+    expect(second.ok).toBe(true);
+
+    const listed = await fetch(`${base}/v1/admin/residents`, { headers: auth });
+    const residents = (await listed.json()) as {
+      phone: string | null;
+      name: string | null;
+      flatId: string;
+    }[];
+    const onFlat = residents.filter((r) => r.flatId === familyFlat.id);
+    expect(onFlat.some((r) => r.phone === phoneA && r.name === "Family Member A")).toBe(
+      true,
+    );
+    expect(onFlat.some((r) => r.phone === phoneB && r.name === "Family Member B")).toBe(
+      true,
+    );
+
+    const emailClash = await fetch(`${base}/v1/admin/residents`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Email Clash",
+        phone: `83${String(Date.now()).slice(-8)}`,
+        flatId: familyFlat.id,
+        email: emailA,
+      }),
+    });
+    expect(emailClash.status).toBe(409);
+    const clashBody = (await emailClash.json()) as { code: string };
+    expect(clashBody.code).toBe("email_taken");
+
+    const quota = await fetch(`${base}/v1/admin/residents`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Extra Bike",
+        phone: `84${String(Date.now()).slice(-8)}`,
+        flatId: familyFlat.id,
+        vehicles: [{ kind: "two_wheeler", registrationNumber: "MH12FM0003" }],
+      }),
+    });
+    expect(quota.status).toBe(400);
+    const quotaBody = (await quota.json()) as { code: string };
+    expect(quotaBody.code).toBe("parking_quota");
   });
 
   test("CSV resident import upserts on re-upload", async () => {
@@ -352,17 +639,31 @@ describe("api integration", () => {
       Authorization: `Bearer ${admin.tokens.accessToken}`,
       "Content-Type": "application/json",
     };
-    const flats = (await (
-      await fetch(`${base}/v1/admin/flats`, { headers: auth })
-    ).json()) as {
+    const me = await fetch(`${base}/v1/auth/me`, { headers: auth });
+    const meBody = (await me.json()) as { tenantId: string };
+    const buildings = await fetch(
+      `${base}/v1/societies/${meBody.tenantId}/buildings`,
+      { headers: auth },
+    );
+    const buildingList = (await buildings.json()) as { id: string }[];
+    const wings = await fetch(
+      `${base}/v1/buildings/${buildingList[0]!.id}/wings`,
+      { headers: auth },
+    );
+    const wingList = (await wings.json()) as { id: string }[];
+    const createFlat = await fetch(`${base}/v1/wings/${wingList[0]!.id}/flats`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ number: `C-${Date.now().toString().slice(-6)}` }),
+    });
+    expect(createFlat.ok).toBe(true);
+    const flat = (await createFlat.json()) as {
       id: string;
       number: string;
       wingName: string | null;
       floor: number | null;
       parkingSlot: string | null;
-    }[];
-    expect(flats.length).toBeGreaterThan(0);
-    const flat = flats[0]!;
+    };
     const phone = `6${String(Date.now()).slice(-9)}`;
     const email = `csv-upsert-${Date.now()}@example.com`;
 
@@ -462,6 +763,95 @@ describe("api integration", () => {
     expect(thirdBody.created).toBe(0);
     expect(thirdBody.updated).toBe(0);
     expect(thirdBody.unchanged).toBe(1);
+  });
+
+  test("import stores two-wheeler and four-wheeler counts without plates", async () => {
+    const admin = await otpLogin("9999999999");
+    const auth = {
+      Authorization: `Bearer ${admin.tokens.accessToken}`,
+      "Content-Type": "application/json",
+    };
+    const me = await fetch(`${base}/v1/auth/me`, { headers: auth });
+    const user = (await me.json()) as { tenantId: string };
+    const buildings = await fetch(
+      `${base}/v1/societies/${user.tenantId}/buildings`,
+      { headers: auth },
+    );
+    const buildingList = (await buildings.json()) as { id: string }[];
+    const wings = await fetch(
+      `${base}/v1/buildings/${buildingList[0]!.id}/wings`,
+      { headers: auth },
+    );
+    const wingList = (await wings.json()) as { id: string }[];
+    const createFlat = await fetch(`${base}/v1/wings/${wingList[0]!.id}/flats`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ number: `N-${Date.now().toString().slice(-6)}` }),
+    });
+    expect(createFlat.ok).toBe(true);
+    const flat = (await createFlat.json()) as { id: string; number: string };
+
+    const phone = `61${String(Date.now()).slice(-8)}`;
+    const imported = await fetch(`${base}/v1/admin/residents/import`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({
+        rows: [
+          {
+            name: "Count Only",
+            phone,
+            flatNumber: flat.number,
+            isOwner: true,
+            adultCount: 2,
+            childCount: 1,
+            seniorCitizenCount: 1,
+            vehicles: [
+              { kind: "two_wheeler" },
+              { kind: "two_wheeler" },
+              { kind: "four_wheeler" },
+            ],
+          },
+        ],
+        sendInvites: false,
+      }),
+    });
+    expect(imported.ok).toBe(true);
+    const body = (await imported.json()) as { created: number; errors: unknown[] };
+    expect(body.created).toBe(1);
+    expect(body.errors).toEqual([]);
+
+    const resident = await otpLogin(phone);
+    const profile = (await (
+      await fetch(`${base}/v1/profile`, {
+        headers: { Authorization: `Bearer ${resident.tokens.accessToken}` },
+      })
+    ).json()) as {
+      vehicles: { kind: string; registrationNumber: string | null }[];
+      flat: {
+        adultCount: number;
+        childCount: number;
+        seniorCitizenCount: number;
+      } | null;
+    };
+    expect(profile.vehicles).toHaveLength(3);
+    expect(profile.vehicles.every((v) => v.registrationNumber == null)).toBe(true);
+    expect(profile.vehicles.filter((v) => v.kind === "two_wheeler")).toHaveLength(2);
+    expect(profile.vehicles.filter((v) => v.kind === "four_wheeler")).toHaveLength(1);
+    expect(profile.flat).toMatchObject({
+      adultCount: 2,
+      childCount: 1,
+      seniorCitizenCount: 1,
+    });
+
+    const flatsAfter = await fetch(`${base}/v1/admin/flats`, { headers: auth });
+    const counted = (await flatsAfter.json()) as {
+      id: string;
+      twoWheelerCount?: number;
+      fourWheelerCount?: number;
+    }[];
+    const countedFlat = counted.find((f) => f.id === flat.id);
+    expect(countedFlat?.twoWheelerCount).toBe(2);
+    expect(countedFlat?.fourWheelerCount).toBe(1);
   });
 
   test("validation error shape", async () => {
@@ -829,8 +1219,44 @@ describe("api integration", () => {
     const body = (await add.json()) as { role: string; userId: string };
     expect(body.role).toBe("secretary");
 
+    const listed = await fetch(`${base}/v1/manage/societies/${list[0]!.id}/team`, {
+      headers: { Authorization: `Bearer ${session.tokens.accessToken}` },
+    });
+    expect(listed.ok).toBe(true);
+    const team = (await listed.json()) as { userId: string; role: string }[];
+    expect(team.some((m) => m.userId === body.userId && m.role === "secretary")).toBe(
+      true,
+    );
+
     const otp = await otpLogin(phone);
     expect(otp.user.id).toBe(body.userId);
+
+    const removed = await fetch(
+      `${base}/v1/manage/societies/${list[0]!.id}/team/${body.userId}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.tokens.accessToken}` },
+      },
+    );
+    expect(removed.ok).toBe(true);
+
+    const afterDelete = await fetch(
+      `${base}/v1/manage/societies/${list[0]!.id}/team`,
+      {
+        headers: { Authorization: `Bearer ${session.tokens.accessToken}` },
+      },
+    );
+    expect(afterDelete.ok).toBe(true);
+    const remaining = (await afterDelete.json()) as { userId: string }[];
+    expect(remaining.some((m) => m.userId === body.userId)).toBe(false);
+
+    const missingSociety = await fetch(
+      `${base}/v1/manage/societies/${crypto.randomUUID()}/team`,
+      {
+        headers: { Authorization: `Bearer ${session.tokens.accessToken}` },
+      },
+    );
+    expect(missingSociety.status).toBe(404);
   });
 
   test("re-adding society team member with mobile enables OTP login", async () => {
@@ -1064,6 +1490,31 @@ describe("api integration", () => {
     expect(added.role).toBe("secretary");
     const addedOtp = await otpLogin(addPhone);
     expect(addedOtp.user.id).toBe(added.userId);
+
+    const noFlatVehicles = await fetch(`${base}/v1/profile`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${addedOtp.tokens.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        pngGasConnection: true,
+        vehicles: [{ kind: "two_wheeler" }],
+      }),
+    });
+    expect(noFlatVehicles.status).toBe(400);
+    const noFlatBody = (await noFlatVehicles.json()) as { code: string };
+    expect(noFlatBody.code).toBe("no_flat");
+
+    const emergencyOnly = await fetch(`${base}/v1/profile`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${addedOtp.tokens.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ emergencyContact: "9111111111" }),
+    });
+    expect(emergencyOnly.ok).toBe(true);
 
     const movedPhone = `5${String(Date.now()).slice(-9)}`;
     const patchedRes = await fetch(`${base}/v1/team/${added.userId}`, {
@@ -2242,6 +2693,24 @@ describe("api integration", () => {
         })
       ).status,
     ).toBe(403);
+    expect(
+      (
+        await fetch(`${base}/v1/manage/societies/${crypto.randomUUID()}/team`, {
+          headers: { Authorization: rAuth.Authorization },
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await fetch(
+          `${base}/v1/manage/societies/${crypto.randomUUID()}/team/${crypto.randomUUID()}`,
+          {
+            method: "DELETE",
+            headers: { Authorization: rAuth.Authorization },
+          },
+        )
+      ).status,
+    ).toBe(403);
 
     // Societies list as platform + get own society as staff
     const societies = await fetch(`${base}/v1/societies`, {
@@ -2259,6 +2728,13 @@ describe("api integration", () => {
       headers: { Authorization: sAuth.Authorization },
     });
     expect(societyGet.ok).toBe(true);
+    expect(
+      (
+        await fetch(`${base}/v1/manage/societies/${me.tenantId}/team`, {
+          headers: { Authorization: sAuth.Authorization },
+        })
+      ).status,
+    ).toBe(403);
 
     // Complaint comments GET + invalid attachment type
     const created = await fetch(`${base}/v1/complaints`, {

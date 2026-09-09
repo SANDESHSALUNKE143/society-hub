@@ -137,6 +137,18 @@ export async function listTeamForTenant(tenantId: string): Promise<TeamMemberDto
     );
 }
 
+export async function listSocietyTeamOrThrow(
+  tenantId: string,
+): Promise<TeamMemberDto[]> {
+  const [society] = await db
+    .select({ id: societies.id })
+    .from(societies)
+    .where(and(eq(societies.id, tenantId), eq(societies.isDeleted, false)))
+    .limit(1);
+  if (!society) throw new AppError(404, "not_found", "Society not found");
+  return listTeamForTenant(tenantId);
+}
+
 async function listStaffRoles(tenantId: string, userId: string) {
   return db
     .select()

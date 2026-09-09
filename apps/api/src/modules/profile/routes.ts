@@ -13,9 +13,11 @@ import {
 } from "../../db/schema";
 import { authPlugin, requireAuth } from "../../lib/auth-context";
 import { upsertProfile } from "./upsert-profile";
+import { applyResidentProfilePatch, vehicleCountsForFlat } from "./apply-patch";
+import { listResidentVehicles } from "../admin/onboard-resident";
 
 /** Shared with auth/routes.ts so `PATCH /v1/auth/profile` (used by the SDK) stays in sync. */
-export { upsertProfile };
+export { upsertProfile, applyResidentProfilePatch };
 
 export async function getProfileDto(
   tenantId: string,
@@ -45,6 +47,10 @@ export async function getProfileDto(
       number: flats.number,
       floor: flats.floor,
       parkingSlot: flats.parkingSlot,
+      pngGasConnection: flats.pngGasConnection,
+      adultCount: flats.adultCount,
+      childCount: flats.childCount,
+      seniorCitizenCount: flats.seniorCitizenCount,
       wingName: wings.name,
       buildingName: buildings.name,
       isOwner: residents.isOwner,
@@ -63,10 +69,16 @@ export async function getProfileDto(
     )
     .limit(1);
 
+  const vehicles = await listResidentVehicles(tenantId, userId);
+  const vehicleCounts = flatRow
+    ? await vehicleCountsForFlat(tenantId, flatRow.id)
+    : { twoWheelerCount: 0, fourWheelerCount: 0 };
+
   return {
     userId,
     emergencyContact: row?.emergencyContact ?? null,
     vehicleNumber: row?.vehicleNumber ?? null,
+    vehicles,
     societyName: society?.name ?? null,
     flat: flatRow
       ? {
@@ -76,6 +88,12 @@ export async function getProfileDto(
           buildingName: flatRow.buildingName ?? null,
           floor: flatRow.floor ?? null,
           parkingSlot: flatRow.parkingSlot ?? null,
+          pngGasConnection: Boolean(flatRow.pngGasConnection),
+          adultCount: Number(flatRow.adultCount ?? 0),
+          childCount: Number(flatRow.childCount ?? 0),
+          seniorCitizenCount: Number(flatRow.seniorCitizenCount ?? 0),
+          twoWheelerCount: vehicleCounts.twoWheelerCount,
+          fourWheelerCount: vehicleCounts.fourWheelerCount,
           isOwner: Boolean(flatRow.isOwner),
         }
       : null,
@@ -91,6 +109,6 @@ export const profileRoutes = new Elysia({ prefix: "/v1/profile" })
   .patch("/", async ({ auth, body }) => {
     const claims = requireAuth(auth);
     const parsed = updateResidentProfileSchema.parse(body);
-    await upsertProfile(claims.tenantId, claims.sub, parsed);
+    await applyResidentProfilePatch(claims.tenantId, claims.sub, parsed);
     return getProfileDto(claims.tenantId, claims.sub);
   });

@@ -57,6 +57,27 @@
       "when": 1788934000000,
       "tag": "0007_offline_upi_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1788960000000,
+      "tag": "0008_resident_vehicles_png",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1788965000000,
+      "tag": "0009_vehicle_registration_nullable",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1788970000000,
+      "tag": "0010_flat_family_counts",
+      "breakpoints": true
     }
   ]
 }

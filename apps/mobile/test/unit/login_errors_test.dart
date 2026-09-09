@@ -45,6 +45,20 @@ void main() {
     );
   });
 
+  test('maps HTML 404 dumps to an unreachable-server hint', () {
+    expect(
+      loginErrorText(
+        ApiException(
+          code: 'http_error',
+          message:
+              'This exception was thrown because the response has a status code of 404',
+          statusCode: 404,
+        ),
+      ),
+      contains('Cannot reach the SocietyHub server'),
+    );
+  });
+
   test('maps a cancelled Google picker', () {
     expect(
       loginErrorText(StateError('Google sign-in was cancelled. Try again.')),

@@ -8,6 +8,7 @@ import 'package:societyhub_mobile/auth/google_id_token.dart';
 import 'package:societyhub_mobile/auth/session.dart';
 import 'package:societyhub_mobile/config/api_config.dart';
 import 'package:societyhub_mobile/core/app_keys.dart';
+import 'package:societyhub_mobile/core/app_version.dart';
 import 'package:societyhub_mobile/features/auth/presentation/login_page.dart';
 
 import '../helpers/test_harness.dart';
@@ -245,6 +246,37 @@ void main() {
 
     expect(find.byKey(AppKeys.loginBusy), findsOneWidget);
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('login footer shows installed version', (tester) async {
+    await tester.pumpWidget(wrapForWidgetTest(child: const LoginPage()));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(AppKeys.loginVersion), findsOneWidget);
+    expect(find.text('Installed version 1.0.0 (1)'), findsOneWidget);
+    expect(find.byKey(AppKeys.loginUpdate), findsNothing);
+  });
+
+  testWidgets('login footer shows Update when Play has a newer build', (tester) async {
+    var opened = false;
+    await tester.pumpWidget(
+      wrapForWidgetTest(
+        child: const LoginPage(),
+        versionSource: FakeAppVersionSource(
+          versionLabel: '1.0.0 (1)',
+          updateAvailable: true,
+          onStartUpdate: () async {
+            opened = true;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(AppKeys.loginUpdate), findsOneWidget);
+    await tester.tap(find.byKey(AppKeys.loginUpdate));
+    await tester.pumpAndSettle();
+    expect(opened, isTrue);
   });
 }
 
