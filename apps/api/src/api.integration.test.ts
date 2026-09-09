@@ -816,6 +816,33 @@ describe("api integration", () => {
     );
     expect(patched.ok).toBe(true);
 
+    const missingMember = await fetch(
+      `${base}/v1/household/members/${crypto.randomUUID()}`,
+      {
+        method: "PATCH",
+        headers: { ...ownerAuth, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Ghost", phone: familyPhone }),
+      },
+    );
+    expect(missingMember.status).toBe(404);
+
+    const otherPhone = `88${String(Date.now()).slice(-8)}`;
+    const other = await fetch(`${base}/v1/household/members`, {
+      method: "POST",
+      headers: { ...ownerAuth, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Sibling", phone: otherPhone }),
+    });
+    expect(other.ok).toBe(true);
+    const phoneClash = await fetch(
+      `${base}/v1/household/members/${addedBody.user.id}`,
+      {
+        method: "PATCH",
+        headers: { ...ownerAuth, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Daughter", phone: otherPhone }),
+      },
+    );
+    expect(phoneClash.status).toBe(409);
+
     const editOwner = await fetch(
       `${base}/v1/household/members/${owner.user.id}`,
       {
@@ -958,7 +985,6 @@ describe("api integration", () => {
             parkingSlot: "P-CSV-UPD",
             emergencyContact: "9222222222",
             vehicleNumber: "MH12CSV0002",
-            isOwner: false,
           },
         ],
         sendInvites: false,
@@ -988,7 +1014,6 @@ describe("api integration", () => {
             email,
             flatNumber: flat.number,
             wingName: flat.wingName,
-            isOwner: false,
             emergencyContact: "9222222222",
             vehicleNumber: "MH12CSV0002",
           },
@@ -1585,6 +1610,98 @@ describe("api integration", () => {
     );
     expect(removedOpen.ok).toBe(true);
 
+    const platformParking = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.tokens.accessToken}`,
+    };
+    const revivedOpen = await fetch(
+      `${base}/v1/manage/societies/${society.id}/parkings`,
+      {
+        method: "POST",
+        headers: platformParking,
+        body: JSON.stringify({ kind: "open", slotNumber: "OP-9" }),
+      },
+    );
+    expect(revivedOpen.ok).toBe(true);
+    const revivedOpenBody = (await revivedOpen.json()) as { id: string };
+
+    const openWingA = await fetch(
+      `${base}/v1/manage/societies/${society.id}/parkings`,
+      {
+        method: "POST",
+        headers: platformParking,
+        body: JSON.stringify({ kind: "open", wing: "A", slotNumber: "OP-22" }),
+      },
+    );
+    expect(openWingA.ok).toBe(true);
+    const openWingB = await fetch(
+      `${base}/v1/manage/societies/${society.id}/parkings`,
+      {
+        method: "POST",
+        headers: platformParking,
+        body: JSON.stringify({ kind: "open", wing: "B", slotNumber: "OP-22" }),
+      },
+    );
+    expect(openWingB.ok).toBe(true);
+
+    const patchedPuzzle = await fetch(
+      `${base}/v1/manage/societies/${society.id}/parkings/${puzzleSlot.id}`,
+      {
+        method: "PATCH",
+        headers: platformParking,
+        body: JSON.stringify({ kind: "puzzle", wing: "A", slotNumber: "102" }),
+      },
+    );
+    expect(patchedPuzzle.ok).toBe(true);
+
+    const clash = await fetch(
+      `${base}/v1/manage/societies/${society.id}/parkings/${puzzleSlot.id}`,
+      {
+        method: "PATCH",
+        headers: platformParking,
+        body: JSON.stringify({ kind: "puzzle", wing: "B", slotNumber: "101" }),
+      },
+    );
+    expect(clash.status).toBe(409);
+    const clashBody = (await clash.json()) as { message?: string };
+    expect(clashBody.message ?? "").toContain("already exists");
+
+    const chair = await otpLogin(`7${String(suffix).slice(-9)}`);
+    const revivedFlat = (await revived.json()) as { id: string };
+    const parked = await fetch(`${base}/v1/admin/residents`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${chair.tokens.accessToken}`,
+      },
+      body: JSON.stringify({
+        name: "Parker",
+        phone: `71${String(Date.now()).slice(-8)}`,
+        flatId: revivedFlat.id,
+        parkingSlot: "OP-9",
+      }),
+    });
+    expect(parked.ok).toBe(true);
+
+    const inUse = await fetch(
+      `${base}/v1/manage/societies/${society.id}/parkings/${revivedOpenBody.id}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.tokens.accessToken}` },
+      },
+    );
+    expect(inUse.status).toBe(409);
+
+    const patchedAssigned = await fetch(
+      `${base}/v1/manage/societies/${society.id}/parkings/${revivedOpenBody.id}`,
+      {
+        method: "PATCH",
+        headers: platformParking,
+        body: JSON.stringify({ kind: "open", slotNumber: "OP-9" }),
+      },
+    );
+    expect(patchedAssigned.ok).toBe(true);
+
     const staff = await otpLogin("9999999999");
     const forbidden = await fetch(
       `${base}/v1/manage/societies/${society.id}/flats`,
@@ -2146,6 +2263,11 @@ describe("api integration", () => {
     expect(added.role).toBe("secretary");
     const addedOtp = await otpLogin(addPhone);
     expect(addedOtp.user.id).toBe(added.userId);
+
+    const householdNoFlat = await fetch(`${base}/v1/household/members`, {
+      headers: { Authorization: `Bearer ${addedOtp.tokens.accessToken}` },
+    });
+    expect(householdNoFlat.status).toBe(400);
 
     const noFlatVehicles = await fetch(`${base}/v1/profile`, {
       method: "PATCH",
