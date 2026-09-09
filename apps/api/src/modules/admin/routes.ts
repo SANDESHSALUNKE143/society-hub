@@ -1,27 +1,22 @@
 import { Elysia } from "elysia";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   createInvitationSchema,
   onboardResidentSchema,
   residentImportSchema,
 } from "@society-hub/validation";
-import type { FlatDto, TeamMemberDto } from "@society-hub/types";
+import type { FlatDto } from "@society-hub/types";
 import { db } from "../../db/client";
-import {
-  buildings,
-  flats,
-  userRoles,
-  users,
-  wings,
-} from "../../db/schema";
+import { buildings, flats, wings } from "../../db/schema";
 import { createInvitationForTenant } from "../invitations/routes";
+import { listTeamForTenant } from "../team/routes";
 import {
   authPlugin,
   requireAuth,
   requireSocietyStaff,
 } from "../../lib/auth-context";
 import { onboardResidentIntoTenant } from "./onboard-resident";
-import { importResidentsCsvRows } from "./import-residents";
+import { importResidentsCsvRows, previewResidentImport } from "./import-residents";
 
 function parseDetails(raw: string | null): Record<string, string> | null {
   if (!raw) return null;
@@ -54,42 +49,6 @@ function toFlatDto(
     details: parseDetails(row.detailsJson),
   };
 }
-
-async function listTeamForTenant(tenantId: string): Promise<TeamMemberDto[]> {
-  return db
-    .select({
-      userId: userRoles.userId,
-      role: userRoles.role,
-      name: users.name,
-      email: users.email,
-      phone: users.phone,
-    })
-    .from(userRoles)
-    .innerJoin(users, eq(users.id, userRoles.userId))
-    .where(
-      and(
-        eq(userRoles.tenantId, tenantId),
-        inArray(userRoles.role, [
-          "chairperson",
-          "admin",
-          "secretary",
-          "treasurer",
-          "cashier",
-          "committee",
-        ]),
-        eq(userRoles.isDeleted, false),
-        eq(users.isDeleted, false),
-      ),
-    );
-}
-
-export const teamRoutes = new Elysia({ prefix: "/v1/team" })
-  .use(authPlugin)
-  .get("/", async ({ auth }) => {
-    const claims = requireAuth(auth);
-    requireSocietyStaff(claims);
-    return listTeamForTenant(claims.tenantId);
-  });
 
 export const adminRoutes = new Elysia({ prefix: "/v1/admin" })
   .use(authPlugin)
@@ -186,6 +145,13 @@ export const adminRoutes = new Elysia({ prefix: "/v1/admin" })
       email: parsed.email,
       flatId: parsed.flatId,
     });
+  })
+  /** Dry run: validate + resolve flats and report what an import would do. */
+  .post("/residents/import/preview", async ({ auth, body }) => {
+    const claims = requireAuth(auth);
+    requireSocietyStaff(claims);
+    residentImportSchema.parse(body);
+    return previewResidentImport(claims.tenantId, body);
   })
   .post("/residents/import", async ({ auth, body }) => {
     const claims = requireAuth(auth);

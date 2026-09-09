@@ -169,6 +169,32 @@ Save `id` as `societyId` / `tenantId`.
 Complaint types: `electric`, `plumbing`, `housekeeping`, `security`, `lift`, `other`  
 Statuses: `open`, `assigned`, `in_progress`, `resolved`, `closed`
 
+### C2. Invite → accept → verify (resident lifecycle)
+
+1. Staff: `POST /v1/invitations` `{ "email": "…", "role": "resident", "flatId": "…", "residentType": "tenant" }`
+   → `pending`, expires in 14 days. In `DEV_AUTH` the response carries `devToken`.
+2. Invitee (unauthenticated): `GET /v1/invites/{token}` to preview, then
+   `POST /v1/invites/accept` `{ "token": "…", "name": "…", "phone": "…" }`
+3. The membership is created as **`pending_verification`** — accepting does not self-approve.
+4. Resident: `POST /v1/profile/documents` (`multipart`, `file` + `docType`) → membership moves to
+   `under_review`
+5. Staff: `GET /v1/admin/residents?verificationStatus=under_review`, then
+   `POST /v1/admin/residents/{id}/verify` (or `/reject` with a `reason`)
+6. Resident: `GET /v1/profile` shows `membership.verificationStatus: "approved"` — or the rejection
+   reason verbatim
+
+### C3. Move a resident out (history is preserved)
+
+1. Staff: `POST /v1/admin/residents/{id}/move-out` `{ "moveOutDate": "2025-05-31", "reason": "…" }`
+2. The membership becomes `moved_out`; it disappears from `GET /v1/admin/flats/{flatId}/residents`
+   but remains in `GET /v1/admin/flats/{flatId}/history` and in
+   `GET /v1/admin/residents?status=moved_out`
+3. Re-onboarding the same person creates a **new** membership; both periods stay visible
+
+Resident types: `owner`, `tenant`, `family`  
+Membership statuses: `invited`, `pending_verification`, `active`, `suspended`, `moved_out`, `rejected`  
+Verification statuses: `pending`, `under_review`, `approved`, `rejected`
+
 ### D. Billing and payment
 
 1. Staff: `POST /v1/bills/generate` with `{ "periodYm": "2026-07", "amountPaise": 500000 }`
@@ -229,12 +255,14 @@ Auth required unless noted. **Staff** = society staff roles. **Platform** = `sup
 | POST | `/select-tenant` | Yes | `{ tenantId }` → new tokens |
 | PATCH | `/profile` | Yes | Alias of profile upsert (SDK) |
 
-### 6.3 Profile — `/v1/profile`
+### 6.3 Profile (resident self-service) — `/v1/profile`
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/` | Yes | `{ userId, emergencyContact, vehicleNumber }` |
-| PATCH | `/` | Yes | Partial upsert |
+| GET | `/` | Yes | Full `ResidentProfileDto`: identity, society, flat, **membership** (status, verification, rejection reason, move-in/out), family, documents, communication preferences |
+| PATCH | `/` | Yes | Partial upsert. Accepts `name`, structured emergency contact, `vehicleNumber`, `communicationPreferences`. **Cannot** change flat, resident type, membership status or verification — those require an Admin. |
+| POST | `/documents` | Yes | `multipart` field `file` + `docType`, `documentNumber?`, `expiresAt?`. Image or PDF, ≤10 MB. |
+| GET | `/documents/:id/file` | Yes | Streams the caller's **own** document. Another resident gets `403`; another society gets `404`. |
 
 ### 6.4 Manage (platform) — `/v1/manage/societies`
 
@@ -266,25 +294,87 @@ Body: `{ email? , phone?, name?, role }` — email **or** phone required. Role d
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/v1/admin/flats` | Staff | Flat picker |
+| GET | `/v1/admin/flats` | Staff | Flat picker — all flats with floor + parking |
 | GET | `/v1/admin/structure` | Staff | Nested buildings→wings→flats |
 | GET | `/v1/admin/team` | Staff | Society team |
 | POST | `/v1/admin/invites` | Staff | Same as invitations create |
-| GET | `/v1/admin/flats` | Staff | Flats with floor + parking |
-| POST | `/v1/admin/residents` | Staff | Onboard one resident |
-| POST | `/v1/admin/residents/import` | Staff | Bulk CSV rows (`name,phone,email,flatNumber,…`) with validation |
-| POST | `/v1/invitations` | Staff | Invite via email and/or WhatsApp (Gupshup adapter; stub without keys) |
-| GET | `/v1/team` | Staff | Alias team list |
+| POST | `/v1/admin/residents/import/preview` | Staff | **Dry run** — validates rows against the live structure and reports per-row `action` (`create`/`update`/`unchanged`/`skip`), errors and warnings. Writes nothing. |
+| POST | `/v1/admin/residents/import` | Staff | Applies the import. Rejects the **whole file** when any row is invalid unless `allowPartial: true`. |
 
-### 6.7 Invitations — `/v1/invitations`
+### 6.6a Residents — `/v1/admin/residents`
+
+All staff-only and tenant-scoped: a resident in another society returns `404`.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/` | **Server-side** directory. Query: `page`, `limit` (≤100), `search` (name/phone/email/flat), `buildingId`, `wingId`, `flatId`, `residentType`, `status`, `verificationStatus`, `sort` (`name`\|`flat`\|`createdAt`\|`status`), `order`. Returns `Paginated<ResidentSummaryDto>`. |
+| POST | `/` | Onboard/move a resident in. `{ name, phone, email, flatId, residentType?, isPrimary?, moveInDate?, remarks? }`. If the person already occupies a *different* flat, that period is closed first. |
+| GET | `/:id` | `ResidentDetailDto` — membership, flat, roles, emergency contact, family, documents, vehicles, other memberships |
+| PATCH | `/:id` | `{ name?, phone?, email?, residentType?, isPrimary?, moveInDate?, remarks? }` |
+| POST | `/:id/verify` | Approve verification → `active` |
+| POST | `/:id/reject` | `{ reason }` (required, ≥3 chars) → `rejected`; the reason is shown to the resident |
+| POST | `/:id/suspend` | `{ reason? }` |
+| POST | `/:id/reactivate` | Back to `active` |
+| POST | `/:id/move-out` | `{ moveOutDate?, reason?, remarks? }` — closes the period; **history is preserved** |
+| GET | `/:id/activity` | Audit trail for this membership |
+| GET/POST | `/:id/family` | List / add household members |
+| PATCH/DELETE | `/:id/family/:familyId` | Edit / soft-delete a household member |
+| GET/POST | `/:id/documents` | List / upload verification documents (`multipart` `file` + `docType`) |
+
+Illegal lifecycle moves (e.g. suspending an already-suspended resident, reviving a moved-out one)
+return **409 `invalid_transition`**.
+
+### 6.6b Documents — `/v1/admin/resident-documents`
+
+| Method | Path | Notes |
+|--------|------|-------|
+| POST | `/:id/verify` | Approve |
+| POST | `/:id/reject` | `{ reason }` — notifies the resident |
+| DELETE | `/:id` | Soft-delete |
+| GET | `/:id/file` | Streams the file. Staff only, tenant-checked, **audited**, `Cache-Control: private, no-store`. Accepts `?access_token=` for browser `<a>`/`<img>` (same pattern as `/v1/media`). |
+
+Blob paths are never returned to clients.
+
+### 6.6c Flats & occupancy — `/v1/admin/flats`, `/v1/admin/occupancy`
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/v1/admin/flats/:id` | `FlatDetailDto` — derived `occupancyStatus`, primary owner, co-owners, tenants, current occupants, vehicles, document count |
+| GET | `/v1/admin/flats/:id/residents` | Current occupants only |
+| GET | `/v1/admin/flats/:id/history` | Every occupancy period, newest first |
+| GET | `/v1/admin/occupancy/stats` | `OccupancyStatsDto` — flats total/occupied/vacant/owner/tenant, residents total/active/pending-verification/moved-out, pending invitations |
+| GET | `/v1/admin/occupancy/flats` | Paginated flat directory. Query: `page`, `limit`, `search`, `buildingId`, `wingId`, `occupancy` (`vacant`\|`owner_occupied`\|`tenant_occupied`) |
+
+Occupancy is **derived from live memberships**, never stored on the flat.
+
+### 6.6d Society team — `/v1/team`
+
+Society-scoped, distinct from the platform-only `/v1/manage/societies/:id/team`.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/` | Society staff list |
+| POST | `/members` | `{ userId? \| email? \| phone?, name?, role }` — reuses a matching account when one exists |
+| PATCH | `/members/:userId/role` | `{ fromRole, toRole }` |
+| DELETE | `/members/:userId/roles/:role` | Removes one staff role |
+
+Removing the last chairperson returns **409 `last_chairperson`**.
+
+### 6.7 Invitations — `/v1/invitations` (staff) and `/v1/invites` (public)
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/` | Staff | |
-| POST | `/` | Staff | `{ email? , phone?, role }` |
-| POST | `/:id/revoke` | Staff | Sets status `revoked` |
+| GET | `/v1/invitations` | Staff | `Paginated<InvitationDto>`. Query: `page`, `limit`, `search`, `status`, `role`. Expired pending rows are flipped lazily on read. |
+| POST | `/v1/invitations` | Staff | `{ name?, email?, phone?, role, flatId?, residentType?, expiresInDays?, channels? }`. Email **or** phone required. |
+| POST | `/v1/invitations/:id/resend` | Staff | Re-sends and extends the window; `pending`/`expired` only |
+| POST | `/v1/invitations/:id/revoke` | Staff | `revoked`; frees the slot so a replacement can be sent at once |
+| GET | `/v1/invites/:token` | **None** | Public preview: society, role, flat, expiry. The token is the credential. |
+| POST | `/v1/invites/accept` | **None** | `{ token, name?, phone?, email? }`. Single use. Creates/reuses the user, grants the role, and — when the invite names a flat — opens a `pending_verification` membership. |
 
-When `DEV_AUTH=true`, create responses may include `devToken`.
+A second **active** invitation for the same recipient and role returns **409 `invitation_exists`**;
+an expired token returns **410 `invite_expired`**.
+
+When `DEV_AUTH=true`, create responses include `devToken` so testers can accept without delivery.
 
 ### 6.8 Complaints & media
 
@@ -344,7 +434,7 @@ Payment methods: `razorpay`, `cash`, `cheque`, `neft`
 |--------|------|------|-------|
 | GET | `/v1/notifications` | Yes | In-app inbox |
 | POST | `/v1/notifications/:id/read` | Yes | Idempotent |
-| GET | `/v1/dashboard/stats` | Yes | Counts scoped by role |
+| GET | `/v1/dashboard/stats` | Yes | Counts scoped by role. Staff (without `?mine=1`) additionally get `occupancy: OccupancyStatsDto`; in Resident mode `occupancy` is `null`. |
 | GET | `/v1/audit` | Staff | Alias |
 | GET | `/v1/audit-logs` | Staff | Same data |
 

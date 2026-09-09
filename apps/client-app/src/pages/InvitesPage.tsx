@@ -1,37 +1,105 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import type { InvitationDto } from "@society-hub/types";
+import type {
+  FlatDto,
+  InvitationDto,
+  InvitationStatus,
+  Paginated,
+  ResidentType,
+} from "@society-hub/types";
 import { ApiClientError } from "@society-hub/sdk";
+import {
+  INVITATION_STATUS_LABELS,
+  RESIDENT_TYPE_LABELS,
+  ShConfirmDialog,
+  ShDataTable,
+  ShField,
+  ShFilterBar,
+  ShFormGrid,
+  ShPage,
+  ShPageHeader,
+  ShPagination,
+  ShSection,
+  ShSelect,
+  ShSplit,
+  invitationBadgeClass,
+  type ShColumn,
+} from "@society-hub/ui";
 import { useAuth } from "../auth";
 import { canUseAdminMode } from "../app-mode";
 
+const PAGE_SIZE = 20;
+
+const STATUS_OPTIONS = [
+  { value: "", label: "All statuses" },
+  ...Object.entries(INVITATION_STATUS_LABELS).map(([value, label]) => ({
+    value,
+    label,
+  })),
+];
+
 export function InvitesPage() {
   const { client, user } = useAuth();
-  const [items, setItems] = useState<InvitationDto[] | null>(null);
+  const allowed = canUseAdminMode(user?.role);
+
+  const [data, setData] = useState<Paginated<InvitationDto> | null>(null);
+  const [flats, setFlats] = useState<FlatDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [status, setStatus] = useState("");
+  const [search, setSearch] = useState("");
+  const [searchDraft, setSearchDraft] = useState("");
+
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState("resident");
+  const [flatId, setFlatId] = useState("");
+  const [residentType, setResidentType] = useState<ResidentType>("owner");
   const [channelEmail, setChannelEmail] = useState(true);
   const [channelWhatsapp, setChannelWhatsapp] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const allowed = canUseAdminMode(user?.role);
+  const [revoking, setRevoking] = useState<InvitationDto | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  function load() {
+  const load = useCallback(() => {
+    setLoading(true);
+    setListError(null);
     client
-      .listInvitations()
-      .then(setItems)
-      .catch(() => setItems([]));
-  }
+      .listInvitations({
+        page,
+        limit: PAGE_SIZE,
+        status: (status || undefined) as InvitationStatus | undefined,
+        search: search || undefined,
+      })
+      .then(setData)
+      .catch((err) =>
+        setListError(
+          err instanceof ApiClientError ? err.body.message : "Could not load invitations",
+        ),
+      )
+      .finally(() => setLoading(false));
+  }, [client, page, status, search]);
 
   useEffect(() => {
     if (!allowed) return;
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowed, load]);
+
+  useEffect(() => {
+    if (!allowed) return;
+    client
+      .listFlats()
+      .then(setFlats)
+      .catch(() => setFlats([]));
   }, [client, allowed]);
 
   if (!allowed) return <Navigate to="/dashboard" replace />;
+
+  const isResidentInvite = role === "resident" || role === "tenant";
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -47,14 +115,19 @@ export function InvitesPage() {
         return;
       }
       const res = await client.createInvitation({
+        name: name || null,
         email: email || null,
         phone: phone || null,
         role,
+        flatId: isResidentInvite ? flatId || null : null,
+        residentType: isResidentInvite ? residentType : null,
         channels,
       });
       const parts: string[] = [];
       if (res.delivery?.email) {
-        parts.push(res.delivery.email.ok ? "email sent" : `email failed: ${res.delivery.email.error}`);
+        parts.push(
+          res.delivery.email.ok ? "email sent" : `email failed: ${res.delivery.email.error}`,
+        );
       }
       if (res.delivery?.whatsapp) {
         parts.push(
@@ -64,6 +137,7 @@ export function InvitesPage() {
         );
       }
       setMessage(parts.length ? `Invite created (${parts.join("; ")})` : "Invite created");
+      setName("");
       setEmail("");
       setPhone("");
       load();
@@ -74,138 +148,318 @@ export function InvitesPage() {
     }
   }
 
+  async function resend(invitation: InvitationDto) {
+    setError(null);
+    setMessage(null);
+    try {
+      await client.resendInvitation(invitation.id);
+      setMessage(`Invitation resent to ${invitation.email ?? invitation.phone}.`);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.body.message : "Could not resend");
+    }
+  }
+
+  async function confirmRevoke() {
+    if (!revoking) return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      await client.revokeInvitation(revoking.id);
+      setMessage("Invitation revoked.");
+      setRevoking(null);
+      load();
+    } catch (err) {
+      setActionError(
+        err instanceof ApiClientError ? err.body.message : "Could not revoke",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const columns: ShColumn<InvitationDto>[] = [
+    {
+      key: "contact",
+      header: "Invitee",
+      render: (row) => (
+        <div>
+          <p className="font-medium">{row.name ?? row.email ?? row.phone ?? "—"}</p>
+          <p className="text-xs text-black/45">{row.email ?? row.phone ?? "—"}</p>
+        </div>
+      ),
+    },
+    {
+      key: "role",
+      header: "Role",
+      render: (row) => (
+        <div className="flex flex-wrap gap-1">
+          <span className="badge">{row.role}</span>
+          {row.residentType && (
+            <span className="badge">{RESIDENT_TYPE_LABELS[row.residentType]}</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "flat",
+      header: "Flat",
+      render: (row) => row.flatNumber ?? "—",
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => (
+        <span className={invitationBadgeClass(row.status)}>
+          {INVITATION_STATUS_LABELS[row.status]}
+        </span>
+      ),
+    },
+    {
+      key: "expires",
+      header: "Expires",
+      render: (row) => (
+        <span className="text-xs text-black/55">
+          {row.expiresAt ? row.expiresAt.slice(0, 10) : "—"}
+          {row.resendCount > 0 && ` · resent ${row.resendCount}×`}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (row) => (
+        <div className="flex justify-end gap-1.5">
+          {(row.status === "pending" || row.status === "expired") && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              data-testid={`invite-resend-${row.id}`}
+              onClick={() => resend(row)}
+            >
+              Resend
+            </button>
+          )}
+          {row.status !== "accepted" && row.status !== "revoked" && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              data-testid={`invite-revoke-${row.id}`}
+              onClick={() => setRevoking(row)}
+            >
+              Revoke
+            </button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="sh-page sh-page-wide" data-testid="invites-page">
-      <div className="sh-page-header">
-        <div>
-          <h1 className="font-display text-xl sm:text-2xl">Invites</h1>
-          <p className="mt-0.5 text-sm text-black/55">
-            Invite by email and/or WhatsApp. Without provider keys, delivery is stubbed locally.
-          </p>
-        </div>
+    <ShPage wide>
+      <ShPageHeader
+        title="Invitations"
+        description="Invite by email and/or WhatsApp. Invites expire after 14 days and can be resent or revoked."
+      />
+
+      <ShSplit>
+        <ShSection title="Send an invitation" testId="invites-form">
+          <form className="space-y-2.5" onSubmit={onSubmit}>
+            <ShFormGrid>
+              <ShField label="Name" htmlFor="invite-name">
+                <input
+                  id="invite-name"
+                  className="input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </ShField>
+              <ShField label="Role" htmlFor="invite-role">
+                <select
+                  id="invite-role"
+                  className="input"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                >
+                  <option value="resident">Resident</option>
+                  <option value="chairperson">Chairperson</option>
+                  <option value="secretary">Secretary</option>
+                  <option value="treasurer">Treasurer</option>
+                  <option value="committee">Committee</option>
+                </select>
+              </ShField>
+              <ShField label="Email" htmlFor="invite-email">
+                <input
+                  id="invite-email"
+                  className="input"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </ShField>
+              <ShField label="Phone (WhatsApp)" htmlFor="invite-phone">
+                <input
+                  id="invite-phone"
+                  className="input"
+                  value={phone}
+                  placeholder="9198xxxxxxxx"
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </ShField>
+              {isResidentInvite && (
+                <>
+                  <ShField label="Flat" htmlFor="invite-flat">
+                    <select
+                      id="invite-flat"
+                      className="input"
+                      value={flatId}
+                      data-testid="invite-flat"
+                      onChange={(e) => setFlatId(e.target.value)}
+                    >
+                      <option value="">No flat yet</option>
+                      {flats.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.wingName ? `${f.wingName}-` : ""}
+                          {f.number}
+                        </option>
+                      ))}
+                    </select>
+                  </ShField>
+                  <ShField label="Resident type" htmlFor="invite-resident-type">
+                    <select
+                      id="invite-resident-type"
+                      className="input"
+                      value={residentType}
+                      onChange={(e) => setResidentType(e.target.value as ResidentType)}
+                    >
+                      {Object.entries(RESIDENT_TYPE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </ShField>
+                </>
+              )}
+            </ShFormGrid>
+            <div className="flex flex-wrap gap-4 text-sm">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={channelEmail}
+                  onChange={(e) => setChannelEmail(e.target.checked)}
+                />
+                Email
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={channelWhatsapp}
+                  onChange={(e) => setChannelWhatsapp(e.target.checked)}
+                />
+                WhatsApp
+              </label>
+            </div>
+            <button
+              className="btn btn-primary"
+              disabled={busy}
+              type="submit"
+              data-testid="invites-submit"
+            >
+              {busy ? "Sending…" : "Send invite"}
+            </button>
+          </form>
+          {message && <p className="mt-2 text-sm text-[var(--leaf)]">{message}</p>}
+          {error && <p className="mt-2 text-sm text-[var(--danger)]">{error}</p>}
+        </ShSection>
+
+        <ShSection
+          title="How invitations work"
+          description="The invite link carries a one-time token."
+        >
+          <ul className="list-disc space-y-1 pl-4 text-xs text-black/60">
+            <li>Only one active invitation can exist per person and role.</li>
+            <li>Revoking frees the slot so a fresh invite can be sent immediately.</li>
+            <li>Accepted residents land in <strong>Pending verification</strong> for review.</li>
+            <li>Expired invites can be resent, which issues a new 14-day window.</li>
+          </ul>
+        </ShSection>
+      </ShSplit>
+
+      <div className="mt-4">
+        <ShFilterBar testId="invites-filters">
+          <div className="sh-field min-w-[12rem] flex-1">
+            <label className="label" htmlFor="invite-search">
+              Search
+            </label>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setPage(1);
+                setSearch(searchDraft.trim());
+              }}
+            >
+              <input
+                id="invite-search"
+                className="input"
+                placeholder="Name, email or phone"
+                value={searchDraft}
+                data-testid="invites-search"
+                onChange={(e) => setSearchDraft(e.target.value)}
+              />
+            </form>
+          </div>
+          <ShSelect
+            label="Status"
+            id="invite-status"
+            testId="invites-filter-status"
+            value={status}
+            onChange={(v) => {
+              setPage(1);
+              setStatus(v);
+            }}
+            options={STATUS_OPTIONS}
+          />
+        </ShFilterBar>
+
+        <ShDataTable
+          testId="invites-table"
+          columns={columns}
+          rows={data?.items ?? null}
+          rowKey={(row) => row.id}
+          loading={loading}
+          error={listError}
+          onRetry={load}
+          emptyMessage="No invitations match these filters."
+        />
+
+        {data && (
+          <ShPagination
+            testId="invites-pagination"
+            page={data.page}
+            limit={data.limit}
+            total={data.total}
+            onPageChange={setPage}
+          />
+        )}
       </div>
 
-      <form className="card sh-section space-y-3" onSubmit={onSubmit} data-testid="invites-form">
-        <div className="grid gap-2.5 sm:grid-cols-2">
-          <div>
-            <label className="label" htmlFor="invite-email">
-              Email
-            </label>
-            <input
-              id="invite-email"
-              className="input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="invite-phone">
-              Phone (WhatsApp)
-            </label>
-            <input
-              id="invite-phone"
-              className="input"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="9198xxxxxxxx"
-            />
-          </div>
-        </div>
-        <div>
-          <label className="label" htmlFor="invite-role">
-            Role
-          </label>
-          <select
-            id="invite-role"
-            className="input"
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-          >
-            <option value="resident">Resident</option>
-            <option value="chairperson">Chairperson</option>
-            <option value="secretary">Secretary</option>
-            <option value="committee">Committee</option>
-          </select>
-        </div>
-        <div className="flex flex-wrap gap-4 text-sm">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={channelEmail}
-              onChange={(e) => setChannelEmail(e.target.checked)}
-            />
-            Email
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={channelWhatsapp}
-              onChange={(e) => setChannelWhatsapp(e.target.checked)}
-            />
-            WhatsApp (Gupshup)
-          </label>
-        </div>
-        <button className="btn btn-primary" disabled={busy} type="submit" data-testid="invites-submit">
-          Send invite
-        </button>
-      </form>
-
-      {message && <p className="mt-3 text-sm text-[var(--leaf)]">{message}</p>}
-      {error && <p className="mt-3 text-sm text-[var(--danger)]">{error}</p>}
-
-      <div className="card mt-8 overflow-x-auto">
-        <table className="w-full min-w-[28rem] text-left text-sm">
-          <thead className="border-b border-[var(--sand)] text-xs uppercase tracking-wide text-black/45">
-            <tr>
-              <th className="px-4 py-3">Contact</th>
-              <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Sent</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items === null && (
-              <tr>
-                <td className="px-4 py-4 text-black/45" colSpan={4}>
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {items?.length === 0 && (
-              <tr>
-                <td className="px-4 py-4 text-black/45" colSpan={4}>
-                  No invites sent yet.
-                </td>
-              </tr>
-            )}
-            {items?.map((r) => (
-              <tr key={r.id} className="border-b border-[var(--sand)]/70 last:border-0">
-                <td className="px-4 py-3">{r.email ?? r.phone ?? "—"}</td>
-                <td className="px-4 py-3">
-                  <span className="badge">{r.role}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`badge ${
-                      r.status === "accepted"
-                        ? "badge-success"
-                        : r.status === "revoked"
-                          ? "badge-danger"
-                          : ""
-                    }`}
-                  >
-                    {r.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-xs text-black/50">
-                  {new Date(r.createdAt).toLocaleDateString()}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+      <ShConfirmDialog
+        open={Boolean(revoking)}
+        title="Revoke invitation"
+        message={`This invitation link will stop working. ${
+          revoking?.email ?? revoking?.phone ?? "The invitee"
+        } will not be able to join with it.`}
+        confirmLabel="Revoke"
+        danger
+        busy={busy}
+        error={actionError}
+        onConfirm={confirmRevoke}
+        onCancel={() => {
+          setRevoking(null);
+          setActionError(null);
+        }}
+      />
+    </ShPage>
   );
 }

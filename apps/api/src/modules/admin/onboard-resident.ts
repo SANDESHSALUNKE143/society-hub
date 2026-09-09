@@ -1,9 +1,15 @@
-import { and, eq, or } from "drizzle-orm";
-import type { UserDto } from "@society-hub/types";
+import { and, eq, isNotNull, or } from "drizzle-orm";
+import type { ResidentStatus, ResidentType, UserDto } from "@society-hub/types";
 import { db } from "../../db/client";
 import { flats, parkingSlots, residents, userRoles, users } from "../../db/schema";
 import { AppError } from "../../lib/errors";
 import { buildUserDto } from "../../lib/auth-context";
+import { ActivityType, AuditEntity, recordAudit } from "../../lib/audit";
+import {
+  activeKeyFor,
+  isOwnerFor,
+  toMysqlDateTime,
+} from "../../lib/resident-lifecycle";
 import { upsertProfile } from "../profile/upsert-profile";
 
 export type OnboardResidentInput = {
@@ -13,7 +19,13 @@ export type OnboardResidentInput = {
   phone: string;
   email?: string | null;
   flatId: string;
+  /** @deprecated Prefer `residentType`; kept so the CSV contract still works. */
   isOwner?: boolean;
+  residentType?: ResidentType;
+  isPrimary?: boolean;
+  status?: ResidentStatus;
+  moveInDate?: string | null;
+  remarks?: string | null;
   emergencyContact?: string | null;
   vehicleNumber?: string | null;
 };
@@ -24,6 +36,8 @@ export type OnboardResidentResult = {
   created: boolean;
   /** True when an existing resident/user record was updated. */
   updated: boolean;
+  /** `residents.id` of the membership this call created or touched. */
+  residentId: string;
 };
 
 export async function onboardResidentIntoTenant(
@@ -117,42 +131,101 @@ export async function onboardResidentIntoTenant(
     updated = true;
   }
 
-  const [res] = await db
+  const residentType: ResidentType =
+    input.residentType ?? (input.isOwner === false ? "tenant" : "owner");
+  const status: ResidentStatus = input.status ?? "active";
+  const now = toMysqlDateTime(input.moveInDate ?? undefined);
+
+  // The person's current occupancy in this society, if any.
+  const [live] = await db
     .select()
     .from(residents)
     .where(
-      and(eq(residents.userId, userId), eq(residents.tenantId, input.tenantId)),
+      and(
+        eq(residents.userId, userId),
+        eq(residents.tenantId, input.tenantId),
+        eq(residents.isDeleted, false),
+        isNotNull(residents.activeKey),
+      ),
     )
     .limit(1);
 
-  const isOwner = input.isOwner ?? true;
-  if (!res) {
-    await db.insert(residents).values({
-      id: crypto.randomUUID(),
-      tenantId: input.tenantId,
-      userId,
-      flatId: input.flatId,
-      isOwner,
-      createdBy: input.actorUserId,
-      updatedBy: input.actorUserId,
-    });
-    created = true;
-  } else {
-    const flatChanged = res.flatId !== input.flatId;
-    const ownerChanged = res.isOwner !== isOwner;
-    const wasDeleted = res.isDeleted;
-    if (flatChanged || ownerChanged || wasDeleted) {
+  let residentId: string;
+  if (live && live.flatId === input.flatId) {
+    // Same flat — correct the membership in place, keeping the period open.
+    residentId = live.id;
+    const typeChanged = live.residentType !== residentType;
+    const primaryChanged =
+      input.isPrimary !== undefined && live.isPrimary !== input.isPrimary;
+    const remarksChanged =
+      input.remarks !== undefined && live.remarks !== input.remarks;
+    if (typeChanged || primaryChanged || remarksChanged) {
       await db
         .update(residents)
         .set({
-          flatId: input.flatId,
-          isOwner,
-          isDeleted: false,
+          residentType,
+          isOwner: isOwnerFor(residentType),
+          ...(input.isPrimary !== undefined ? { isPrimary: input.isPrimary } : {}),
+          ...(input.remarks !== undefined ? { remarks: input.remarks } : {}),
           updatedBy: input.actorUserId,
         })
-        .where(eq(residents.id, res.id));
+        .where(eq(residents.id, live.id));
       updated = true;
     }
+  } else {
+    // New flat (or first ever) — close any open period, then open a new one so
+    // the previous occupancy survives as history.
+    if (live) {
+      await db
+        .update(residents)
+        .set({
+          status: "moved_out",
+          activeKey: null,
+          moveOutDate: now,
+          moveOutReason: "Moved to another flat",
+          updatedBy: input.actorUserId,
+        })
+        .where(eq(residents.id, live.id));
+      await recordAudit({
+        tenantId: input.tenantId,
+        actorUserId: input.actorUserId,
+        action: ActivityType.RESIDENT_MOVED_OUT,
+        entityType: AuditEntity.RESIDENT,
+        entityId: live.id,
+        message: "Moved out — reassigned to another flat",
+        meta: { fromFlatId: live.flatId, toFlatId: input.flatId },
+      });
+    }
+
+    residentId = crypto.randomUUID();
+    await db.insert(residents).values({
+      id: residentId,
+      tenantId: input.tenantId,
+      userId,
+      flatId: input.flatId,
+      residentType,
+      isOwner: isOwnerFor(residentType),
+      isPrimary: input.isPrimary ?? true,
+      status,
+      verificationStatus: status === "active" ? "approved" : "pending",
+      verifiedAt: status === "active" ? now : null,
+      verifiedBy: status === "active" ? input.actorUserId : null,
+      moveInDate: now,
+      remarks: input.remarks ?? null,
+      activeKey: activeKeyFor(status),
+      createdBy: input.actorUserId,
+      updatedBy: input.actorUserId,
+    });
+    await recordAudit({
+      tenantId: input.tenantId,
+      actorUserId: input.actorUserId,
+      action: ActivityType.RESIDENT_MOVED_IN,
+      entityType: AuditEntity.RESIDENT,
+      entityId: residentId,
+      message: `Moved in as ${residentType}`,
+      meta: { flatId: input.flatId, residentType, moveInDate: now },
+    });
+    created = true;
   }
 
   if (
@@ -169,10 +242,23 @@ export async function onboardResidentIntoTenant(
   // Prefer "created" when this pass introduced the membership; otherwise mark update.
   if (created) updated = false;
 
+  if (created) {
+    await recordAudit({
+      tenantId: input.tenantId,
+      actorUserId: input.actorUserId,
+      action: ActivityType.RESIDENT_CREATED,
+      entityType: AuditEntity.RESIDENT,
+      entityId: residentId,
+      message: `Onboarded ${input.name}`,
+      meta: { flatId: input.flatId, residentType },
+    });
+  }
+
   return {
     user: await buildUserDto(userId, input.tenantId, "resident"),
     created,
     updated,
+    residentId,
   };
 }
 

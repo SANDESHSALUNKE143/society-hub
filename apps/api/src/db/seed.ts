@@ -26,6 +26,20 @@ const FLAT_ID = "66666666-6666-6666-6666-666666666666";
 const SUPERADMIN_USERNAME = "superadmin";
 const SUPERADMIN_PASSWORD = process.env.SUPERADMIN_PASSWORD ?? "Test@1234";
 
+/**
+ * A live, verified owner membership. `activeKey: "Y"` is what marks the row as
+ * currently occupying the flat — without it the resident would not appear in
+ * the directory, flat occupancy or dashboard counts.
+ */
+const ACTIVE_OWNER_MEMBERSHIP = {
+  isOwner: true,
+  residentType: "owner",
+  isPrimary: true,
+  status: "active",
+  verificationStatus: "approved",
+  activeKey: "Y",
+} as const;
+
 async function ensureSociety() {
   const existing = await db
     .select()
@@ -98,7 +112,7 @@ async function ensureSociety() {
     tenantId: TENANT_ID,
     userId: RESIDENT_USER_ID,
     flatId: FLAT_ID,
-    isOwner: true,
+    ...ACTIVE_OWNER_MEMBERSHIP,
   });
 
   // President/chairperson is also a resident of the society (dual Admin | Resident use).
@@ -107,7 +121,7 @@ async function ensureSociety() {
     tenantId: TENANT_ID,
     userId: ADMIN_USER_ID,
     flatId: FLAT_ID,
-    isOwner: true,
+    ...ACTIVE_OWNER_MEMBERSHIP,
   });
 
   return true;
@@ -140,7 +154,7 @@ async function ensureChairpersonResident() {
     tenantId: TENANT_ID,
     userId: ADMIN_USER_ID,
     flatId: FLAT_ID,
-    isOwner: true,
+    ...ACTIVE_OWNER_MEMBERSHIP,
   });
   console.log("Linked chairperson (9999999999) to flat 101 for Resident mode");
 }

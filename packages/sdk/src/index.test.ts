@@ -235,7 +235,9 @@ describe("sdk client", () => {
     expect(paths).toEqual([
       "http://api.test/v1/auth/memberships",
       "http://api.test/v1/auth/select-tenant",
-      "http://api.test/v1/auth/profile",
+      // Profile edits go to the canonical /v1/profile route, which also
+      // accepts the display name and communication preferences.
+      "http://api.test/v1/profile",
     ]);
   });
 
@@ -329,6 +331,147 @@ describe("sdk client", () => {
     await client.listEvents();
     await client.createEvent({ title: "Ganesh Utsav" });
     expect(true).toBe(true);
+  });
+
+  test("resident directory helpers build server-side query strings", async () => {
+    const paths: string[] = [];
+    globalThis.fetch = (async (url) => {
+      paths.push(String(url));
+      return jsonOk({ items: [], page: 1, limit: 20, total: 0 });
+    }) as typeof fetch;
+    const client = createSocietyHubClient({
+      baseUrl: "http://api.test",
+      getAccessToken: () => "tok",
+    });
+
+    await client.listResidents();
+    await client.listResidents({
+      page: 2,
+      limit: 50,
+      search: "rohan vichare",
+      residentType: "tenant",
+      status: "active",
+      verificationStatus: "pending",
+      sort: "flat",
+      order: "desc",
+    });
+    // Empty and undefined filters must not appear in the query string at all.
+    await client.listResidents({ search: "", buildingId: undefined, page: 1 });
+    await client.listFlatsWithOccupancy({ occupancy: "vacant" });
+    await client.listInvitations({ status: "pending", search: "a@b.com" });
+
+    expect(paths[0]).toBe("http://api.test/v1/admin/residents");
+    expect(paths[1]).toContain("page=2");
+    expect(paths[1]).toContain("limit=50");
+    expect(paths[1]).toContain("search=rohan+vichare");
+    expect(paths[1]).toContain("residentType=tenant");
+    expect(paths[1]).toContain("verificationStatus=pending");
+    expect(paths[1]).toContain("sort=flat");
+    expect(paths[1]).toContain("order=desc");
+    expect(paths[2]).toBe("http://api.test/v1/admin/residents?page=1");
+    expect(paths[3]).toBe("http://api.test/v1/admin/occupancy/flats?occupancy=vacant");
+    expect(paths[4]).toContain("/v1/invitations?status=pending");
+  });
+
+  test("resident lifecycle helpers hit the documented routes", async () => {
+    const calls: Array<{ path: string; method: string }> = [];
+    globalThis.fetch = (async (url, init) => {
+      calls.push({ path: String(url), method: (init as RequestInit)?.method ?? "GET" });
+      return jsonOk({ ok: true });
+    }) as typeof fetch;
+    const client = createSocietyHubClient({
+      baseUrl: "http://api.test",
+      getAccessToken: () => "tok",
+    });
+
+    await client.getResident("r1");
+    await client.updateResident("r1", { residentType: "owner" });
+    await client.verifyResident("r1");
+    await client.rejectResident("r1", "Blurry document");
+    await client.suspendResident("r1", "Dues unpaid");
+    await client.suspendResident("r1");
+    await client.reactivateResident("r1");
+    await client.moveOutResident("r1", { reason: "Relocated" });
+    await client.moveOutResident("r1");
+    await client.listResidentActivity("r1");
+    await client.onboardResident({
+      name: "Rohan",
+      phone: "9800000000",
+      flatId: "f1",
+      email: "rohan@example.com",
+      residentType: "owner",
+    });
+
+    expect(calls.map((c) => c.path)).toEqual([
+      "http://api.test/v1/admin/residents/r1",
+      "http://api.test/v1/admin/residents/r1",
+      "http://api.test/v1/admin/residents/r1/verify",
+      "http://api.test/v1/admin/residents/r1/reject",
+      "http://api.test/v1/admin/residents/r1/suspend",
+      "http://api.test/v1/admin/residents/r1/suspend",
+      "http://api.test/v1/admin/residents/r1/reactivate",
+      "http://api.test/v1/admin/residents/r1/move-out",
+      "http://api.test/v1/admin/residents/r1/move-out",
+      "http://api.test/v1/admin/residents/r1/activity",
+      "http://api.test/v1/admin/residents",
+    ]);
+    expect(calls[1]!.method).toBe("PATCH");
+    expect(calls[2]!.method).toBe("POST");
+  });
+
+  test("family, document, flat and team helpers", async () => {
+    const paths: string[] = [];
+    globalThis.fetch = (async (url) => {
+      paths.push(String(url));
+      return jsonOk({ ok: true });
+    }) as typeof fetch;
+    const client = createSocietyHubClient({
+      baseUrl: "http://api.test",
+      getAccessToken: () => "tok",
+    });
+
+    await client.listFamilyMembers("r1");
+    await client.addFamilyMember("r1", { name: "Sayali", relationship: "spouse" });
+    await client.removeFamilyMember("r1", "f9");
+    await client.listResidentDocuments("r1");
+    await client.uploadResidentDocument(
+      "r1",
+      new File(["x"], "id.png", { type: "image/png" }),
+      { docType: "identity", documentNumber: "XXXX1234", expiresAt: "2030-01-01" },
+    );
+    await client.uploadMyDocument(new File(["y"], "lease.pdf", { type: "application/pdf" }), {
+      docType: "tenant_agreement",
+    });
+    await client.verifyDocument("d1");
+    await client.rejectDocument("d1", "Unreadable");
+    await client.deleteDocument("d1");
+    await client.getFlatDetail("fl1");
+    await client.listFlatResidents("fl1");
+    await client.listFlatHistory("fl1");
+    await client.getOccupancyStats();
+    await client.addTeamMember({ email: "ops@x.test", role: "secretary" });
+    await client.changeTeamRole("u1", "secretary", "treasurer");
+    await client.removeTeamRole("u1", "treasurer");
+    await client.resendInvitation("i1");
+    await client.getInvitation("tok-123");
+    await client.acceptInvitation({ token: "tok-123", name: "Rohan" });
+    await client.previewResidentImport({
+      rows: [{ name: "A", phone: "9800000001", flatNumber: "101" }],
+    });
+
+    expect(paths).toContain("http://api.test/v1/admin/residents/r1/family/f9");
+    expect(paths).toContain("http://api.test/v1/admin/residents/r1/documents");
+    expect(paths).toContain("http://api.test/v1/profile/documents");
+    expect(paths).toContain("http://api.test/v1/admin/resident-documents/d1/verify");
+    expect(paths).toContain("http://api.test/v1/admin/resident-documents/d1");
+    expect(paths).toContain("http://api.test/v1/admin/flats/fl1/history");
+    expect(paths).toContain("http://api.test/v1/admin/occupancy/stats");
+    expect(paths).toContain("http://api.test/v1/team/members/u1/role");
+    expect(paths).toContain("http://api.test/v1/team/members/u1/roles/treasurer");
+    expect(paths).toContain("http://api.test/v1/invitations/i1/resend");
+    expect(paths).toContain("http://api.test/v1/invites/tok-123");
+    expect(paths).toContain("http://api.test/v1/invites/accept");
+    expect(paths).toContain("http://api.test/v1/admin/residents/import/preview");
   });
 
   test("handles non-json error body", async () => {

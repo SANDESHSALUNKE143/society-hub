@@ -11,14 +11,17 @@ describe("Client App staff onboard resident (Admin mode)", () => {
     cy.visit("/onboard");
     cy.wait("@flats");
 
-    cy.contains("h1", "Onboard resident").should("be.visible");
+    cy.contains("h1", "Add residents").should("be.visible");
     cy.get('[data-testid="onboard-society-name"]').should("be.disabled");
 
     cy.get("#onboard-email:invalid").should("exist");
 
     cy.intercept("POST", "**/v1/admin/residents", {
       statusCode: 200,
-      body: { user: { name: "Test Resident", phone: "9999999999" } },
+      body: {
+        user: { name: "Test Resident", phone: "9999999999" },
+        resident: { id: "res-1" },
+      },
     }).as("onboard");
 
     cy.get("#name").type("Test Resident");

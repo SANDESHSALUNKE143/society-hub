@@ -1,15 +1,35 @@
-import { FormEvent, useEffect, useState } from "react";
-import type { ResidentProfileDto } from "@society-hub/types";
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import type {
+  CommunicationPreferences,
+  ResidentDocumentType,
+  ResidentProfileDto,
+} from "@society-hub/types";
 import { ApiClientError } from "@society-hub/sdk";
 import {
+  DOCUMENT_TYPE_LABELS,
+  RELATIONSHIP_LABELS,
+  RESIDENT_STATUS_LABELS,
+  ShDetailGrid,
+  ShDetailItem,
   ShField,
   ShFormGrid,
   ShPage,
   ShPageHeader,
   ShSection,
   ShSplit,
+  VERIFICATION_STATUS_LABELS,
+  residentStatusBadgeClass,
+  verificationBadgeClass,
 } from "@society-hub/ui";
 import { useAuth } from "../auth";
+
+const CHANNELS: Array<{ key: keyof CommunicationPreferences; label: string; note?: string }> = [
+  { key: "inApp", label: "In-app" },
+  { key: "push", label: "Push", note: "Coming with the mobile app" },
+  { key: "email", label: "Email" },
+  { key: "whatsapp", label: "WhatsApp" },
+  { key: "sms", label: "SMS" },
+];
 
 export function AccountPage() {
   const { client, user, setSession } = useAuth();
@@ -17,25 +37,38 @@ export function AccountPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [emergencyContact, setEmergencyContact] = useState("");
+  const [name, setName] = useState("");
+  const [emergencyName, setEmergencyName] = useState("");
+  const [emergencyRelation, setEmergencyRelation] = useState("");
+  const [emergencyPhone, setEmergencyPhone] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
+  const [prefs, setPrefs] = useState<CommunicationPreferences | null>(null);
   const [profile, setProfile] = useState<ResidentProfileDto | null>(null);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [docType, setDocType] = useState<ResidentDocumentType>("identity");
+  const [uploadBusy, setUploadBusy] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     client
       .getProfile()
       .then((next) => {
         setProfile(next);
-        setEmergencyContact(next.emergencyContact ?? "");
+        setName(next.name ?? "");
+        setEmergencyName(next.emergencyContactName ?? "");
+        setEmergencyRelation(next.emergencyContactRelation ?? "");
+        setEmergencyPhone(next.emergencyContactPhone ?? next.emergencyContact ?? "");
         setVehicleNumber(next.vehicleNumber ?? "");
+        setPrefs(next.communicationPreferences ?? null);
       })
       .catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [client]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   async function savePin(e: FormEvent) {
     e.preventDefault();
@@ -85,102 +118,127 @@ export function AccountPage() {
     setProfileMessage(null);
     try {
       const next = await client.updateProfile({
-        emergencyContact: emergencyContact || null,
+        name: name.trim() || undefined,
+        emergencyContactName: emergencyName || null,
+        emergencyContactRelation: emergencyRelation || null,
+        emergencyContactPhone: emergencyPhone || null,
         vehicleNumber: vehicleNumber || null,
+        communicationPreferences: prefs ?? undefined,
       });
       setProfile(next);
+      setPrefs(next.communicationPreferences ?? null);
       setProfileMessage("Profile updated.");
     } catch (err) {
       setProfileError(err instanceof ApiClientError ? err.body.message : "Failed");
     }
   }
 
+  async function uploadDocument(file: File | null) {
+    if (!file) return;
+    setUploadBusy(true);
+    setProfileError(null);
+    try {
+      await client.uploadMyDocument(file, { docType });
+      load();
+      setProfileMessage("Document uploaded — an admin will review it.");
+    } catch (err) {
+      setProfileError(err instanceof ApiClientError ? err.body.message : "Upload failed");
+    } finally {
+      setUploadBusy(false);
+    }
+  }
+
   const flat = profile?.flat ?? null;
-  const flatLabel = flat
-    ? [flat.wingName ? `${flat.wingName}-` : "", flat.number].join("")
-    : user?.flatNumber
-      ? `Flat ${user.flatNumber}`
-      : null;
+  const membership = profile?.membership ?? null;
+  // Tolerate a slimmer payload (older API build, mocked fixture) rather than crash.
+  const family = profile?.family ?? [];
+  const documents = profile?.documents ?? [];
+  const token = localStorage.getItem("sh_web_access") ?? "";
+  const apiBase = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
   return (
     <ShPage wide>
       <ShPageHeader
-        title="Account"
+        title="My account"
         description={
           <>
             {user?.email ?? user?.phone ?? "No contact"} · {user?.role}
-            {flatLabel
-              ? ` · ${flatLabel.startsWith("Flat") ? flatLabel : `Flat ${flatLabel}`}`
-              : ""}
+            {flat ? ` · Flat ${flat.wingName ? `${flat.wingName}-` : ""}${flat.number}` : ""}
           </>
         }
       />
 
+      <ShSection
+        title="Verification status"
+        description="Sensitive details are changed by a society admin, not here."
+        testId="account-verification"
+      >
+        {membership ? (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={verificationBadgeClass(membership.verificationStatus)}
+                data-testid="account-verification-status"
+              >
+                {VERIFICATION_STATUS_LABELS[membership.verificationStatus]}
+              </span>
+              <span className={residentStatusBadgeClass(membership.status)}>
+                {RESIDENT_STATUS_LABELS[membership.status]}
+              </span>
+            </div>
+            {membership.verificationStatus === "rejected" && membership.rejectionReason && (
+              <p className="text-sm text-[var(--danger)]" data-testid="account-rejection-reason">
+                Reason: {membership.rejectionReason}
+              </p>
+            )}
+            {membership.verificationStatus === "approved" && (
+              <p className="text-sm text-black/60">
+                Your society membership is verified.
+              </p>
+            )}
+            {(membership.verificationStatus === "pending" ||
+              membership.verificationStatus === "under_review") && (
+              <p className="text-sm text-black/60">
+                Upload your documents below so an admin can verify your membership.
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-black/55" data-testid="account-no-membership">
+            You are not linked to a flat in this society yet. Ask an admin to add you.
+          </p>
+        )}
+      </ShSection>
+
       <ShSplit>
-        <ShSection
-          title="My flat"
-          description="Society home linked to your account."
-          testId="account-flat-details"
-        >
+        <ShSection title="My society & flat" testId="account-flat-details">
           {flat ? (
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-              <div>
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  Society
-                </dt>
-                <dd className="font-medium" data-testid="account-society-name">
-                  {profile?.societyName ?? "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  Flat
-                </dt>
-                <dd className="font-medium" data-testid="account-flat-number">
-                  {flat.wingName ? `${flat.wingName}-${flat.number}` : flat.number}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  Building
-                </dt>
-                <dd className="font-medium" data-testid="account-building-name">
-                  {flat.buildingName ?? "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  Wing
-                </dt>
-                <dd className="font-medium" data-testid="account-wing-name">
-                  {flat.wingName ?? "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  Floor
-                </dt>
-                <dd className="font-medium" data-testid="account-floor">
-                  {flat.floor != null ? flat.floor : "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  Parking
-                </dt>
-                <dd className="font-medium" data-testid="account-parking">
-                  {flat.parkingSlot ?? "—"}
-                </dd>
-              </div>
-              <div className="col-span-2">
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  Occupancy
-                </dt>
-                <dd className="font-medium" data-testid="account-occupancy">
-                  {flat.isOwner ? "Owner" : "Tenant / occupant"}
-                </dd>
-              </div>
-            </dl>
+            <ShDetailGrid className="sm:grid-cols-2">
+              <ShDetailItem label="Society" testId="account-society-name">
+                {profile?.societyName ?? "—"}
+              </ShDetailItem>
+              <ShDetailItem label="Flat" testId="account-flat-number">
+                {flat.wingName ? `${flat.wingName}-${flat.number}` : flat.number}
+              </ShDetailItem>
+              <ShDetailItem label="Building" testId="account-building-name">
+                {flat.buildingName ?? "—"}
+              </ShDetailItem>
+              <ShDetailItem label="Wing" testId="account-wing-name">
+                {flat.wingName ?? "—"}
+              </ShDetailItem>
+              <ShDetailItem label="Floor" testId="account-floor">
+                {flat.floor != null ? flat.floor : "—"}
+              </ShDetailItem>
+              <ShDetailItem label="Parking" testId="account-parking">
+                {flat.parkingSlot ?? "—"}
+              </ShDetailItem>
+              <ShDetailItem label="Occupancy" testId="account-occupancy">
+                {flat.isOwner ? "Owner" : "Tenant / occupant"}
+              </ShDetailItem>
+              <ShDetailItem label="Moved in">
+                {membership?.moveInDate?.slice(0, 10) ?? "—"}
+              </ShDetailItem>
+            </ShDetailGrid>
           ) : (
             <p className="text-sm text-black/55" data-testid="account-flat-empty">
               No flat linked yet. Ask an admin to onboard you.
@@ -188,17 +246,101 @@ export function AccountPage() {
           )}
         </ShSection>
 
-        <ShSection title="Profile" description="For security and society records.">
+        <ShSection title="My family" testId="account-family">
+          {family.length ? (
+            <ul className="space-y-1.5 text-sm">
+              {family.map((f) => (
+                <li key={f.id} className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{f.name}</span>
+                  <span className="badge">{RELATIONSHIP_LABELS[f.relationship]}</span>
+                  {f.phone && <span className="text-black/45">{f.phone}</span>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-black/55">
+              No family members recorded. Ask an admin to add household members.
+            </p>
+          )}
+        </ShSection>
+
+        <ShSection
+          title="My documents"
+          description="Only you and society admins can open these files."
+          testId="account-documents"
+        >
+          {documents.length ? (
+            <ul className="mb-3 space-y-2 text-sm">
+              {documents.map((doc) => (
+                <li key={doc.id} className="rounded-lg border border-[var(--sand)] p-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="badge">{DOCUMENT_TYPE_LABELS[doc.docType]}</span>
+                    <a
+                      className="font-medium text-[var(--leaf-dark)]"
+                      href={`${apiBase}${doc.downloadPath}?access_token=${encodeURIComponent(token)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {doc.fileName}
+                    </a>
+                    <span className={verificationBadgeClass(doc.status)}>
+                      {VERIFICATION_STATUS_LABELS[doc.status]}
+                    </span>
+                  </div>
+                  {doc.rejectionReason && (
+                    <p className="mt-1 text-xs text-[var(--danger)]">
+                      Reason: {doc.rejectionReason}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mb-3 text-sm text-black/55">No documents uploaded yet.</p>
+          )}
+
+          {membership && (
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="sh-field min-w-[10rem]">
+                <label className="label" htmlFor="account-doc-type">
+                  Document type
+                </label>
+                <select
+                  id="account-doc-type"
+                  className="input"
+                  value={docType}
+                  data-testid="account-doc-type"
+                  onChange={(e) => setDocType(e.target.value as ResidentDocumentType)}
+                >
+                  {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <input
+                type="file"
+                className="text-xs"
+                accept="image/*,application/pdf"
+                disabled={uploadBusy}
+                data-testid="account-doc-upload"
+                onChange={(e) => void uploadDocument(e.target.files?.[0] ?? null)}
+              />
+            </div>
+          )}
+        </ShSection>
+
+        <ShSection title="Profile" description="Details you can change yourself.">
           <form className="space-y-2.5" onSubmit={saveProfile}>
             <ShFormGrid>
-              <ShField label="Emergency contact" htmlFor="account-emergency-contact">
+              <ShField label="Full name" htmlFor="account-name">
                 <input
-                  id="account-emergency-contact"
-                  data-testid="account-emergency-contact"
+                  id="account-name"
+                  data-testid="account-name"
                   className="input"
-                  placeholder="Name & phone"
-                  value={emergencyContact}
-                  onChange={(e) => setEmergencyContact(e.target.value)}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                 />
               </ShField>
               <ShField label="Vehicle number" htmlFor="account-vehicle-number">
@@ -211,7 +353,64 @@ export function AccountPage() {
                   onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
                 />
               </ShField>
+              <ShField label="Emergency contact name" htmlFor="account-emergency-name">
+                <input
+                  id="account-emergency-name"
+                  data-testid="account-emergency-name"
+                  className="input"
+                  value={emergencyName}
+                  onChange={(e) => setEmergencyName(e.target.value)}
+                />
+              </ShField>
+              <ShField label="Relationship" htmlFor="account-emergency-relation">
+                <input
+                  id="account-emergency-relation"
+                  data-testid="account-emergency-relation"
+                  className="input"
+                  placeholder="Spouse, parent…"
+                  value={emergencyRelation}
+                  onChange={(e) => setEmergencyRelation(e.target.value)}
+                />
+              </ShField>
+              <ShField
+                label="Emergency contact phone"
+                htmlFor="account-emergency-contact"
+                className="sh-span-2"
+              >
+                <input
+                  id="account-emergency-contact"
+                  data-testid="account-emergency-contact"
+                  className="input"
+                  value={emergencyPhone}
+                  onChange={(e) => setEmergencyPhone(e.target.value)}
+                />
+              </ShField>
             </ShFormGrid>
+
+            <fieldset className="mt-2">
+              <legend className="label">How we may contact you</legend>
+              <div className="flex flex-wrap gap-3 text-xs">
+                {CHANNELS.map((channel) => (
+                  <label key={channel.key} className="flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      data-testid={`account-pref-${channel.key}`}
+                      checked={prefs?.[channel.key] ?? false}
+                      onChange={(e) =>
+                        setPrefs((p) =>
+                          p ? { ...p, [channel.key]: e.target.checked } : p,
+                        )
+                      }
+                    />
+                    {channel.label}
+                    {channel.note && (
+                      <span className="text-black/35">({channel.note})</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
             <button className="btn btn-primary" type="submit">
               Save profile
             </button>

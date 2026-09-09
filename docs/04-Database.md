@@ -43,11 +43,17 @@
 
 | Table | Purpose |
 |-------|---------|
-| `users` | Login identity (phone, email, google subject) |
+| `users` | Login identity (phone, email, google subject). **Global — no `tenant_id`.** |
 | `otp_challenges` | OTP request/verify records |
 | `user_roles` | Role per user per tenant |
-| `residents` | Person linked to flat (owner/tenant flags, contacts) |
-| `resident_documents` | Metadata + blob path for verification docs |
+| `residents` | **Society membership + flat occupancy period** — see §5 |
+| `resident_profiles` | Per-society profile: emergency contact, vehicle note, channel preferences |
+| `resident_family_members` | Household members of a membership (may have no login) |
+| `verification_documents` | Metadata + blob path + review state for verification docs |
+| `invitations` | Pending/accepted/revoked/expired invitations, with flat and resident type |
+
+> The name `resident_documents` used by earlier drafts of this document is **not** a table —
+> `verification_documents` is the implementation.
 
 ### Complaints
 
@@ -90,6 +96,10 @@ erDiagram
   flats ||--o{ residents : occupied_by
   users ||--o{ residents : linked
   users ||--o{ user_roles : has
+  residents ||--o{ resident_family_members : household
+  residents ||--o{ verification_documents : submits
+  users ||--o| resident_profiles : profile
+  flats ||--o{ invitations : invites_to
   residents ||--o{ complaints : raises
   complaints ||--o{ complaint_comments : has
   complaints ||--o{ complaint_attachments : has
@@ -103,6 +113,64 @@ erDiagram
 ```
 
 ## 5. Field-level notes (critical paths)
+
+### residents — membership and occupancy
+
+`residents` is **one person's membership of one society, occupying one flat, over one period**.
+Full rationale in [implementation/phase-1-domain.md](implementation/phase-1-domain.md).
+
+- `resident_type`: `owner` | `tenant` | `family`; `is_primary` separates the primary owner/tenant
+  from co-owners and additional occupants
+- `is_owner` is kept as a **derived mirror** of `resident_type = 'owner'` for backward compatibility
+- `status`: `invited` | `pending_verification` | `active` | `suspended` | `moved_out` | `rejected`
+  — transitions are enforced in `apps/api/src/lib/resident-lifecycle.ts`; `moved_out` is terminal
+- `verification_status`: `pending` | `under_review` | `approved` | `rejected`, plus `verified_by`,
+  `verified_at`, `rejection_reason`
+- `move_in_date`, `move_out_date`, `move_out_reason`, `remarks`
+- `active_key`: `'Y'` while the membership occupies the flat, `NULL` once it does not
+
+**Occupancy history is never destroyed.** Move-out closes a row; move-in inserts a new one.
+
+**Uniqueness.** MySQL has no partial unique indexes, so
+`UNIQUE (tenant_id, user_id, flat_id, active_key)` combined with the nullable `active_key` gives
+"at most one *active* membership per person per flat per society" while leaving any number of
+historical rows unconstrained (MySQL allows repeated `NULL`s in a unique index). `active_key IS NOT
+NULL` is the single predicate for "currently occupies".
+
+Indexes: `(tenant_id)`, `(tenant_id, user_id)`, `(tenant_id, flat_id, active_key)`,
+`(tenant_id, status)`, `(tenant_id, verification_status)`.
+
+### resident_family_members
+
+Household members attached to a membership. `user_id` cannot represent them because a family member
+may have **no SocietyHub account** — `linked_user_id` is nullable and set only when they do.
+`relationship`: `spouse` | `child` | `parent` | `sibling` | `other`.
+
+### verification_documents
+
+- `doc_type`: `identity` | `address_proof` | `tenant_agreement` | `police_verification` | `other`
+- `status`: `pending` | `under_review` | `approved` | `rejected` with `verified_by`, `verified_at`,
+  `rejection_reason`, `expires_at`
+- `document_number` is for a masked/partial reference only — never a full sensitive number
+- `blob_path` is **server-only**; files are served exclusively through the authenticated,
+  tenant-checked, audited download routes
+
+### invitations
+
+- `status`: `pending` | `accepted` | `revoked` | `expired`
+- `flat_id` + `resident_type` let an invitation pre-bind the invitee to a flat
+- `expires_at` (default +14 days), `accepted_at`, `accepted_by_user_id`, `revoked_at`,
+  `last_sent_at`, `resend_count`
+- `active_key` = `lower(email|phone|role)` **only while pending**, with
+  `UNIQUE (tenant_id, active_key)` — blocks a second live invitation for the same recipient while
+  leaving revoked/accepted history unconstrained
+
+### resident_profiles
+
+Per-society profile for a user: structured emergency contact
+(`emergency_contact_name/relation/phone`), `vehicle_number`, and `communication_prefs_json`
+(`{"inApp":true,"push":true,"email":true,"whatsapp":false,"sms":false}`). The older free-text
+`emergency_contact` column is deprecated but retained.
 
 ### complaints
 
@@ -163,6 +231,11 @@ erDiagram
 - Unique `(tenant_id, ticket_number)` on complaints
 - Unique provider payment ids where not null
 - `(user_id, notice_id)` unique on `notice_reads`
+- `(tenant_id, flat_id, active_key)` on residents — powers every "who lives here" query
+- `(tenant_id, status)` and `(tenant_id, verification_status)` on residents — directory filters
+- Unique `(tenant_id, user_id, flat_id, active_key)` on residents — one active membership per flat
+- Unique `(tenant_id, active_key)` on invitations — one live invitation per recipient and role
+- `(tenant_id, resident_id)` on verification_documents and resident_family_members
 
 ## 7. Soft delete and tenancy rules
 

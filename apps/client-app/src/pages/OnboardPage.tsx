@@ -1,8 +1,14 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import type { FlatDto, ResidentImportResultDto } from "@society-hub/types";
+import type {
+  FlatDto,
+  ResidentImportPreviewDto,
+  ResidentImportResultDto,
+  ResidentType,
+} from "@society-hub/types";
 import { ApiClientError } from "@society-hub/sdk";
 import {
+  RESIDENT_TYPE_LABELS,
   ShField,
   ShFormGrid,
   ShPage,
@@ -12,11 +18,13 @@ import {
 } from "@society-hub/ui";
 import { useAuth } from "../auth";
 import { canUseAdminMode } from "../app-mode";
-import { mapResidentCsvRows, parseCsv } from "../lib/resident-csv";
+import { mapResidentCsvRows, parseCsv, type ResidentCsvRow } from "../lib/resident-csv";
 
 const CSV_TEMPLATE = `name,phone,email,flatNumber,wingName,floor,parkingSlot,isOwner,emergencyContact,vehicleNumber
 Demo Resident,8888888888,resident@example.com,101,A,1,P-101,true,9999999999,MH12AB1234
 `;
+
+type ImportStage = "idle" | "previewing" | "preview" | "importing" | "done";
 
 export function OnboardPage() {
   const { user, client } = useAuth();
@@ -26,14 +34,22 @@ export function OnboardPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [flatId, setFlatId] = useState("");
+  const [residentType, setResidentType] = useState<ResidentType>("owner");
+  const [isPrimary, setIsPrimary] = useState(true);
+  const [moveInDate, setMoveInDate] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const [stage, setStage] = useState<ImportStage>("idle");
+  const [parseErrors, setParseErrors] = useState<Array<{ row: number; message: string }>>([]);
+  const [pendingRows, setPendingRows] = useState<ResidentCsvRow[]>([]);
+  const [preview, setPreview] = useState<ResidentImportPreviewDto | null>(null);
   const [importResult, setImportResult] = useState<ResidentImportResultDto | null>(null);
-  const [importErrors, setImportErrors] = useState<Array<{ row: number; message: string }>>([]);
   const [sendInvites, setSendInvites] = useState(true);
   const [createMissingFlats, setCreateMissingFlats] = useState(false);
   const [forceInvite, setForceInvite] = useState(false);
-  const [busyImport, setBusyImport] = useState(false);
+  const [allowPartial, setAllowPartial] = useState(false);
   const allowed = canUseAdminMode(user?.role);
 
   useEffect(() => {
@@ -57,57 +73,95 @@ export function OnboardPage() {
     e.preventDefault();
     setError(null);
     setMessage(null);
+    setBusy(true);
     try {
-      const res = await client.onboardResident({ name, phone, flatId, email });
+      const res = await client.onboardResident({
+        name,
+        phone,
+        flatId,
+        email,
+        residentType,
+        isPrimary,
+        moveInDate: moveInDate || null,
+      });
       setMessage(`Onboarded ${res.user.name} (${res.user.phone})`);
       setName("");
       setPhone("");
       setEmail("");
+      setMoveInDate("");
     } catch (err) {
       setError(err instanceof ApiClientError ? err.body.message : "Failed");
+    } finally {
+      setBusy(false);
     }
   }
 
+  /** Step 1 — parse locally, then ask the server what the import would do. */
   async function onCsvSelected(file: File | null) {
     setImportResult(null);
-    setImportErrors([]);
+    setPreview(null);
+    setParseErrors([]);
     setError(null);
     if (!file) return;
-    setBusyImport(true);
+    setStage("previewing");
     try {
-      const text = await file.text();
-      const raw = parseCsv(text);
-      const mapped = mapResidentCsvRows(raw);
-      if (mapped.errors.length) {
-        setImportErrors(mapped.errors);
-      }
+      const mapped = mapResidentCsvRows(parseCsv(await file.text()));
+      setParseErrors(mapped.errors);
       if (mapped.rows.length === 0) {
-        setError("No valid rows to import. Fix CSV errors and try again.");
+        setError("No readable rows in this file. Fix the errors below and try again.");
+        setStage("idle");
         return;
       }
+      setPendingRows(mapped.rows);
+      setPreview(
+        await client.previewResidentImport({ rows: mapped.rows, createMissingFlats }),
+      );
+      setStage("preview");
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.body.message : "Could not read the CSV");
+      setStage("idle");
+    }
+  }
+
+  /** Step 2 — apply the import the admin just reviewed. */
+  async function confirmImport() {
+    setStage("importing");
+    setError(null);
+    try {
       const result = await client.importResidents({
-        rows: mapped.rows,
+        rows: pendingRows,
         sendInvites,
         forceInvite,
         updateFlats: true,
         createMissingFlats,
+        allowPartial,
       });
       setImportResult(result);
-      setImportErrors([...mapped.errors, ...result.errors]);
+      setStage("done");
       setMessage(
-        `Import finished: ${result.created} created, ${result.updated} updated, ${result.unchanged} unchanged, ${result.invited} invited, ${result.skipped} skipped.`,
+        `Import finished — Total ${result.total} · Imported ${result.created + result.updated} · Failed ${result.errors.length} · Skipped ${result.skipped}`,
       );
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.body.message : "CSV import failed");
-    } finally {
-      setBusyImport(false);
+      setError(err instanceof ApiClientError ? err.body.message : "Import failed");
+      setStage("preview");
     }
   }
+
+  function resetImport() {
+    setStage("idle");
+    setPreview(null);
+    setPendingRows([]);
+    setImportResult(null);
+    setParseErrors([]);
+    setMessage(null);
+  }
+
+  const blockedRows = preview?.rows.filter((r) => r.errors.length > 0) ?? [];
 
   return (
     <ShPage wide>
       <ShPageHeader
-        title="Onboard residents"
+        title="Add residents"
         description={
           <>
             Add one resident or bulk-import via CSV. Flats must exist under{" "}
@@ -116,6 +170,11 @@ export function OnboardPage() {
             </Link>{" "}
             first.
           </>
+        }
+        actions={
+          <Link to="/residents" className="btn btn-ghost btn-sm">
+            View residents
+          </Link>
         }
       />
 
@@ -183,15 +242,54 @@ export function OnboardPage() {
                 ))}
               </select>
             </ShField>
+            <ShField label="Resident type" htmlFor="onboard-resident-type">
+              <select
+                id="onboard-resident-type"
+                className="input"
+                value={residentType}
+                data-testid="onboard-resident-type"
+                onChange={(e) => setResidentType(e.target.value as ResidentType)}
+              >
+                {Object.entries(RESIDENT_TYPE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </ShField>
+            <ShField label="Move-in date" htmlFor="onboard-move-in">
+              <input
+                id="onboard-move-in"
+                className="input"
+                type="date"
+                value={moveInDate}
+                data-testid="onboard-move-in"
+                onChange={(e) => setMoveInDate(e.target.value)}
+              />
+            </ShField>
           </ShFormGrid>
-          <button className="btn btn-primary" data-testid="onboard-submit" type="submit">
-            Onboard
+          <label className="flex items-center gap-1.5 text-xs">
+            <input
+              type="checkbox"
+              checked={isPrimary}
+              data-testid="onboard-is-primary"
+              onChange={(e) => setIsPrimary(e.target.checked)}
+            />
+            Primary {residentType === "tenant" ? "tenant" : "owner"} for this flat
+          </label>
+          <button
+            className="btn btn-primary"
+            data-testid="onboard-submit"
+            type="submit"
+            disabled={busy}
+          >
+            {busy ? "Onboarding…" : "Onboard"}
           </button>
         </form>
 
         <ShSection
           title="Bulk import (CSV)"
-          description="Re-upload updates existing residents matched by phone."
+          description="Upload → validate → preview → confirm. Nothing is written until you confirm."
           testId="onboard-csv"
         >
           <p className="mb-2 text-[11px] leading-snug text-black/50">
@@ -231,24 +329,142 @@ export function OnboardPage() {
               Create missing flats
             </label>
           </div>
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            className="text-xs"
-            data-testid="onboard-csv-input"
-            disabled={busyImport}
-            onChange={(e) => void onCsvSelected(e.target.files?.[0] ?? null)}
-          />
-          {importResult && (
-            <p className="mt-2 text-xs text-[var(--leaf)]" data-testid="onboard-csv-result">
-              Created {importResult.created} · Updated {importResult.updated} · Unchanged{" "}
-              {importResult.unchanged} · Invited {importResult.invited} · Skipped{" "}
-              {importResult.skipped}
+
+          {stage === "idle" && (
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              className="text-xs"
+              data-testid="onboard-csv-input"
+              onChange={(e) => void onCsvSelected(e.target.files?.[0] ?? null)}
+            />
+          )}
+          {stage === "previewing" && (
+            <p className="text-xs text-black/55" data-testid="onboard-csv-validating">
+              Validating…
             </p>
           )}
-          {importErrors.length > 0 && (
-            <ul className="mt-2 max-h-24 overflow-y-auto rounded-lg bg-[var(--mist)]/40 p-2 text-[11px] text-[var(--danger)]">
-              {importErrors.slice(0, 30).map((err) => (
+
+          {preview && (stage === "preview" || stage === "importing") && (
+            <div data-testid="onboard-csv-preview">
+              <dl className="grid grid-cols-3 gap-2 text-xs sm:grid-cols-5">
+                <div>
+                  <dt className="text-black/45">Total</dt>
+                  <dd className="font-semibold" data-testid="preview-total">
+                    {preview.total}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-black/45">Will create</dt>
+                  <dd className="font-semibold" data-testid="preview-create">
+                    {preview.willCreate}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-black/45">Will update</dt>
+                  <dd className="font-semibold" data-testid="preview-update">
+                    {preview.willUpdate}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-black/45">Unchanged</dt>
+                  <dd className="font-semibold">{preview.unchanged}</dd>
+                </div>
+                <div>
+                  <dt className="text-black/45">Invalid</dt>
+                  <dd className="font-semibold text-[var(--danger)]" data-testid="preview-invalid">
+                    {preview.invalid}
+                  </dd>
+                </div>
+              </dl>
+
+              {blockedRows.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-semibold text-[var(--danger)]">
+                    {blockedRows.length} row(s) cannot be imported
+                  </p>
+                  <ul
+                    className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-lg bg-[var(--mist)]/40 p-2 text-[11px]"
+                    data-testid="preview-errors"
+                  >
+                    {blockedRows.slice(0, 50).map((row) => (
+                      <li key={row.row}>
+                        <span className="font-semibold">Row {row.row}</span>
+                        {row.flatNumber ? ` · Flat: ${row.flatNumber}` : ""}
+                        <br />
+                        <span className="text-[var(--danger)]">{row.errors.join("; ")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <label className="mt-2 flex items-center gap-1.5 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={allowPartial}
+                      data-testid="onboard-allow-partial"
+                      onChange={(e) => setAllowPartial(e.target.checked)}
+                    />
+                    Import the valid rows anyway and skip the rest
+                  </label>
+                </div>
+              )}
+
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  data-testid="onboard-csv-confirm"
+                  disabled={
+                    stage === "importing" || (blockedRows.length > 0 && !allowPartial)
+                  }
+                  onClick={confirmImport}
+                >
+                  {stage === "importing" ? "Importing…" : "Confirm import"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={resetImport}
+                  data-testid="onboard-csv-cancel"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {importResult && stage === "done" && (
+            <div data-testid="onboard-csv-result">
+              <p className="mt-2 text-xs text-[var(--leaf)]">
+                Total {importResult.total} · Created {importResult.created} · Updated{" "}
+                {importResult.updated} · Unchanged {importResult.unchanged} · Invited{" "}
+                {importResult.invited} · Skipped {importResult.skipped}
+              </p>
+              {importResult.errors.length > 0 && (
+                <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg bg-[var(--mist)]/40 p-2 text-[11px] text-[var(--danger)]">
+                  {importResult.errors.slice(0, 50).map((err) => (
+                    <li key={`${err.row}-${err.message}`}>
+                      Row {err.row}
+                      {err.flatNumber ? ` · Flat: ${err.flatNumber}` : ""}: {err.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm mt-2"
+                onClick={resetImport}
+              >
+                Import another file
+              </button>
+            </div>
+          )}
+
+          {parseErrors.length > 0 && (
+            <ul
+              className="mt-2 max-h-24 overflow-y-auto rounded-lg bg-[var(--mist)]/40 p-2 text-[11px] text-[var(--danger)]"
+              data-testid="onboard-csv-parse-errors"
+            >
+              {parseErrors.slice(0, 30).map((err) => (
                 <li key={`${err.row}-${err.message}`}>
                   Row {err.row}: {err.message}
                 </li>

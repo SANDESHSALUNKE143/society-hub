@@ -33,8 +33,10 @@ describe("Client App staff (Admin mode) navigation", () => {
     cy.get('[data-testid="app-mode-toggle"]').should("be.visible");
     cy.get('[data-testid="app-mode-admin"]').should("have.class", "bg-white");
 
+    cy.get('nav a[href="/residents"]').should("be.visible");
     cy.get('nav a[href="/onboard"]').should("be.visible");
     cy.get('nav a[href="/invites"]').scrollIntoView().should("be.visible");
+    cy.get('nav a[href="/flats"]').scrollIntoView().should("be.visible");
     cy.get('nav a[href="/team"]').scrollIntoView().should("be.visible");
     cy.get('nav a[href="/audit"]').scrollIntoView().should("exist");
 
@@ -50,6 +52,8 @@ describe("Client App staff (Admin mode) navigation", () => {
     cy.get('[data-testid="app-mode-admin"]').should("not.have.class", "bg-white");
 
     cy.get('nav a[href="/onboard"]').should("not.exist");
+    cy.get('nav a[href="/residents"]').should("not.exist");
+    cy.get('nav a[href="/flats"]').should("not.exist");
     cy.contains('nav a[href="/complaints"]', "My complaints").should("be.visible");
 
     cy.reload();

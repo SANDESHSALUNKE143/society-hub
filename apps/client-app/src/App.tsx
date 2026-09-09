@@ -22,6 +22,11 @@ import { InvitesPage } from "./pages/InvitesPage";
 import { TeamPage } from "./pages/TeamPage";
 import { AuditPage } from "./pages/AuditPage";
 import { StructurePage } from "./pages/StructurePage";
+import { ResidentsPage } from "./pages/ResidentsPage";
+import { ResidentDetailPage } from "./pages/ResidentDetailPage";
+import { FlatsPage } from "./pages/FlatsPage";
+import { FlatDetailPage } from "./pages/FlatDetailPage";
+import { AcceptInvitePage } from "./pages/AcceptInvitePage";
 import { AssetsPage } from "./pages/AssetsPage";
 import { VendorsPage } from "./pages/VendorsPage";
 import { EventsPage } from "./pages/EventsPage";
@@ -39,6 +44,8 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      {/* Public: the invite token in the link is the credential. */}
+      <Route path="/accept-invite" element={<AcceptInvitePage />} />
       <Route
         path="/select-society"
         element={
@@ -67,6 +74,10 @@ export function App() {
         <Route path="visitors" element={<VisitorsPage />} />
         <Route path="parking" element={<ParkingPage />} />
         <Route path="bookings" element={<BookingsPage />} />
+        <Route path="residents" element={<ResidentsPage />} />
+        <Route path="residents/:id" element={<ResidentDetailPage />} />
+        <Route path="flats" element={<FlatsPage />} />
+        <Route path="flats/:id" element={<FlatDetailPage />} />
         <Route path="onboard" element={<OnboardPage />} />
         <Route path="invites" element={<InvitesPage />} />
         <Route path="team" element={<TeamPage />} />

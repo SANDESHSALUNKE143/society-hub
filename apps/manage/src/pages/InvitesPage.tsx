@@ -11,7 +11,11 @@ export function InvitesPage() {
       testId="invites"
       emptyLabel="No invites sent yet."
       createLabel="Send invite"
-      onList={() => client.listInvitations()}
+      // The invitations endpoint is paginated now; this simple Manage list
+      // shows the first page.
+      onList={() =>
+        client.listInvitations({ page: 1, limit: 100 }).then((res) => res.items)
+      }
       onCreate={(v) =>
         client.createInvitation({
           email: v.email || null,

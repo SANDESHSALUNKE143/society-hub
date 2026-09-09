@@ -5,6 +5,7 @@ import { listQuerySchema } from "@society-hub/validation";
 import { db } from "../../db/client";
 import { bills, bookings, complaints, notices, notifications } from "../../db/schema";
 import { authPlugin, isStaffRole, requireAuth } from "../../lib/auth-context";
+import { occupancyStats } from "../residents/repository";
 
 export const dashboardRoutes = new Elysia({ prefix: "/v1/dashboard" })
   .use(authPlugin)
@@ -96,6 +97,8 @@ export const dashboardRoutes = new Elysia({ prefix: "/v1/dashboard" })
       upcomingBookings: Number(bookingRow?.total ?? 0),
       publishedNotices: Number(noticeRow?.total ?? 0),
       unreadNotifications: Number(unreadRow?.total ?? 0),
+      // Occupancy is a society-wide fact; Resident mode has no use for it.
+      occupancy: societyWide ? await occupancyStats(claims.tenantId) : null,
     };
     return stats;
   });
