@@ -56,4 +56,39 @@ describe("Client App staff (Admin mode) navigation", () => {
     cy.get('[data-testid="app-mode-resident"]').should("have.class", "bg-white");
     cy.contains('nav a[href="/complaints"]', "My complaints").should("be.visible");
   });
+
+  it("opens Team with add and edit controls", () => {
+    cy.intercept("GET", "**/v1/team", {
+      statusCode: 200,
+      body: [
+        {
+          userId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+          name: "Society Admin",
+          email: "admin@keshav.local",
+          phone: "9999999999",
+          role: "chairperson",
+        },
+        {
+          userId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+          name: "Committee",
+          email: "ops@example.com",
+          phone: null,
+          role: "committee",
+        },
+      ],
+    }).as("team");
+
+    cy.visit("/team");
+    cy.wait("@team");
+    cy.get('[data-testid="team-page"]').should("be.visible");
+    cy.get('[data-testid="add-team-form"]').should("be.visible");
+    cy.get('[data-testid="add-team-phone"]').should("be.visible");
+    cy.get('[data-testid="team-table"]').should("be.visible");
+    cy.get('[data-testid="team-edit-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"]').click();
+    cy.get('[data-testid="edit-team-form"]').should("be.visible");
+    cy.get('[data-testid="edit-team-phone"]').should("be.visible");
+    cy.get('[data-testid="team-remove-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"]').should(
+      "be.visible",
+    );
+  });
 });

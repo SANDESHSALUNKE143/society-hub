@@ -12,6 +12,7 @@ import type {
   InvitationDto,
   BillDto,
   PaymentDto,
+  PaymentAccountDto,
   NoticeDto,
   NotificationDto,
   AuditLogDto,
@@ -391,6 +392,44 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         method: "POST",
         body: JSON.stringify({ billId }),
       }),
+    getPaymentAccount: () => request<PaymentAccountDto>("/v1/payments/account"),
+    updatePaymentAccount: (body: {
+      upiId?: string | null;
+      accountName?: string | null;
+      accountNumber?: string | null;
+      ifsc?: string | null;
+    }) =>
+      request<PaymentAccountDto>("/v1/payments/account", {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    uploadPaymentQr: (file: File) => {
+      const data = new FormData();
+      data.append("file", file);
+      return request<PaymentAccountDto>("/v1/payments/account/qr", {
+        method: "POST",
+        body: data,
+      });
+    },
+    submitOfflinePayment: (billId: string, file: File) => {
+      const data = new FormData();
+      data.append("billId", billId);
+      data.append("file", file);
+      return request<PaymentDto>("/v1/payments/offline", {
+        method: "POST",
+        body: data,
+      });
+    },
+    acknowledgePayment: (id: string, note?: string | null) =>
+      request<PaymentDto>(`/v1/payments/${id}/acknowledge`, {
+        method: "POST",
+        body: JSON.stringify({ note: note ?? null }),
+      }),
+    rejectPayment: (id: string, note?: string | null) =>
+      request<PaymentDto>(`/v1/payments/${id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ note: note ?? null }),
+      }),
 
     listNotices: () => request<NoticeDto[]>("/v1/notices"),
     createNotice: (body: {
@@ -434,6 +473,49 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
     },
 
     listTeam: () => request<TeamMemberDto[]>("/v1/team"),
+    addTeamMember: (body: {
+      email?: string;
+      phone?: string;
+      name?: string;
+      role?:
+        | "chairperson"
+        | "admin"
+        | "secretary"
+        | "treasurer"
+        | "cashier"
+        | "committee";
+    }) =>
+      request<{
+        ok: true;
+        userId: string;
+        tenantId: string;
+        role: string;
+        societyName: string;
+      }>("/v1/team", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    updateTeamMember: (
+      userId: string,
+      body: {
+        email?: string;
+        phone?: string;
+        name?: string;
+        role?:
+          | "chairperson"
+          | "admin"
+          | "secretary"
+          | "treasurer"
+          | "cashier"
+          | "committee";
+      },
+    ) =>
+      request<TeamMemberDto>(`/v1/team/${userId}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    removeTeamMember: (userId: string) =>
+      request<{ ok: true }>(`/v1/team/${userId}`, { method: "DELETE" }),
 
     listVisitors: () => request<VisitorDto[]>("/v1/visitors"),
     createVisitor: (body: {

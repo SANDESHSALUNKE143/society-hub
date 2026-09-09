@@ -205,6 +205,66 @@ void main() {
       expect(profile.flat!.parkingSlot, 'P-12');
     });
 
+    test('listTeam add update remove', () async {
+      bundle.adapter
+        ..onGet(
+          '/v1/team',
+          (server) => server.reply(200, [
+            {
+              'userId': 'u2',
+              'name': 'Ops',
+              'email': 'ops@example.com',
+              'phone': null,
+              'role': 'committee',
+            },
+          ]),
+        )
+        ..onPost(
+          '/v1/team',
+          (server) => server.reply(200, {
+            'ok': true,
+            'userId': 'u3',
+            'role': 'secretary',
+            'societyName': 'Keshav Heights',
+          }),
+          data: Matchers.any,
+        )
+        ..onPatch(
+          '/v1/team/u2',
+          (server) => server.reply(200, {
+            'userId': 'u2',
+            'name': 'Ops',
+            'email': 'ops@example.com',
+            'phone': '8888888888',
+            'role': 'committee',
+          }),
+          data: Matchers.any,
+        )
+        ..onDelete(
+          '/v1/team/u2',
+          (server) => server.reply(200, {'ok': true}),
+        );
+
+      final rows = await bundle.api.listTeam();
+      expect(rows.first.phone, isNull);
+      expect(rows.first.displayName, 'Ops');
+
+      final added = await bundle.api.addTeamMember(
+        phone: '7777777777',
+        role: 'secretary',
+      );
+      expect(added.userId, 'u3');
+      expect(added.role, 'secretary');
+
+      final updated = await bundle.api.updateTeamMember(
+        'u2',
+        phone: '8888888888',
+      );
+      expect(updated.phone, '8888888888');
+
+      await bundle.api.removeTeamMember('u2');
+    });
+
     test('listComplaints mine query is accepted', () async {
       bundle.adapter.onGet(
         RegExp(r'/v1/complaints\?page=1&limit=20&mine=1'),

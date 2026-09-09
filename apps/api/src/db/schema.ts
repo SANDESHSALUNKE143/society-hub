@@ -35,6 +35,13 @@ export const societies = mysqlTable("societies", {
   timezone: varchar("timezone", { length: 64 }).notNull().default("Asia/Kolkata"),
   slaDays: int("sla_days").notNull().default(3),
   billingDefaults: text("billing_defaults"),
+  /** Offline UPI / bank details residents use to pay (Razorpay is future). */
+  upiId: varchar("upi_id", { length: 80 }),
+  accountName: varchar("account_name", { length: 120 }),
+  accountNumber: varchar("account_number", { length: 40 }),
+  ifsc: varchar("ifsc", { length: 20 }),
+  qrBlobPath: varchar("qr_blob_path", { length: 500 }),
+  qrContentType: varchar("qr_content_type", { length: 120 }),
   ...timestamps,
 });
 
@@ -378,13 +385,16 @@ export const payments = mysqlTable(
     billId: char("bill_id", { length: 36 }),
     flatId: char("flat_id", { length: 36 }).notNull(),
     amountPaise: int("amount_paise").notNull(),
-    method: mysqlEnum("method", ["razorpay", "cash", "cheque", "neft"]).notNull(),
+    method: mysqlEnum("method", ["razorpay", "cash", "cheque", "neft", "upi"]).notNull(),
     status: mysqlEnum("status", ["pending", "success", "failed"])
       .notNull()
       .default("pending"),
     razorpayOrderId: varchar("razorpay_order_id", { length: 120 }),
     razorpayPaymentId: varchar("razorpay_payment_id", { length: 120 }),
     receiptNumber: varchar("receipt_number", { length: 64 }),
+    proofBlobPath: varchar("proof_blob_path", { length: 500 }),
+    proofContentType: varchar("proof_content_type", { length: 120 }),
+    reviewNote: varchar("review_note", { length: 500 }),
     ...timestamps,
   },
   (t) => [

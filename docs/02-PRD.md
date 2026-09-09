@@ -142,7 +142,7 @@ Phase 2 builds on the complaint portal. It is **in product roadmap**, not droppe
 | **Residents** | Owners vs tenants; move-in/move-out; profile self-update; tenant verification document store/retrieve |
 | **Complaints (advanced)** | Status `Assigned`; assignment to staff; comments thread; SLA timers/reminders/escalation (BullMQ) |
 | **Billing** | Generate maintenance bills per flat/period; line items; dues; defaulters; bill correct/void with audit |
-| **Payments** | Razorpay online (UPI/card/netbanking); webhook reconciliation; cash/cheque/NEFT manual entry; receipts; payment history |
+| **Payments** | **Now:** offline UPI/QR — society posts UPI ID + optional QR/account details; resident uploads a payment screenshot; Admin/Treasurer reviews, credits the bill, and acknowledges (or rejects). **Future:** Razorpay online checkout + webhooks. Cash/cheque/NEFT staff entry still available. |
 | **Notices** | Publish to all/wing/flat; read acknowledgment; edit/unpublish |
 | **Notifications** | In-app inbox; email (Resend); web push (FCM); deep links |
 | **Dashboards** | Secretary ops; Treasurer finance (collection %, outstanding); Committee read-only; richer resident home |
@@ -169,6 +169,7 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 - FR-ONB-1: Admin onboarding for the pilot society (or Super Admin creates society + first Admin).
 - FR-ONB-2: Admin registers residents against **flats** (flat number required for auto-fill).
 - FR-ONB-3: Buildings/wings only as needed to uniquely identify flats for the pilot.
+- FR-ONB-4: Society Admin can add, update (name / email / mobile / role), and remove society team members in Client App Admin. A team member cannot remove themselves.
 
 ### 7.3 Complaint management (MVP)
 
@@ -232,13 +233,14 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 - FR-BIL-4: Treasurer views outstanding dues and defaulters (filter by wing/flat).
 - FR-BIL-5: Bill corrections/voids write audit logs.
 
-### 7.8 Phase 2 — payments
+### 7.8 Payments (offline first; Razorpay later)
 
-- FR-PAY-1: Resident pays bill via Razorpay (UPI/card/netbanking); success updates bill; failure leaves unpaid.
-- FR-PAY-2: Razorpay webhooks verified and idempotent; payment linked to bill.
-- FR-PAY-3: Treasurer records cash/cheque/NEFT with reference; updates bill; receipt available.
-- FR-PAY-4: Resident downloads receipt (society, flat, amount, mode, date, transaction id).
-- FR-PAY-5: Resident views payment history.
+- FR-PAY-1: Society Admin/Treasurer publishes **offline pay details**: UPI ID, optional account name / number / IFSC, optional QR image. Residents see these when paying a bill.
+- FR-PAY-2: Resident pays **outside the app** (UPI/QR/bank), then uploads a **screenshot** against an unpaid bill. Payment stays `pending` until staff review. Bill is not marked paid yet.
+- FR-PAY-3: Admin/Treasurer reviews the screenshot, then **acknowledges** (credit: payment `success`, bill `paid`, receipt issued) or **rejects** (payment `failed`, bill stays unpaid; resident may submit again).
+- FR-PAY-4: Treasurer may still record cash/cheque/NEFT in person (immediate credit).
+- FR-PAY-5: Resident views payment history (pending / success / rejected) and receipt after acknowledgement.
+- FR-PAY-6 **(future):** Resident pays bill via Razorpay (UPI/card/netbanking); verified webhooks; do not treat client-reported success as paid.
 
 ### 7.9 Phase 2 — notices
 
@@ -304,7 +306,7 @@ Notifications on assignment and status changes; SLA jobs monitor breach.
 
 ### 8.4 Phase 2 — monthly bill and pay
 
-Treasurer generates period bills → residents notified → online Razorpay pay or Treasurer records offline → receipt → dashboards update collection %.
+Treasurer generates period bills → resident pays via society UPI/QR and uploads screenshot → Admin/Treasurer reviews and credits → receipt. Razorpay checkout is future.
 
 ### 8.5 Phase 2 — notice publish and read
 

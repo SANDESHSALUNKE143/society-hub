@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../api/models.dart';
 import '../../../auth/google_id_token.dart';
+import '../../../auth/login_errors.dart';
 import '../../../auth/session.dart';
 import '../../../core/app_keys.dart';
 import '../../../core/theme.dart';
@@ -50,10 +51,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       await ref.read(sessionProvider.notifier).setSession(res.user, res.tokens);
       if (!mounted) return;
       context.go('/select-society');
-    } on ApiException catch (e) {
-      setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = loginErrorText(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -71,8 +70,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         _otpSent = true;
         if (res.devCode != null) _devHint = 'Dev OTP: ${res.devCode}';
       });
-    } on ApiException catch (e) {
-      setState(() => _error = e.message);
+    } catch (e) {
+      setState(() => _error = loginErrorText(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -87,18 +86,28 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       });
     }
 
+    if (session.loading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(key: AppKeys.loginBusy),
+        ),
+      );
+    }
+
     return Scaffold(
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: ShCard(
-                padding: const EdgeInsets.all(28),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
+        child: Stack(
+          children: [
+            Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: ShCard(
+                    padding: const EdgeInsets.all(28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                     const Center(child: BrandMark()),
                     const SizedBox(height: 16),
                     const Text(
@@ -147,19 +156,45 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ),
                     ],
                     if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _error!,
-                        key: AppKeys.loginError,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: AppColors.danger),
+                      const SizedBox(height: 16),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: const Color(0x14A4161A),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          child: Text(
+                            _error!,
+                            key: AppKeys.loginError,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: AppColors.danger,
+                              fontSize: 13,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+            if (_busy)
+              const ColoredBox(
+                color: Color(0x66FFFAF4),
+                child: Center(
+                  child: CircularProgressIndicator(key: AppKeys.loginBusy),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -273,37 +308,40 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       ];
 
   Future<void> _signInGoogle() async {
-    final config = ref.read(apiConfigProvider);
-    if (config.allowsDevGoogle) {
+    await _apply(() async {
+      final config = ref.read(apiConfigProvider);
+      if (config.allowsDevGoogle) {
+        final token = googleIdTokenForApi(
+          config: config,
+          phone: _phone.text,
+          googleIdToken: null,
+        );
+        if (token == null) {
+          throw StateError('Enter the onboarded mobile number.');
+        }
+        return ref.read(apiProvider).loginGoogle(token);
+      }
+
+      final configError = googleSignInConfigError(config.googleServerClientId);
+      if (configError != null) {
+        throw StateError(configError);
+      }
+
+      final raw = await ref.read(googleIdTokenSourceProvider).fetchIdToken(
+            serverClientId: config.googleServerClientId,
+          );
       final token = googleIdTokenForApi(
         config: config,
-        phone: _phone.text,
-        googleIdToken: null,
+        phone: '',
+        googleIdToken: raw,
       );
       if (token == null) {
-        setState(() => _error = 'Enter the onboarded mobile number.');
-        return;
-      }
-      await _apply(() => ref.read(apiProvider).loginGoogle(token));
-      return;
-    }
-
-    final raw = await ref.read(googleIdTokenSourceProvider).fetchIdToken(
-          serverClientId: config.googleServerClientId,
+        throw StateError(
+          'Google sign-in was cancelled. Try again, or use OTP or email.',
         );
-    final token = googleIdTokenForApi(
-      config: config,
-      phone: '',
-      googleIdToken: raw,
-    );
-    if (token == null) {
-      setState(() {
-        _error =
-            'Google sign-in was cancelled or is not configured. Use OTP or email.';
-      });
-      return;
-    }
-    await _apply(() => ref.read(apiProvider).loginGoogle(token));
+      }
+      return ref.read(apiProvider).loginGoogle(token);
+    });
   }
 
   List<Widget> _googleForm() {
@@ -316,6 +354,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             : 'Sign in with the Google account that is already onboarded.',
         style: const TextStyle(color: Colors.black54, fontSize: 14),
       ),
+      if (!isDev &&
+          googleSignInConfigError(config.googleServerClientId) != null) ...[
+        const SizedBox(height: 12),
+        const Text(
+          'Google Sign-In is not configured in this build. Use OTP or email, or rebuild with GOOGLE_SERVER_CLIENT_ID.',
+          style: TextStyle(color: AppColors.danger, fontSize: 13),
+        ),
+      ],
       if (isDev) ...[
         const SizedBox(height: 12),
         TextField(

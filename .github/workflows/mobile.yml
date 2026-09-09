@@ -15,17 +15,12 @@ on:
       - ".github/workflows/mobile.yml"
   workflow_dispatch:
     inputs:
-      environment:
-        description: API environment for store binaries
-        type: choice
-        options: [staging, prod]
-        default: staging
       build_ios:
         description: Build IPA (requires ENABLE_IOS_IPA=true and ASC secrets)
         type: boolean
         default: false
       upload_play:
-        description: Upload AAB to Play internal (requires ENABLE_PLAY_UPLOAD + PLAY_SERVICE_ACCOUNT_JSON)
+        description: Upload AAB and roll out Play internal (requires ENABLE_PLAY_UPLOAD + PLAY_SERVICE_ACCOUNT_JSON)
         type: boolean
         default: false
 
@@ -70,7 +65,7 @@ jobs:
     defaults:
       run:
         working-directory: apps/mobile
-    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'prod' }}
+    environment: prod
 
     steps:
       - uses: actions/checkout@v4
@@ -113,7 +108,7 @@ jobs:
           MOBILE_API_BASE_URL: ${{ vars.MOBILE_API_BASE_URL }}
           GOOGLE_SERVER_CLIENT_ID: ${{ vars.GOOGLE_SERVER_CLIENT_ID }}
           PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
-          MOBILE_ENV: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'prod' }}
+          MOBILE_ENV: prod
         run: |
           if [ -z "$MOBILE_API_BASE_URL" ]; then
             echo "Set GitHub variable MOBILE_API_BASE_URL on this environment."
@@ -126,24 +121,28 @@ jobs:
             --dart-define=PRIVACY_POLICY_URL="${PRIVACY_POLICY_URL:-https://societyhub-client.onrender.com/privacy}" \
             --obfuscate --split-debug-info=build/debug-info
 
+      - name: Stage AAB at artifact root
+        run: |
+          mkdir -p aab-artifact
+          cp build/app/outputs/bundle/release/app-release.aab aab-artifact/app-release.aab
+          cp -R build/debug-info aab-artifact/debug-info
+
       - uses: actions/upload-artifact@v4
         with:
           name: societyhub-android-aab
-          path: |
-            apps/mobile/build/app/outputs/bundle/release/app-release.aab
-            apps/mobile/build/debug-info
+          path: apps/mobile/aab-artifact/*
           if-no-files-found: error
           retention-days: 30
 
   play-internal:
-    name: Play internal (draft)
+    name: Play internal
     needs: android-aab
     if: >
       vars.ENABLE_PLAY_UPLOAD == 'true' &&
       (github.event_name != 'workflow_dispatch' || github.event.inputs.upload_play == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'prod' }}
+    environment: prod
 
     steps:
       - uses: actions/download-artifact@v4
@@ -151,14 +150,26 @@ jobs:
           name: societyhub-android-aab
           path: artifacts
 
+      - name: Locate AAB
+        id: aab
+        run: |
+          aab=$(find artifacts -name 'app-release.aab' -type f | head -n 1)
+          if [ -z "$aab" ]; then
+            echo "app-release.aab not in artifact"
+            find artifacts -type f
+            exit 1
+          fi
+          echo "Found $aab"
+          echo "path=$aab" >> "$GITHUB_OUTPUT"
+
       - name: Upload AAB to Play internal track
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.societyhub.societyhub_mobile
-          releaseFiles: artifacts/app-release.aab
+          releaseFiles: ${{ steps.aab.outputs.path }}
           track: internal
-          status: draft
+          status: completed
 
   ios-ipa:
     name: iOS IPA
@@ -172,7 +183,7 @@ jobs:
     defaults:
       run:
         working-directory: apps/mobile
-    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'prod' }}
+    environment: prod
 
     steps:
       - uses: actions/checkout@v4
@@ -195,7 +206,7 @@ jobs:
           MOBILE_API_BASE_URL: ${{ vars.MOBILE_API_BASE_URL }}
           GOOGLE_SERVER_CLIENT_ID: ${{ vars.GOOGLE_SERVER_CLIENT_ID }}
           PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
-          MOBILE_ENV: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'prod' }}
+          MOBILE_ENV: prod
         run: |
           if [ -z "$MOBILE_API_BASE_URL" ]; then
             echo "Set GitHub variable MOBILE_API_BASE_URL on this environment."

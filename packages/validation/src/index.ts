@@ -130,6 +130,24 @@ export const societyStaffRoleEnum = z.enum([
   "committee",
 ]);
 
+export const addSocietyTeamMemberSchema = z.object({
+  email: z.string().email().max(200).optional(),
+  phone: z.string().min(10).max(15).optional(),
+  name: z.string().min(1).max(120).optional(),
+  role: societyStaffRoleEnum.default("chairperson"),
+});
+
+export const updateSocietyTeamMemberSchema = z
+  .object({
+    email: z.string().email().max(200).optional(),
+    phone: z.string().min(10).max(15).optional(),
+    name: z.string().min(1).max(120).optional(),
+    role: societyStaffRoleEnum.optional(),
+  })
+  .refine((d) => d.email || d.phone || d.name || d.role, {
+    message: "at least one field is required",
+  });
+
 export const createSocietySchema = z.object({
   name: z.string().min(1).max(200),
   address: z.string().max(500).optional().nullable(),
@@ -216,8 +234,19 @@ export const recordPaymentSchema = z.object({
   billId: z.string().uuid().optional().nullable(),
   flatId: z.string().uuid(),
   amountPaise: z.number().int().min(1),
-  method: z.enum(["razorpay", "cash", "cheque", "neft"]),
+  method: z.enum(["razorpay", "cash", "cheque", "neft", "upi"]),
   receiptNumber: z.string().max(64).optional().nullable(),
+});
+
+export const updatePaymentAccountSchema = z.object({
+  upiId: z.string().max(80).optional().nullable(),
+  accountName: z.string().max(120).optional().nullable(),
+  accountNumber: z.string().max(40).optional().nullable(),
+  ifsc: z.string().max(20).optional().nullable(),
+});
+
+export const reviewPaymentSchema = z.object({
+  note: z.string().max(500).optional().nullable(),
 });
 
 export const razorpayWebhookSchema = z.object({

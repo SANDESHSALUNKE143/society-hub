@@ -200,8 +200,16 @@ export type BillDto = {
   createdAt: string;
 };
 
-export type PaymentMethod = "razorpay" | "cash" | "cheque" | "neft";
+export type PaymentMethod = "razorpay" | "cash" | "cheque" | "neft" | "upi";
 export type PaymentStatus = "pending" | "success" | "failed";
+
+export type PaymentAccountDto = {
+  upiId: string | null;
+  accountName: string | null;
+  accountNumber: string | null;
+  ifsc: string | null;
+  qrUrl: string | null;
+};
 
 export type PaymentDto = {
   id: string;
@@ -212,6 +220,8 @@ export type PaymentDto = {
   method: PaymentMethod;
   status: PaymentStatus;
   receiptNumber: string | null;
+  proofUrl: string | null;
+  reviewNote: string | null;
   createdAt: string;
 };
 

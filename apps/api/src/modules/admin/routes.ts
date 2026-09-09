@@ -1,19 +1,21 @@
 import { Elysia } from "elysia";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
+  addSocietyTeamMemberSchema,
   createInvitationSchema,
   onboardResidentSchema,
   residentImportSchema,
+  updateSocietyTeamMemberSchema,
 } from "@society-hub/validation";
-import type { FlatDto, TeamMemberDto } from "@society-hub/types";
+import type { FlatDto } from "@society-hub/types";
 import { db } from "../../db/client";
+import { buildings, flats, wings } from "../../db/schema";
 import {
-  buildings,
-  flats,
-  userRoles,
-  users,
-  wings,
-} from "../../db/schema";
+  addTeamMemberToTenant,
+  listTeamForTenant,
+  removeTeamMemberFromTenant,
+  updateTeamMemberInTenant,
+} from "./team-service";
 import { createInvitationForTenant } from "../invitations/routes";
 import {
   authPlugin,
@@ -55,40 +57,34 @@ function toFlatDto(
   };
 }
 
-async function listTeamForTenant(tenantId: string): Promise<TeamMemberDto[]> {
-  return db
-    .select({
-      userId: userRoles.userId,
-      role: userRoles.role,
-      name: users.name,
-      email: users.email,
-      phone: users.phone,
-    })
-    .from(userRoles)
-    .innerJoin(users, eq(users.id, userRoles.userId))
-    .where(
-      and(
-        eq(userRoles.tenantId, tenantId),
-        inArray(userRoles.role, [
-          "chairperson",
-          "admin",
-          "secretary",
-          "treasurer",
-          "cashier",
-          "committee",
-        ]),
-        eq(userRoles.isDeleted, false),
-        eq(users.isDeleted, false),
-      ),
-    );
-}
-
 export const teamRoutes = new Elysia({ prefix: "/v1/team" })
   .use(authPlugin)
   .get("/", async ({ auth }) => {
     const claims = requireAuth(auth);
     requireSocietyStaff(claims);
     return listTeamForTenant(claims.tenantId);
+  })
+  .post("/", async ({ auth, body }) => {
+    const claims = requireAuth(auth);
+    requireSocietyStaff(claims);
+    const parsed = addSocietyTeamMemberSchema.parse(body);
+    return addTeamMemberToTenant(claims.tenantId, claims.sub, parsed);
+  })
+  .patch("/:userId", async ({ auth, params, body }) => {
+    const claims = requireAuth(auth);
+    requireSocietyStaff(claims);
+    const parsed = updateSocietyTeamMemberSchema.parse(body);
+    return updateTeamMemberInTenant(
+      claims.tenantId,
+      claims.sub,
+      params.userId,
+      parsed,
+    );
+  })
+  .delete("/:userId", async ({ auth, params }) => {
+    const claims = requireAuth(auth);
+    requireSocietyStaff(claims);
+    return removeTeamMemberFromTenant(claims.tenantId, claims.sub, params.userId);
   });
 
 export const adminRoutes = new Elysia({ prefix: "/v1/admin" })

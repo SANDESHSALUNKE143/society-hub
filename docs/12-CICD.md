@@ -43,7 +43,7 @@ Web preview does **not** wait for Mobile CI. A mobile-only PR still runs **CI** 
 |-----|---------|--------|
 | Analyze + test | Every mobile PR/push | `flutter analyze` + `flutter test` |
 | Android AAB | **Manual** Mobile CI, or tag `mobile-v*` | Signed `app-release.aab` artifact (needs keystore secrets) |
-| Play internal | AAB job + `ENABLE_PLAY_UPLOAD=true` + `upload_play` | Draft on Play **internal** only. **Off** until the Play app exists. Never production |
+| Play internal | AAB job + `ENABLE_PLAY_UPLOAD=true` + `upload_play` | Upload + roll out **internal**. Never production |
 | iOS IPA | Same + `ENABLE_IOS_IPA=true` + `build_ios` | Skipped until Apple secrets |
 
 **Package / application id:** `com.societyhub.societyhub_mobile`
@@ -51,11 +51,11 @@ Web preview does **not** wait for Mobile CI. A mobile-only PR still runs **CI** 
 **How to build an AAB in CI**
 
 1. GitHub → **Actions** → **Mobile CI** → **Run workflow**
-2. Environment: `staging` or `prod` (matches GitHub Environments)
-3. Leave `upload_play` and `build_ios` false until those flags are set
+2. Use workflow from the **`staging`** git branch (or `main` after promote). Store jobs always use GitHub environment **`production`**.
+3. Tick `upload_play` to upload and roll out to Play **internal**. Leave `build_ios` off until Apple. Production and closed testers stay in the Console.
 4. Download artifact `societyhub-android-aab`
 
-First Play upload is **manual**: download AAB → Play Console **internal** track. Production promote stays a Console click (staged 20% → 100%).
+Production promote stays a Console click (staged 20% → 100%).
 
 Local AAB (same signing): `apps/mobile/README.md` + `android/key.properties` (gitignored).
 
@@ -75,7 +75,7 @@ Preview login may still use `DEV_AUTH=true` + OTP `123456`. Store builds must hi
 
 ## 5. Secrets and variables (GitHub)
 
-Repo + environments `staging`, `prod`, `production` (Mobile job uses `prod` or `staging` from the dispatch dropdown).
+Repo + environments `staging`, `prod`, `production`. Mobile store jobs always use GitHub environment **`prod`**. The `staging` git branch is still the PR target; it is not a Mobile CI environment choice.
 
 | Kind | Name | Used by |
 |------|------|---------|
@@ -117,7 +117,7 @@ gh pr create --base staging
 GitHub → Actions → Promote preview → Run workflow
 
 # Signed Android bundle (after keystore secrets)
-GitHub → Actions → Mobile CI → Run workflow (environment staging or prod)
+GitHub → Actions → Mobile CI → Run workflow (git branch staging; environment prod)
 ```
 
 More click-through for accounts and Play: [10-Go-Live](10-Go-Live.md). Local Flutter: [08-Local-Development](08-Local-Development.md) §12 and [`apps/mobile/README.md`](../apps/mobile/README.md).

@@ -142,6 +142,21 @@ void main() {
     });
   });
 
+  group('TeamMemberDto', () {
+    test('parses contact fields and displayName fallback', () {
+      final member = TeamMemberDto.fromJson({
+        'userId': 'u2',
+        'name': null,
+        'email': 'ops@example.com',
+        'phone': '8888888888',
+        'role': 'secretary',
+      });
+      expect(member.displayName, 'ops@example.com');
+      expect(member.phone, '8888888888');
+      expect(member.role, 'secretary');
+    });
+  });
+
   group('DashboardStatsDto', () {
     test('defaults missing numbers to zero', () {
       final stats = DashboardStatsDto.fromJson({});

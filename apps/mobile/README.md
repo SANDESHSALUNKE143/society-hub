@@ -11,7 +11,8 @@ Index: [docs/08-Local-Development.md](../../docs/08-Local-Development.md) (Mobil
 | Auth (OTP, email/password, PIN, Google) | Speech-to-text on raise |
 | Dashboard, complaints (list / raise / detail) | **CSV bulk** import |
 | Manual **single** resident onboard | Structure / heavy admin bulk |
-| Account: flat, profile, PIN, privacy link | Manage portal |
+| **Team** — add / edit email+mobile / remove | Manage portal (create society) |
+| Account: flat, profile, PIN, privacy link | CSV / bulk import |
 | Coming soon stubs | Full Phase 2 modules |
 
 ## Prerequisites (Android debug)
@@ -119,10 +120,10 @@ keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
 |-----|------|-------|
 | Analyze + test | PR / push to `apps/mobile/**` | Always |
 | Android AAB | `workflow_dispatch` or tag `mobile-v*` | Needs keystore secrets + `MOBILE_API_BASE_URL` |
-| Play internal | Same + `ENABLE_PLAY_UPLOAD=true` + `upload_play` | Draft on **internal** only. Off until the Play app exists. Never production. |
+| Play internal | Same + `ENABLE_PLAY_UPLOAD=true` + `upload_play` | Rolls out **internal** (`status: completed`). Never production. |
 | iOS IPA | Same triggers **and** `ENABLE_IOS_IPA=true` | Skipped until Apple secrets; see Go-Live |
 
-GitHub **variables** (per environment `staging` / `prod`): `MOBILE_API_BASE_URL`, `GOOGLE_SERVER_CLIENT_ID`, `PRIVACY_POLICY_URL`. Optional: `ENABLE_PLAY_UPLOAD`, `ENABLE_IOS_IPA`.
+GitHub **variables** (environment `prod` for store jobs): `MOBILE_API_BASE_URL`, `GOOGLE_SERVER_CLIENT_ID`, `PRIVACY_POLICY_URL`. Optional: `ENABLE_PLAY_UPLOAD`, `ENABLE_IOS_IPA`.
 
 GitHub **secrets** (Android): `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS`. Later: `PLAY_SERVICE_ACCOUNT_JSON`.
 
@@ -132,9 +133,10 @@ iOS later: set variable `ENABLE_IOS_IPA=true` and ASC secrets. Do not buy Apple 
 
 1. Pay $25, create app `SocietyHub`, id `com.societyhub.societyhub_mobile`, enable Play App Signing.
 2. Upload the CI (or local) AAB to the **internal** track first.
-3. Privacy policy URL: `https://app.societyhub.in/privacy` (or your hosted Client App `/privacy`).
+3. Privacy policy URL: `https://societyhub-client.onrender.com/privacy`.
 4. Data safety: account, phone, photos/videos for complaints.
-5. Production after smoke; staged rollout 20% → 100%.
+5. Store listing files: [`store/`](store/) (icon, feature graphic, 4 phone screenshots). Copy in [Go-Live §7.2a](../../docs/10-Go-Live.md).
+6. Production after smoke; staged rollout 20% → 100%.
 
 ## Next: iOS (not this phase)
 

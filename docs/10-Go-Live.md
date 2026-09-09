@@ -300,7 +300,7 @@ Do **not** put Android keystores or Apple keys in the repo.
 | Variable | `GOOGLE_SERVER_CLIENT_ID` | Web OAuth client (API audience) |
 | Variable | `PRIVACY_POLICY_URL` | In-app + store listing (default `https://app.societyhub.in/privacy`) |
 | Variable | `ENABLE_IOS_IPA` | Set `true` to run the IPA job |
-| Variable | `ENABLE_PLAY_UPLOAD` | Set `true` to upload the AAB to Play **internal** (draft). Off until the Play app exists. |
+| Variable | `ENABLE_PLAY_UPLOAD` | Set `true` to upload the AAB and roll out Play **internal**. Never production. |
 | Secret | `ANDROID_KEYSTORE_BASE64` | AAB signing |
 | Secret | `ANDROID_KEYSTORE_PASSWORD` | AAB signing |
 | Secret | `ANDROID_KEY_PASSWORD` | AAB signing |
@@ -325,6 +325,37 @@ Local debug: [apps/mobile/README.md](../apps/mobile/README.md) and [08-Local-Dev
 3. Create apps:
    - Play: `SocietyHub` / application id `com.societyhub.societyhub_mobile`
    - App Store Connect: bundle `com.societyhub.societyhubMobile`
+
+### 7.2a Default store listing (en-IN)
+
+Assets live in [`apps/mobile/store/`](../apps/mobile/store/).
+
+| Field | Value |
+|---|---|
+| App name | SocietyHub |
+| Short description | Raise and track housing society complaints from your phone. |
+| Full description | See below |
+| App icon | `apps/mobile/store/icon-512.png` |
+| Feature graphic | `apps/mobile/store/feature-graphic-1024x500.png` |
+| Phone screenshots | `screenshot-01` … `screenshot-04` in the same folder |
+| Video | empty |
+| Website | `https://societyhub-client.onrender.com` |
+| Privacy | `https://societyhub-client.onrender.com/privacy` |
+| Delete-data URL | same privacy URL |
+
+Full description:
+
+```
+SocietyHub helps housing-society residents raise and track complaints in one place.
+
+You must already be onboarded by your society admin. Sign in with mobile OTP, Google, email, or a PIN. Then submit a complaint, add optional photos or video, and follow the ticket until it is resolved.
+
+Committee members can review the queue, update status, and add a short note or evidence photos.
+
+This app is for society operations. It is not a substitute for emergency services.
+
+Privacy policy: https://societyhub-client.onrender.com/privacy
+```
 
 ### 7.2 Local builds (no store)
 
@@ -366,7 +397,7 @@ flutter build appbundle --release \
 | Analyze + test | PR / push `apps/mobile/**` | Yes |
 | Signed AAB | Actions → **Mobile CI** → Run workflow, or tag `mobile-v*` | Yes, after keystore secrets |
 | First Play upload | Download the AAB artifact → Play **internal** track | **Manual** until identity unlocks **Create app** |
-| Later uploads | Same workflow + `ENABLE_PLAY_UPLOAD=true` + `PLAY_SERVICE_ACCOUNT_JSON` | Internal **draft** only |
+| Later uploads | Same workflow + `ENABLE_PLAY_UPLOAD=true` + `PLAY_SERVICE_ACCOUNT_JSON` | Internal track **completed** (testers can install). Never production. |
 | Production | Play Console: promote internal → production, staged 20% → 100% | **Never** from CI |
 
 Do **not** auto-publish production from `main` or every commit. First listing, Data safety, and content rating stay Console clicks.
