@@ -12,7 +12,11 @@ describe("complaint labels", () => {
     expect(statusBadgeClass("open")).toContain("badge-danger");
     expect(statusBadgeClass("resolved")).toContain("badge-success");
     expect(statusBadgeClass("in_progress")).toContain("badge-progress");
+    expect(statusBadgeClass("assigned")).toBe("badge");
+    expect(statusBadgeClass("closed")).toContain("badge-success");
     expect(statusTone("open")).toBe("open");
     expect(statusTone("in_progress")).toBe("progress");
+    expect(statusTone("resolved")).toBe("ok");
+    expect(statusTone("assigned")).toBe("ack");
   });
 });

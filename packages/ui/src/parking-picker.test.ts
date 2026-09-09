@@ -73,5 +73,12 @@ describe("parking-picker", () => {
     expect(parkingNumberHint([puzzleTaken], "puzzle", "flat-1", "")).toContain(
       "assigned to other flats",
     );
+    expect(parkingNumberHint([puzzleTaken, openFree], "puzzle", "flat-1", "")).toContain(
+      "Switch to Open",
+    );
+    expect(preferredParkingKind([], undefined, "flat-1", "")).toBe("puzzle");
+    expect(parkingNumberHint([puzzleTaken], "open", "flat-1", "")).toContain(
+      "Switch Parking type to see Puzzle",
+    );
   });
 });

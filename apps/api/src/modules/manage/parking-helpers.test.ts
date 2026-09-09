@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   normalizeSocietyParking,
   parkingIdentitiesMatch,
+  parkingTakenMessage,
   slotNumbersMatch,
   stripWingFromSlotNumber,
 } from "./parking-helpers";
@@ -17,6 +18,21 @@ describe("parking-helpers", () => {
     expect(stripWingFromSlotNumber("D", "D 12")).toBe("12");
     expect(stripWingFromSlotNumber("A", "101")).toBe("101");
     expect(stripWingFromSlotNumber("A", "D-101")).toBe("D-101");
+  });
+
+  test("parkingTakenMessage names the wing for puzzle lots", () => {
+    expect(
+      parkingTakenMessage({ kind: "puzzle", wing: "A", slotNumber: "12" }),
+    ).toBe("Parking 12 already exists for wing A");
+    expect(
+      parkingTakenMessage({ kind: "open", wing: null, slotNumber: "9" }),
+    ).toBe("Parking 9 already exists in this society");
+    expect(
+      parkingIdentitiesMatch(
+        { kind: "puzzle", wing: "A", slotNumber: "1" },
+        { kind: "open", wing: null, slotNumber: "1" },
+      ),
+    ).toBe(false);
   });
 
   test("puzzle uniqueness is wing + number", () => {

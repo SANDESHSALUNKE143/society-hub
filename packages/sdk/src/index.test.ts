@@ -242,12 +242,21 @@ describe("sdk client", () => {
     await client.updateProfile({ vehicleNumber: "MH12AB1234" });
     await client.listHouseholdMembers();
     await client.addHouseholdMember({ name: "Kid", phone: "8888888881" });
+    await client.updateHouseholdMember("u-kid", {
+      name: "Kid",
+      phone: "8888888881",
+    });
+    await client.removeHouseholdMember("u-kid");
+    await client.removeResident("u-kid");
     expect(paths).toEqual([
       "http://api.test/v1/auth/memberships",
       "http://api.test/v1/auth/select-tenant",
       "http://api.test/v1/auth/profile",
       "http://api.test/v1/household/members",
       "http://api.test/v1/household/members",
+      "http://api.test/v1/household/members/u-kid",
+      "http://api.test/v1/household/members/u-kid",
+      "http://api.test/v1/admin/residents/u-kid",
     ]);
   });
 

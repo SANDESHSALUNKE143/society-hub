@@ -28,6 +28,7 @@ class _SelectSocietyPageState extends ConsumerState<SelectSocietyPage> {
 
   Future<void> _load() async {
     try {
+      final rows = await ref.read(apiProvider).listMemberships();
       final unique = uniqueMembershipsBySociety(rows);
       if (!mounted) return;
       if (unique.length <= 1) {

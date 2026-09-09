@@ -804,6 +804,27 @@ describe("api integration", () => {
       body: JSON.stringify({ name: "Son", phone: familyPhone }),
     });
     expect(added.ok).toBe(true);
+    const addedBody = (await added.json()) as { user: { id: string } };
+
+    const patched = await fetch(
+      `${base}/v1/household/members/${addedBody.user.id}`,
+      {
+        method: "PATCH",
+        headers: { ...ownerAuth, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Daughter", phone: familyPhone }),
+      },
+    );
+    expect(patched.ok).toBe(true);
+
+    const editOwner = await fetch(
+      `${base}/v1/household/members/${owner.user.id}`,
+      {
+        method: "PATCH",
+        headers: { ...ownerAuth, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Flat Owner", phone: ownerPhone }),
+      },
+    );
+    expect(editOwner.status).toBe(409);
 
     const family = await otpLogin(familyPhone);
     expect(family.user.flatId).toBe(flat.id);
@@ -830,6 +851,18 @@ describe("api integration", () => {
       body: JSON.stringify({ name: "Cousin", phone: `87${String(Date.now()).slice(-8)}` }),
     });
     expect(forbidden.status).toBe(403);
+
+    const removeOwner = await fetch(
+      `${base}/v1/household/members/${owner.user.id}`,
+      { method: "DELETE", headers: ownerAuth },
+    );
+    expect(removeOwner.status).toBe(409);
+
+    const removed = await fetch(
+      `${base}/v1/household/members/${addedBody.user.id}`,
+      { method: "DELETE", headers: ownerAuth },
+    );
+    expect(removed.ok).toBe(true);
   });
 
   test("staff with a linked flat can list household members", async () => {

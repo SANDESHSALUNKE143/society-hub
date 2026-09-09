@@ -572,8 +572,8 @@ class _OnboardPageState extends ConsumerState<OnboardPage> {
               if (_flatId != null && _tab == 'parking') ...[
               if (_parkings.isNotEmpty) ...[
                 DropdownButtonFormField<String>(
-                  key: const Key('onboard-parking-kind'),
-                  value: _parkingKind,
+                  key: Key('onboard-parking-kind-$_parkingKind'),
+                  initialValue: _parkingKind,
                   decoration: const InputDecoration(labelText: 'Parking type'),
                   items: const [
                     DropdownMenuItem(value: 'puzzle', child: Text('Puzzle')),
@@ -597,8 +597,8 @@ class _OnboardPageState extends ConsumerState<OnboardPage> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  key: const Key('onboard-parking'),
-                  value: _parkingSelectValue,
+                  key: Key('onboard-parking-$_parkingSelectValue'),
+                  initialValue: _parkingSelectValue,
                   decoration: const InputDecoration(labelText: 'Parking number'),
                   items: [
                     const DropdownMenuItem(value: '', child: Text('None')),

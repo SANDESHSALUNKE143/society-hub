@@ -51,7 +51,6 @@ class _AccountPageState extends ConsumerState<AccountPage> {
   String? _familyError;
   List<SocietyResidentDto> _household = [];
   SocietyResidentDto? _editingFamily;
-  bool _showFamilyForm = false;
   final _familyName = TextEditingController();
   final _familyPhone = TextEditingController();
   final _familyEmail = TextEditingController();
@@ -184,7 +183,6 @@ class _AccountPageState extends ConsumerState<AccountPage> {
   void _openAddFamily() {
     setState(() {
       _editingFamily = null;
-      _showFamilyForm = true;
       _familyName.clear();
       _familyPhone.clear();
       _familyEmail.clear();
@@ -195,7 +193,6 @@ class _AccountPageState extends ConsumerState<AccountPage> {
   void _openEditFamily(SocietyResidentDto person) {
     setState(() {
       _editingFamily = person;
-      _showFamilyForm = true;
       _familyName.text = person.name ?? '';
       _familyPhone.text = person.phone ?? '';
       _familyEmail.text = person.email ?? '';
@@ -240,7 +237,6 @@ class _AccountPageState extends ConsumerState<AccountPage> {
         _familyPhone.clear();
         _familyEmail.clear();
         _editingFamily = null;
-        _showFamilyForm = false;
         _familyMessage =
             '${editing == null ? 'Added' : 'Updated'} ${user.name ?? user.phone}. They can log in with this number and raise complaints.';
       });
@@ -752,7 +748,8 @@ class _AccountPageState extends ConsumerState<AccountPage> {
               if (flat != null && _tab == 'parking') ...[
                 if (_parkings.isNotEmpty) ...[
                   DropdownButtonFormField<String>(
-                    value: _parkingKind,
+                    key: ValueKey('parking-kind-$_parkingKind'),
+                    initialValue: _parkingKind,
                     decoration: const InputDecoration(labelText: 'Parking type'),
                     items: const [
                       DropdownMenuItem(value: 'puzzle', child: Text('Puzzle')),
@@ -776,7 +773,8 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: _parkingSelectValue,
+                    key: ValueKey('parking-slot-$_parkingSelectValue'),
+                    initialValue: _parkingSelectValue,
                     decoration: const InputDecoration(labelText: 'Parking number'),
                     items: [
                       const DropdownMenuItem(value: '', child: Text('None')),

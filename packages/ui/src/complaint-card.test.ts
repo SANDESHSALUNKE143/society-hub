@@ -4,6 +4,7 @@ import {
   complaintQueueLine,
   complaintTypeIconName,
   formatComplaintRaised,
+  formatComplaintTimelineWhen,
   formatComplaintWhen,
   timelineEventIcon,
   timelineEventTitle,
@@ -49,5 +50,15 @@ describe("complaint-card", () => {
     expect(timelineEventIcon("resolved")).toBe("done");
     const now = new Date();
     expect(formatComplaintRaised(now.toISOString())).toBe("today");
+    const yesterday = new Date(now.getTime() - 86_400_000);
+    expect(formatComplaintRaised(yesterday.toISOString())).toBe("yesterday");
+    expect(formatComplaintRaised("2025-05-20T10:15:00.000Z")).toMatch(/20 May 2025/);
+    expect(formatComplaintTimelineWhen(now.toISOString())).toMatch(/^Today,/);
+    expect(formatComplaintTimelineWhen(yesterday.toISOString())).toMatch(/^Yesterday,/);
+    expect(formatComplaintTimelineWhen("2025-05-20T10:15:00.000Z")).toMatch(
+      /20 May 2025, \d{1,2}:\d{2} [AP]M/,
+    );
+    expect(formatComplaintRaised("not-a-date")).toBe("");
+    expect(formatComplaintTimelineWhen("not-a-date")).toBe("");
   });
 });
