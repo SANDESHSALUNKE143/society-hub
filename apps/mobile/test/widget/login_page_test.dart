@@ -93,7 +93,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(AppKeys.loginError), findsOneWidget);
-    expect(find.text('Invalid email or password'), findsOneWidget);
+    expect(find.text('Email or password is incorrect.'), findsOneWidget);
   });
 
   testWidgets('dev Google login sends a dev: token', (tester) async {

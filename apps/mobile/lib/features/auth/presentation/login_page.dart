@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../api/models.dart';
 import '../../../auth/google_id_token.dart';
+import '../../../auth/login_errors.dart';
 import '../../../auth/session.dart';
 import '../../../core/app_keys.dart';
 import '../../../core/theme.dart';
@@ -50,10 +51,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       await ref.read(sessionProvider.notifier).setSession(res.user, res.tokens);
       if (!mounted) return;
       context.go('/select-society');
-    } on ApiException catch (e) {
-      setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = _loginErrorMessage(e));
+      setState(() => _error = loginErrorText(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -71,8 +70,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         _otpSent = true;
         if (res.devCode != null) _devHint = 'Dev OTP: ${res.devCode}';
       });
-    } on ApiException catch (e) {
-      setState(() => _error = e.message);
+    } catch (e) {
+      setState(() => _error = loginErrorText(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -157,12 +156,29 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ),
                     ],
                     if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _error!,
-                        key: AppKeys.loginError,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: AppColors.danger),
+                      const SizedBox(height: 16),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: const Color(0x14A4161A),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          child: Text(
+                            _error!,
+                            key: AppKeys.loginError,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: AppColors.danger,
+                              fontSize: 13,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                       ],
@@ -290,11 +306,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           ),
         ),
       ];
-
-  String _loginErrorMessage(Object error) {
-    final raw = error.toString();
-    return raw.replaceFirst(RegExp(r'^[^:]+:\s*'), '');
-  }
 
   Future<void> _signInGoogle() async {
     await _apply(() async {
