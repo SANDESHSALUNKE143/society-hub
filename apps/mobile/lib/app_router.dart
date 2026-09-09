@@ -10,6 +10,7 @@ import 'features/complaints/presentation/complaints_pages.dart';
 import 'features/dashboard/presentation/dashboard_page.dart';
 import 'features/onboard/presentation/onboard_page.dart';
 import 'features/shell/presentation/app_shell.dart';
+import 'features/team/presentation/team_page.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final refresh = _SessionListenable(ref);
@@ -96,7 +97,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/home/team',
-            builder: (context, state) => const ComingSoonPage(title: 'Team'),
+            builder: (context, state) => const TeamPage(),
           ),
           GoRoute(
             path: '/home/structure',

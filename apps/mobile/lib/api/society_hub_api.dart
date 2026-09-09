@@ -372,6 +372,69 @@ class SocietyHubApi {
     );
   }
 
+  Future<List<TeamMemberDto>> listTeam() {
+    return _request(
+      '/v1/team',
+      parse: (json) => (json as List<dynamic>)
+          .map((e) => TeamMemberDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Future<({String userId, String role, String societyName})> addTeamMember({
+    String? email,
+    String? phone,
+    String? name,
+    String role = 'committee',
+  }) {
+    return _request(
+      '/v1/team',
+      method: 'POST',
+      data: {
+        if (email != null && email.isNotEmpty) 'email': email,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (name != null && name.isNotEmpty) 'name': name,
+        'role': role,
+      },
+      parse: (json) {
+        final map = json as Map<String, dynamic>;
+        return (
+          userId: map['userId'] as String,
+          role: map['role'] as String,
+          societyName: map['societyName'] as String? ?? '',
+        );
+      },
+    );
+  }
+
+  Future<TeamMemberDto> updateTeamMember(
+    String userId, {
+    String? email,
+    String? phone,
+    String? name,
+    String? role,
+  }) {
+    return _request(
+      '/v1/team/$userId',
+      method: 'PATCH',
+      data: {
+        if (email != null && email.isNotEmpty) 'email': email,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (name != null && name.isNotEmpty) 'name': name,
+        if (role != null && role.isNotEmpty) 'role': role,
+      },
+      parse: (json) => TeamMemberDto.fromJson(json as Map<String, dynamic>),
+    );
+  }
+
+  Future<void> removeTeamMember(String userId) {
+    return _request(
+      '/v1/team/$userId',
+      method: 'DELETE',
+      parse: (_) {},
+    );
+  }
+
   Future<UserDto> onboardResident({
     required String name,
     required String phone,

@@ -22,9 +22,12 @@ import {
   loginPasswordSchema,
   loginPinSchema,
   onboardResidentSchema,
+  addSocietyTeamMemberSchema,
+  updateSocietyTeamMemberSchema,
   residentImportSchema,
   razorpayWebhookSchema,
   recordPaymentSchema,
+  updatePaymentAccountSchema,
   refreshSchema,
   requestOtpSchema,
   resetPasswordSchema,
@@ -169,6 +172,26 @@ describe("validation schemas", () => {
     expect(createFlatSchema.parse({ number: "101" }).number).toBe("101");
   });
 
+  test("addSocietyTeamMemberSchema requires email or phone", () => {
+    expect(
+      addSocietyTeamMemberSchema.parse({
+        email: "ops@societyhub.local",
+        phone: "8888888888",
+        role: "secretary",
+      }).phone,
+    ).toBe("8888888888");
+    expect(addSocietyTeamMemberSchema.parse({ phone: "8888888888" }).role).toBe(
+      "chairperson",
+    );
+    expect(() =>
+      addSocietyTeamMemberSchema.parse({ phone: "123", role: "secretary" }),
+    ).toThrow();
+    expect(
+      updateSocietyTeamMemberSchema.parse({ phone: "8888888888" }).phone,
+    ).toBe("8888888888");
+    expect(() => updateSocietyTeamMemberSchema.parse({})).toThrow();
+  });
+
   test("createInvitationSchema and updateResidentProfileSchema", () => {
     expect(
       createInvitationSchema.parse({ email: "a@b.com", role: "resident" }).role,
@@ -227,6 +250,13 @@ describe("validation schemas", () => {
       recordPaymentSchema.parse({ flatId, amountPaise: 1000, method: "cash" })
         .method,
     ).toBe("cash");
+    expect(
+      recordPaymentSchema.parse({ flatId, amountPaise: 1000, method: "upi" })
+        .method,
+    ).toBe("upi");
+    expect(
+      updatePaymentAccountSchema.parse({ upiId: "keshav@upi" }).upiId,
+    ).toBe("keshav@upi");
     expect(
       razorpayWebhookSchema.parse({ orderId: "order_1", paymentId: "pay_1" })
         .status,

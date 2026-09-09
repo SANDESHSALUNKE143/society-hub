@@ -361,6 +361,34 @@ class DashboardStatsDto {
   }
 }
 
+class TeamMemberDto {
+  const TeamMemberDto({
+    required this.userId,
+    required this.name,
+    required this.email,
+    required this.phone,
+    required this.role,
+  });
+
+  final String userId;
+  final String? name;
+  final String? email;
+  final String? phone;
+  final String role;
+
+  factory TeamMemberDto.fromJson(Map<String, dynamic> json) {
+    return TeamMemberDto(
+      userId: json['userId'] as String,
+      name: json['name'] as String?,
+      email: json['email'] as String?,
+      phone: json['phone'] as String?,
+      role: json['role'] as String,
+    );
+  }
+
+  String get displayName => name ?? email ?? phone ?? userId;
+}
+
 class LoginResult {
   const LoginResult({
     required this.user,

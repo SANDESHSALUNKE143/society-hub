@@ -4,6 +4,7 @@ import { Shell } from "./components/Shell";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { SocietiesPage } from "./pages/SocietiesPage";
+import { SocietyDetailPage } from "./pages/SocietyDetailPage";
 import { ComingSoonPage } from "./pages/ComingSoonPage";
 import { MANAGE_NAV } from "./manage-nav";
 
@@ -19,6 +20,7 @@ describe("manage smoke unit", () => {
       LoginPage,
       DashboardPage,
       SocietiesPage,
+      SocietyDetailPage,
       ComingSoonPage,
     ]) {
       expect(typeof component).toBe("function");

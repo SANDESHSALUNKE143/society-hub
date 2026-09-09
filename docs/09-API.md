@@ -173,9 +173,12 @@ Statuses: `open`, `assigned`, `in_progress`, `resolved`, `closed`
 
 1. Staff: `POST /v1/bills/generate` with `{ "periodYm": "2026-07", "amountPaise": 500000 }`
 2. Resident: `GET /v1/bills/mine`
-3. Pay (dev mock): `POST /v1/payments/mock` `{ "billId": "..." }` **or** `POST /v1/bills/{id}/pay`
-4. Offline cash: staff `POST /v1/payments` with `method: "cash"|"cheque"|"neft"`
-5. Receipt: `GET /v1/payments/{id}/receipt`
+3. Staff publish pay details: `PATCH /v1/payments/account` `{ "upiId", "accountName?", "accountNumber?", "ifsc?" }` and optional `POST /v1/payments/account/qr` (`file`)
+4. Resident offline pay: `POST /v1/payments/offline` multipart `{ billId, file }` (screenshot) → status `pending`
+5. Staff review: `POST /v1/payments/{id}/acknowledge` or `/reject` (credits or leaves bill unpaid)
+6. Staff in-person: `POST /v1/payments` with `method: "cash"|"cheque"|"neft"` (immediate credit)
+7. Receipt: `GET /v1/payments/{id}/receipt` after acknowledgement
+8. **Future Razorpay:** `POST /v1/payments/mock` and `/v1/bills/{id}/pay` stay as local/dev only — not the resident product path
 6. Void: staff `DELETE /v1/bills/{id}`
 
 Amounts are always **integer paise** (₹1 = 100).
@@ -269,12 +272,15 @@ Body: `{ email? , phone?, name?, role }` — email **or** phone required. Role d
 | GET | `/v1/admin/flats` | Staff | Flat picker |
 | GET | `/v1/admin/structure` | Staff | Nested buildings→wings→flats |
 | GET | `/v1/admin/team` | Staff | Society team |
+| POST | `/v1/team` | Staff | Add team member `{ email?, phone?, name?, role }` — email or phone required |
+| PATCH | `/v1/team/:userId` | Staff | Update name / email / mobile / role |
+| DELETE | `/v1/team/:userId` | Staff | Soft-remove staff roles (cannot remove self) |
 | POST | `/v1/admin/invites` | Staff | Same as invitations create |
 | GET | `/v1/admin/flats` | Staff | Flats with floor + parking |
 | POST | `/v1/admin/residents` | Staff | Onboard one resident |
 | POST | `/v1/admin/residents/import` | Staff | Bulk CSV rows (`name,phone,email,flatNumber,…`) with validation |
 | POST | `/v1/invitations` | Staff | Invite via email and/or WhatsApp (Gupshup adapter; stub without keys) |
-| GET | `/v1/team` | Staff | Alias team list |
+| GET | `/v1/team` | Staff | Society team list |
 
 ### 6.7 Invitations — `/v1/invitations`
 
@@ -317,14 +323,22 @@ When `DEV_AUTH=true`, create responses may include `devToken`.
 |--------|------|------|-------|
 | GET | `/` | Staff | Paginated |
 | GET | `/mine` | Yes | |
-| POST | `/` | Staff | Offline record |
-| POST | `/mock` | Yes | Dev pay by `billId` |
-| GET | `/:id/receipt` | Yes | |
-| POST | `/razorpay/webhook` | No* | Dev mock; production must verify signature |
+| GET | `/account` | Yes | Society UPI / QR / bank details |
+| PATCH | `/account` | Staff | Set UPI ID and account fields |
+| POST | `/account/qr` | Staff | Upload QR image (`file`) |
+| GET | `/account/qr` | Yes | QR image (`?access_token=` allowed) |
+| POST | `/offline` | Yes | Resident screenshot vs `billId` → `pending` |
+| POST | `/` | Staff | Immediate cash/cheque/NEFT credit |
+| POST | `/:id/acknowledge` | Staff | Credit pending UPI proof; mark bill paid |
+| POST | `/:id/reject` | Staff | Reject proof; bill stays unpaid |
+| GET | `/:id/proof` | Yes | Screenshot (`?access_token=` allowed) |
+| POST | `/mock` | Yes | Dev Razorpay mock (not product UI) |
+| GET | `/:id/receipt` | Yes | After success |
+| POST | `/razorpay/webhook` | No* | Future Razorpay; local mock only |
 
 \*Webhook is unauthenticated in local/dev mock form. Production must verify Razorpay signature before trusting the body.
 
-Payment methods: `razorpay`, `cash`, `cheque`, `neft`
+Payment methods: `upi` (resident screenshot), `cash`, `cheque`, `neft` (staff), `razorpay` (future)
 
 ### 6.11 Notices — `/v1/notices`
 
@@ -414,18 +428,13 @@ Staff without a linked flat:
 { "billId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" }
 ```
 
-### D. Offline payment
+### D. Offline UPI payment (product path)
 
-`POST /v1/payments`
+Resident: `POST /v1/payments/offline` as `multipart/form-data` with `billId` + screenshot `file`.
 
-```json
-{
-  "flatId": "66666666-6666-6666-6666-666666666666",
-  "billId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-  "amountPaise": 500000,
-  "method": "cash"
-}
-```
+Staff credit: `POST /v1/payments/{id}/acknowledge`
+
+Staff in-person cash still uses `POST /v1/payments` `{ method: "cash"|"cheque"|"neft" }`.
 
 ### E. Publish notice
 
@@ -448,10 +457,17 @@ Then `POST /v1/notices/{id}/publish`.
 ```json
 {
   "email": "ops@societyhub.local",
+  "phone": "8888888888",
   "name": "Platform Ops",
   "role": "secretary"
 }
 ```
+
+Society Admin can also manage the current society's team:
+
+- `POST /v1/team` — same body
+- `PATCH /v1/team/{userId}` — `{ "email"?, "phone"?, "name"?, "role"? }`
+- `DELETE /v1/team/{userId}` — remove staff access (cannot remove yourself)
 
 ### G. Razorpay webhook (dev)
 

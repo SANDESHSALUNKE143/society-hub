@@ -11,7 +11,8 @@ Index: [docs/08-Local-Development.md](../../docs/08-Local-Development.md) (Mobil
 | Auth (OTP, email/password, PIN, Google) | Speech-to-text on raise |
 | Dashboard, complaints (list / raise / detail) | **CSV bulk** import |
 | Manual **single** resident onboard | Structure / heavy admin bulk |
-| Account: flat, profile, PIN, privacy link | Manage portal |
+| **Team** — add / edit email+mobile / remove | Manage portal (create society) |
+| Account: flat, profile, PIN, privacy link | CSV / bulk import |
 | Coming soon stubs | Full Phase 2 modules |
 
 ## Prerequisites (Android debug)
