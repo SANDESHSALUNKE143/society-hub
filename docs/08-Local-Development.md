@@ -261,6 +261,7 @@ Use **Manage** (`manage.localhost:5174`) for SocietyHub platform employees (crea
 | `bun run setup:db` | migrate + seed (expects DB exists) |
 | `bun run db:migrate` | Apply Drizzle migrations |
 | `bun run db:seed` | Seed / refresh superadmin |
+| `bun run db:seed-demo` | **Realistic demo society** (Green Meadows) for reviewing the UI — see §8b |
 | `bun run db:generate` | Generate a new migration after schema edits |
 | `bun run test:unit` | Unit tests with **≥90%** coverage gate |
 | `bun run test:integration` | API integration smoke (API must be running) |
@@ -272,7 +273,40 @@ Use **Manage** (`manage.localhost:5174`) for SocietyHub platform employees (crea
 
 ---
 
-## 8b. Cypress E2E
+## 8b. Demo society (for UI review)
+
+`db:seed` creates the minimum needed to log in — **one flat, two users** — which leaves the
+occupancy and directory screens nearly empty. To review or demo the UI, add the demo society:
+
+```bash
+bun run db:seed-demo
+```
+
+This builds **Green Meadows Society** in its own tenant and **never touches Keshav Heights**,
+so the fixtures the integration tests depend on stay intact. Re-running wipes and rebuilds only
+the demo tenant, so it is safe to repeat.
+
+What it creates:
+
+| | |
+|---|---|
+| Structure | 2 towers, 4 wings, 36 flats across 3 floors |
+| Occupancy | 8 vacant, 16 owner-occupied, 12 tenant-occupied |
+| Residents | 40 memberships — 26 active, 4 pending verification, plus suspended, invited and rejected |
+| History | 10 closed occupancy periods, so flat History tabs and the moved-out filter have data |
+| Household | 25 family members, emergency contacts and communication preferences |
+| Invitations | 4 pending, 1 expired, 1 revoked |
+| Other | 3 notices (incl. a wing-targeted one and a draft), 6 complaints across all statuses, 56 bills over 2 periods |
+
+The existing pilot logins (`9999999999` / `8888888888`, OTP `123456`) are added to this society
+too, so **the society switcher appears after login** — which also exercises the multi-society path.
+
+> Flat numbers carry a wing prefix (`AN-101`, `BW-303`) because `flats_tenant_number_uidx` is
+> unique per *society*, not per wing — see [phase-1-deferred](implementation/phase-1-deferred.md).
+
+---
+
+## 8c. Cypress E2E
 
 Each web app (`apps/manage`, `apps/client-app`) has a Cypress suite under `cypress/e2e/*.cy.ts`. Specs use `cy.intercept` to mock the API, so they run **without** the API or a database — only the app's own Vite dev server needs to be up.
 

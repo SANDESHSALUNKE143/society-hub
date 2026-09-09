@@ -35,7 +35,7 @@ The primary path works. Edge cases, admin ergonomics and scale are missing.
 |---|---|---|
 | **Bills** | generate, list, mine, detail, pay, delete | edit, partial payment, adjustments/credit notes, late fees, dues ageing, per-flat statement, generation preview |
 | **Payments** | list, mine, record, mock, receipt, webhook | real gateway, signature verification, idempotency, refunds, reconciliation |
-| **Notices** | create, publish, unpublish, read receipts, delete | audience targeting, attachments, scheduling, pinning |
+| **Notices** | create, publish, unpublish, read receipts, delete, **audience targeting (all / wing / flat)** | attachments, scheduling, pinning, owner-only and tenant-only audiences; targeting is filtered in JS after fetching all rows (`notices/routes.ts:59-61`) rather than in SQL |
 | **Notifications** | list, mark one read | unread count, mark-all-read, pagination (hard `limit(100)`), preference enforcement |
 | **Structure** | buildings/wings/flats CRUD | bulk import, per-wing flat uniqueness, floor metadata |
 | **Audit log** | list with search | export, retention, entity deep-links |
@@ -110,9 +110,11 @@ Every route in `modules/misc/routes.ts` returns a bare array of all non-deleted 
 
 Tracked in [phase-1-deferred.md](phase-1-deferred.md): society-wide rather than per-wing flat uniqueness; two competing vehicle stores; the legacy `admin` role; two pre-existing `api.integration.test.ts` failures caused by the seed linking the chairperson to flat 101.
 
-### B9 — Demo data quality
+### B9 — Demo data quality — ✅ done
 
-The Docker MySQL holds integration-test residue (`Coverage Resident`, `cov-…@example.com`) inside the pilot society, and the seed creates exactly **one** flat. The Phase 1 occupancy screens are consequently near-empty in a walkthrough. A realistic demo seed — multiple wings, vacant/owner/tenant flats, pending verifications, a move-out history — would make the new UI reviewable.
+The Docker MySQL holds integration-test residue (`Coverage Resident`, `cov-…@example.com`) inside the pilot society, and `seed.ts` creates exactly **one** flat, leaving the Phase 1 occupancy screens near-empty in a walkthrough.
+
+Addressed by `bun run db:seed-demo` (`apps/api/src/db/seed-demo.ts`), which builds **Green Meadows Society** in its own tenant — 36 flats, mixed occupancy, 40 memberships across every lifecycle state, closed occupancy periods, invitations in each status. It never touches Keshav Heights, so the integration-test fixtures are unaffected. See [08-Local-Development §8b](../08-Local-Development.md).
 
 ---
 
@@ -191,7 +193,7 @@ Dues ageing, late-fee rules, partial payments, adjustments and credit notes, per
 
 ### D4 — Communication
 
-Audience targeting for notices (society / building / wing / flat / owners-only / tenants-only), attachments, scheduling. Then delivery fan-out over C2 — email, WhatsApp, push — honouring the preferences already stored (B5).
+Extend the existing notice targeting (all/wing/flat) with owner-only and tenant-only audiences, and push the filter into SQL. Add attachments, scheduling and pinning. Then delivery fan-out over C2 — email, WhatsApp, push — honouring the preferences already stored (B5).
 
 ### D5 — Complaints maturity
 

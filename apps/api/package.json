@@ -14,6 +14,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run src/db/migrate.ts",
     "db:seed": "bun run src/db/seed.ts",
+    "db:seed-demo": "bun run src/db/seed-demo.ts",
     "db:cleanup-test": "bun run src/db/cleanup-test-data.ts"
   },
   "dependencies": {

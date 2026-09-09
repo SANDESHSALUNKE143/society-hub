@@ -24,6 +24,7 @@
     "db:generate": "bun run --filter=@society-hub/api db:generate",
     "db:migrate": "bun run --filter=@society-hub/api db:migrate",
     "db:seed": "bun run --filter=@society-hub/api db:seed",
+    "db:seed-demo": "bun run --filter=@society-hub/api db:seed-demo",
     "db:cleanup-test": "bun run --filter=@society-hub/api db:cleanup-test",
     "db:up": "docker compose -f devops/docker/docker-compose.yml up mysql -d"
   },

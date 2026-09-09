@@ -49,6 +49,13 @@ import {
 /** Seeded pilot — also the society Cypress mocks as "Keshav Heights". */
 const DEFAULT_KEEP_SOCIETY_ID = "11111111-1111-1111-1111-111111111111";
 
+/**
+ * Green Meadows, from `db:seed-demo`. It is deliberate demo data rather than
+ * test residue, so cleanup keeps it too — otherwise this script would quietly
+ * delete the society you built to demo with. Pass KEEP_SOCIETY_IDS to override.
+ */
+const DEFAULT_KEEP_DEMO_SOCIETY_ID = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+
 const SEED_USER_IDS = [
   "22222222-2222-2222-2222-222222222222", // chairperson
   "33333333-3333-3333-3333-333333333333", // resident
@@ -60,7 +67,7 @@ function parseKeepIds(): string[] {
     .map((s) => s.trim())
     .filter(Boolean);
   if (fromEnv?.length) return fromEnv;
-  return [DEFAULT_KEEP_SOCIETY_ID];
+  return [DEFAULT_KEEP_SOCIETY_ID, DEFAULT_KEEP_DEMO_SOCIETY_ID];
 }
 
 function parseKeepNames(): string[] {
