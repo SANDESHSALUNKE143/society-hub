@@ -1,0 +1,139 @@
+SocietyHub — Android Play CI/CD operator note
+Last updated: 9 Sep 2026
+Owner: Sandesh Salunke (sandesh@engineersbay.in / Engineers Bay)
+Keep this file in Google Drive. Do NOT put keystore files or JSON keys in Drive or git.
+
+============================================================
+WHAT THIS IS
+============================================================
+SocietyHub Android app (package com.societyhub.societyhub_mobile) is built by
+GitHub Actions workflow "Mobile CI" (.github/workflows/mobile.yml).
+
+CI can:
+  1) flutter analyze + test
+  2) Sign a release AAB (upload keystore in GitHub secrets)
+  3) Upload that AAB as a DRAFT on the Play INTERNAL track
+
+CI never publishes Production. Production stays a Play Console click.
+New personal Play accounts also need Closed testing: 12 testers for 14 days
+before Google unlocks "Apply for production".
+
+============================================================
+GOOGLE CLOUD
+============================================================
+Project name:     SocietyHub
+Project ID:       societyhub-507013
+Project number:   583640086898
+Organisation:     engineersbay.in
+Console:          https://console.cloud.google.com/?project=societyhub-507013
+
+OAuth (already created):
+  Web client name:     societyhub-web
+  Web client ID:       583640086898-uhmdenf6kpv8iskvdaju4pk4gpbmae20.apps.googleusercontent.com
+  Android client name: societyhub-android
+  Package:             com.societyhub.societyhub_mobile
+  Use Web client ID as Flutter GOOGLE_SERVER_CLIENT_ID and API GOOGLE_CLIENT_ID.
+  Never put the Web client SECRET in the app.
+
+Play upload service account:
+  Name:   play-upload
+  Email:  play-upload@societyhub-507013.iam.gserviceaccount.com
+  API:    Google Play Android Developer API (androidpublisher.googleapis.com)
+
+Org policy note:
+  Google blocked JSON keys by default (iam.managed.disableServiceAccountKeyCreation).
+  Project societyhub-507013 was overridden so a key could be created for GitHub.
+  Prefer not to create extra keys. If this key leaks, delete it in GCP → IAM →
+  service accounts → play-upload → Keys, then make a new key and update GitHub.
+
+============================================================
+PLAY CONSOLE (must invite the robot)
+============================================================
+https://play.google.com/console
+
+App: SocietyHub
+Package: com.societyhub.societyhub_mobile
+
+Invite this user if not already invited:
+  play-upload@societyhub-507013.iam.gserviceaccount.com
+  Users and permissions → Invite → Release to testing tracks (internal / closed).
+  Wait ~5 minutes after invite before running CI upload.
+
+Privacy / website (until societyhub.in is live):
+  https://societyhub-client.onrender.com
+  https://societyhub-client.onrender.com/privacy
+
+Store listing files on the laptop / repo:
+  apps/mobile/store/icon-512.png
+  apps/mobile/store/feature-graphic-1024x500.png
+  apps/mobile/store/screenshot-01-login.png
+  apps/mobile/store/screenshot-02-complaints.png
+  apps/mobile/store/screenshot-03-new.png
+  apps/mobile/store/screenshot-04-detail.png
+
+============================================================
+GITHUB (engineersbay/society-hub)
+============================================================
+Environment used by Mobile CI store jobs: prod
+(The staging git branch is still where PRs merge. It is not a Run workflow environment.)
+
+Secrets (never commit, never paste in chat/Drive):
+  ANDROID_KEYSTORE_BASE64
+  ANDROID_KEYSTORE_PASSWORD
+  ANDROID_KEY_PASSWORD
+  ANDROID_KEY_ALIAS                  (value: upload)
+  PLAY_SERVICE_ACCOUNT_JSON          (play-upload key; repo + staging + prod)
+
+Variables:
+  MOBILE_API_BASE_URL                https://societyhub-api.onrender.com
+  GOOGLE_SERVER_CLIENT_ID            (Web client ID above)
+  PRIVACY_POLICY_URL                 https://societyhub-client.onrender.com/privacy
+  ENABLE_PLAY_UPLOAD                 true
+  ENABLE_IOS_IPA                     leave unset until Apple
+
+Upload keystore lives only on the operator Mac:
+  apps/mobile/android/upload-keystore.jks
+  apps/mobile/android/key.properties
+Both are gitignored. Back them up in a password manager or encrypted Drive
+folder — not this note, not Slack, not the git repo.
+
+============================================================
+HOW TO RUN A STORE BUILD
+============================================================
+GitHub → Actions → Mobile CI → Run workflow
+  Use workflow from: staging (or main after promote)
+  Build IPA:         false
+  Upload to Play:    true
+
+Result:
+  Artifact societyhub-android-aab
+  Play Console → Internal testing → a DRAFT release (you still click Review)
+
+Local AAB (same signing), if CI is down:
+  apps/mobile/build/app/outputs/bundle/release/app-release.aab
+
+============================================================
+WHAT IS NOT AUTOMATED
+============================================================
+- First Play listing, Data safety, content rating
+- Closed testing testers (12 people, 14 days) before Production
+- Production rollout (staged 20% → 100%)
+- iOS / TestFlight
+- Azure
+
+============================================================
+RENDER (preview API the app talks to)
+============================================================
+API:     https://societyhub-api.onrender.com
+Client:  https://societyhub-client.onrender.com
+Manage:  https://societyhub-manage.onrender.com
+Hobby cold start can take ~60s. Mobile timeouts are 90s.
+
+============================================================
+IF SOMETHING BREAKS
+============================================================
+Play upload 403: invite play-upload@… in Play Console and wait.
+Play upload 401: JSON secret missing or wrong environment.
+AAB signing fail: ANDROID_KEYSTORE_* secrets on that environment.
+Google Sign-In fail on Play build: add Play App Signing SHA-1 to
+  societyhub-android (Play → App integrity → App signing key certificate).
