@@ -74,15 +74,18 @@ Store listing files on the laptop / repo:
 ============================================================
 GITHUB (engineersbay/society-hub)
 ============================================================
-Environment used by Mobile CI store jobs: prod
-(The staging git branch is still where PRs merge. It is not a Run workflow environment.)
+GitHub Environments (only two):
+  staging      Azure later. Not used by Mobile CI.
+  production   Mobile CI store jobs (AAB / Play). Azure production later.
+
+Git branch "staging" is where PRs merge. It is not a GitHub Environment picker.
 
 Secrets (never commit, never paste in chat/Drive):
   ANDROID_KEYSTORE_BASE64
   ANDROID_KEYSTORE_PASSWORD
   ANDROID_KEY_PASSWORD
   ANDROID_KEY_ALIAS                  (value: upload)
-  PLAY_SERVICE_ACCOUNT_JSON          (play-upload key; repo + staging + prod)
+  PLAY_SERVICE_ACCOUNT_JSON          (play-upload key; environment production)
 
 Variables:
   MOBILE_API_BASE_URL                https://societyhub-api.onrender.com

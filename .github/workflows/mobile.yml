@@ -65,7 +65,7 @@ jobs:
     defaults:
       run:
         working-directory: apps/mobile
-    environment: prod
+    environment: production
 
     steps:
       - uses: actions/checkout@v4
@@ -142,7 +142,7 @@ jobs:
       (github.event_name != 'workflow_dispatch' || github.event.inputs.upload_play == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: prod
+    environment: production
 
     steps:
       - uses: actions/download-artifact@v4
@@ -183,7 +183,7 @@ jobs:
     defaults:
       run:
         working-directory: apps/mobile
-    environment: prod
+    environment: production
 
     steps:
       - uses: actions/checkout@v4

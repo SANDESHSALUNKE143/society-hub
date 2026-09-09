@@ -292,7 +292,7 @@ Git flow: [devops/PIPELINE.md](../devops/PIPELINE.md).
 
 Do **not** put Android keystores or Apple keys in the repo.
 
-**Mobile Environments** (reuse `staging` / `production`, or add `mobile-staging` / `mobile-prod`):
+**Mobile secrets** live on GitHub environment **`production`** (same name as Azure later). Do not add a `prod` or `mobile-prod` environment.
 
 | Kind | Name | Used by |
 |------|------|---------|
