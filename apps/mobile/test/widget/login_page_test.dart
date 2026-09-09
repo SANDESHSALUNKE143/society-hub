@@ -93,7 +93,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(AppKeys.loginError), findsOneWidget);
-    expect(find.text('Invalid email or password'), findsOneWidget);
+    expect(find.text('Email or password is incorrect.'), findsOneWidget);
   });
 
   testWidgets('dev Google login sends a dev: token', (tester) async {
@@ -190,7 +190,11 @@ void main() {
       ProviderScope(
         overrides: [
           ...testSessionOverrides(
-            config: const ApiConfig(baseUrl: testApiBase, env: 'prod'),
+            config: const ApiConfig(
+              baseUrl: testApiBase,
+              env: 'prod',
+              googleServerClientId: 'web-client.apps.googleusercontent.com',
+            ),
           ),
           googleIdTokenSourceProvider.overrideWithValue(
             const _FakeGoogleSource(null),
@@ -212,6 +216,36 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('prod Google login shows a spinner while the token is fetched',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...testSessionOverrides(
+            config: const ApiConfig(
+              baseUrl: testApiBase,
+              env: 'prod',
+              googleServerClientId: 'web-client.apps.googleusercontent.com',
+            ),
+          ),
+          googleIdTokenSourceProvider.overrideWithValue(
+            const _SlowGoogleSource(),
+          ),
+        ],
+        child: const MaterialApp(home: LoginPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(AppKeys.loginModeGoogle));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(AppKeys.loginSubmit));
+    await tester.pump();
+
+    expect(find.byKey(AppKeys.loginBusy), findsOneWidget);
+    await tester.pumpAndSettle();
+  });
 }
 
 class _FakeGoogleSource implements GoogleIdTokenSource {
@@ -222,5 +256,15 @@ class _FakeGoogleSource implements GoogleIdTokenSource {
   @override
   Future<String?> fetchIdToken({required String serverClientId}) async {
     return token;
+  }
+}
+
+class _SlowGoogleSource implements GoogleIdTokenSource {
+  const _SlowGoogleSource();
+
+  @override
+  Future<String?> fetchIdToken({required String serverClientId}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    return null;
   }
 }

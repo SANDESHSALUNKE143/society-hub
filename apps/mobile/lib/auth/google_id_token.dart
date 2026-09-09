@@ -21,6 +21,14 @@ String? googleIdTokenForApi({
   return googleIdToken;
 }
 
+/// Missing Web client ID — Android then returns no `idToken`.
+String? googleSignInConfigError(String serverClientId) {
+  if (serverClientId.trim().isEmpty) {
+    return 'Google Sign-In is not configured in this build.';
+  }
+  return null;
+}
+
 /// Fetches a Google ID token. Tests override this; release uses Sign-In.
 abstract class GoogleIdTokenSource {
   Future<String?> fetchIdToken({required String serverClientId});

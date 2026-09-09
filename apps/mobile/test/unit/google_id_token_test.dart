@@ -48,6 +48,15 @@ void main() {
       );
     });
 
+    test('googleSignInConfigError flags a missing Web client ID', () {
+      expect(googleSignInConfigError(''), isNotNull);
+      expect(googleSignInConfigError('   '), isNotNull);
+      expect(
+        googleSignInConfigError('123.apps.googleusercontent.com'),
+        isNull,
+      );
+    });
+
     test('prod env refuses an empty Google idToken', () {
       const config = ApiConfig(baseUrl: 'https://api.example', env: 'prod');
       expect(
