@@ -300,7 +300,7 @@ Do **not** put Android keystores or Apple keys in the repo.
 | Variable | `GOOGLE_SERVER_CLIENT_ID` | Web OAuth client (API audience) |
 | Variable | `PRIVACY_POLICY_URL` | In-app + store listing (default `https://app.societyhub.in/privacy`) |
 | Variable | `ENABLE_IOS_IPA` | Set `true` to run the IPA job |
-| Variable | `ENABLE_PLAY_UPLOAD` | Set `true` to upload the AAB to Play **internal** (draft). Off until the Play app exists. |
+| Variable | `ENABLE_PLAY_UPLOAD` | Set `true` to upload the AAB and roll out Play **internal**. Never production. |
 | Secret | `ANDROID_KEYSTORE_BASE64` | AAB signing |
 | Secret | `ANDROID_KEYSTORE_PASSWORD` | AAB signing |
 | Secret | `ANDROID_KEY_PASSWORD` | AAB signing |
@@ -397,7 +397,7 @@ flutter build appbundle --release \
 | Analyze + test | PR / push `apps/mobile/**` | Yes |
 | Signed AAB | Actions → **Mobile CI** → Run workflow, or tag `mobile-v*` | Yes, after keystore secrets |
 | First Play upload | Download the AAB artifact → Play **internal** track | **Manual** until identity unlocks **Create app** |
-| Later uploads | Same workflow + `ENABLE_PLAY_UPLOAD=true` + `PLAY_SERVICE_ACCOUNT_JSON` | Internal **draft** only |
+| Later uploads | Same workflow + `ENABLE_PLAY_UPLOAD=true` + `PLAY_SERVICE_ACCOUNT_JSON` | Internal track **completed** (testers can install). Never production. |
 | Production | Play Console: promote internal → production, staged 20% → 100% | **Never** from CI |
 
 Do **not** auto-publish production from `main` or every commit. First listing, Data safety, and content rating stay Console clicks.
