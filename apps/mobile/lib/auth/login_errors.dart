@@ -15,10 +15,12 @@ String loginErrorText(Object error) {
         'No PIN is set for this mobile. Sign in with OTP or Google first, then set a PIN in Account.',
       'invalid_otp' || 'otp_invalid' || 'otp_expired' =>
         'That OTP is wrong or has expired. Request a new code.',
-      'http_error' => _networkOrTimeout(error.message),
-      _ => error.message.trim().isEmpty
-          ? 'Sign-in failed. Try OTP or email.'
-          : error.message,
+      'http_error' => _networkOrTimeout(error.message, error.statusCode),
+      _ => error.statusCode == 404
+          ? _unreachableServer
+          : error.message.trim().isEmpty
+              ? 'Sign-in failed. Try OTP or email.'
+              : error.message,
     };
   }
 
@@ -42,8 +44,19 @@ String loginErrorText(Object error) {
   return raw.trim().isEmpty ? 'Sign-in failed. Try OTP or email.' : raw;
 }
 
-String _networkOrTimeout(String message) {
+const _unreachableServer =
+    'Cannot reach the SocietyHub server. Wait a minute if it is waking up, then try again. If this keeps happening, install the latest app update.';
+
+String _networkOrTimeout(String message, int? statusCode) {
   final lower = message.toLowerCase();
+  if (statusCode == 404 ||
+      statusCode == 502 ||
+      statusCode == 503 ||
+      lower.contains('status code of 404') ||
+      lower.contains('cannot post') ||
+      lower.contains('cannot get')) {
+    return _unreachableServer;
+  }
   if (lower.contains('timed out') ||
       lower.contains('timeout') ||
       lower.contains('connection')) {

@@ -1,5 +1,10 @@
 import { FormEvent, useEffect, useState } from "react";
 import type { ResidentProfileDto } from "@society-hub/types";
+import {
+  INCLUDED_FOUR_WHEELER_PARKING,
+  INCLUDED_TWO_WHEELER_PARKING,
+  vehicleParkingQuotaMessage,
+} from "@society-hub/types";
 import { ApiClientError } from "@society-hub/sdk";
 import {
   ShField,
@@ -10,6 +15,48 @@ import {
   ShSplit,
 } from "@society-hub/ui";
 import { useAuth } from "../auth";
+import { VehicleFields } from "../components/VehicleFields";
+import {
+  draftsFromVehicles,
+  otherHouseholdVehiclesForQuota,
+  remainingIncludedForUser,
+  toVehiclePayload,
+  type VehicleDraft,
+} from "../lib/vehicle-draft";
+
+function vehiclesForAccountSave(
+  flat: NonNullable<ResidentProfileDto["flat"]>,
+  savedVehicles: ResidentProfileDto["vehicles"],
+  twoWheelers: VehicleDraft[],
+  fourWheelers: VehicleDraft[],
+) {
+  const myTwo = savedVehicles.filter((v) => v.kind === "two_wheeler").length;
+  const myFour = savedVehicles.filter((v) => v.kind === "four_wheeler").length;
+  const remainingTw = remainingIncludedForUser(
+    flat.twoWheelerCount,
+    myTwo,
+    INCLUDED_TWO_WHEELER_PARKING,
+  );
+  const remainingFw = remainingIncludedForUser(
+    flat.fourWheelerCount,
+    myFour,
+    INCLUDED_FOUR_WHEELER_PARKING,
+  );
+  const vehicles = [
+    ...toVehiclePayload("two_wheeler", twoWheelers, remainingTw, { keepBlank: true }),
+    ...toVehiclePayload("four_wheeler", fourWheelers, remainingFw, { keepBlank: true }),
+  ];
+  const quotaError = vehicleParkingQuotaMessage([
+    ...otherHouseholdVehiclesForQuota({
+      householdTwo: flat.twoWheelerCount,
+      householdFour: flat.fourWheelerCount,
+      myTwo,
+      myFour,
+    }),
+    ...vehicles,
+  ]);
+  return { remainingTw, remainingFw, vehicles, quotaError };
+}
 
 export function AccountPage() {
   const { client, user, setSession } = useAuth();
@@ -18,21 +65,46 @@ export function AccountPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [emergencyContact, setEmergencyContact] = useState("");
-  const [vehicleNumber, setVehicleNumber] = useState("");
+  const [pngGasConnection, setPngGasConnection] = useState(false);
+  const [adultCount, setAdultCount] = useState("0");
+  const [childCount, setChildCount] = useState("0");
+  const [seniorCitizenCount, setSeniorCitizenCount] = useState("0");
+  const [twoWheelers, setTwoWheelers] = useState<VehicleDraft[]>([]);
+  const [fourWheelers, setFourWheelers] = useState<VehicleDraft[]>([]);
   const [profile, setProfile] = useState<ResidentProfileDto | null>(null);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  function applyProfile(next: ResidentProfileDto) {
+    setProfile(next);
+    setEmergencyContact(next.emergencyContact ?? "");
+    setPngGasConnection(Boolean(next.flat?.pngGasConnection));
+    setAdultCount(String(next.flat?.adultCount ?? 0));
+    setChildCount(String(next.flat?.childCount ?? 0));
+    setSeniorCitizenCount(String(next.flat?.seniorCitizenCount ?? 0));
+    const vehicles = next.vehicles ?? [];
+    if (vehicles.length === 0 && next.vehicleNumber) {
+      setTwoWheelers([]);
+      setFourWheelers([
+        {
+          id: crypto.randomUUID(),
+          registrationNumber: next.vehicleNumber,
+          parkingPurchased: false,
+          parkingSlot: "",
+        },
+      ]);
+      return;
+    }
+    setTwoWheelers(draftsFromVehicles(vehicles, "two_wheeler"));
+    setFourWheelers(draftsFromVehicles(vehicles, "four_wheeler"));
+  }
+
   useEffect(() => {
     client
       .getProfile()
-      .then((next) => {
-        setProfile(next);
-        setEmergencyContact(next.emergencyContact ?? "");
-        setVehicleNumber(next.vehicleNumber ?? "");
-      })
+      .then(applyProfile)
       .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -83,12 +155,36 @@ export function AccountPage() {
     e.preventDefault();
     setProfileError(null);
     setProfileMessage(null);
+    const flat = profile?.flat ?? null;
     try {
-      const next = await client.updateProfile({
-        emergencyContact: emergencyContact || null,
-        vehicleNumber: vehicleNumber || null,
-      });
-      setProfile(next);
+      if (flat) {
+        const { vehicles, quotaError } = vehiclesForAccountSave(
+          flat,
+          profile?.vehicles ?? [],
+          twoWheelers,
+          fourWheelers,
+        );
+        if (quotaError) {
+          setProfileError(
+            `${quotaError}. Included parking is per flat, across all family members.`,
+          );
+          return;
+        }
+        const next = await client.updateProfile({
+          emergencyContact: emergencyContact || null,
+          pngGasConnection,
+          adultCount: Number(adultCount) || 0,
+          childCount: Number(childCount) || 0,
+          seniorCitizenCount: Number(seniorCitizenCount) || 0,
+          vehicles,
+        });
+        applyProfile(next);
+      } else {
+        const next = await client.updateProfile({
+          emergencyContact: emergencyContact || null,
+        });
+        applyProfile(next);
+      }
       setProfileMessage("Profile updated.");
     } catch (err) {
       setProfileError(err instanceof ApiClientError ? err.body.message : "Failed");
@@ -101,6 +197,18 @@ export function AccountPage() {
     : user?.flatNumber
       ? `Flat ${user.flatNumber}`
       : null;
+  const myTwo = (profile?.vehicles ?? []).filter((v) => v.kind === "two_wheeler").length;
+  const myFour = (profile?.vehicles ?? []).filter((v) => v.kind === "four_wheeler").length;
+  const remainingTw = remainingIncludedForUser(
+    flat?.twoWheelerCount,
+    myTwo,
+    INCLUDED_TWO_WHEELER_PARKING,
+  );
+  const remainingFw = remainingIncludedForUser(
+    flat?.fourWheelerCount,
+    myFour,
+    INCLUDED_FOUR_WHEELER_PARKING,
+  );
 
   return (
     <ShPage wide>
@@ -172,6 +280,25 @@ export function AccountPage() {
                   {flat.parkingSlot ?? "—"}
                 </dd>
               </div>
+              <div>
+                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
+                  PNG gas
+                </dt>
+                <dd className="font-medium" data-testid="account-png">
+                  {flat.pngGasConnection ? "Taken" : "Not taken"}
+                </dd>
+              </div>
+              <div className="col-span-2">
+                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
+                  Family members
+                </dt>
+                <dd className="font-medium" data-testid="account-family-counts">
+                  {flat.adultCount ?? 0} adult{(flat.adultCount ?? 0) === 1 ? "" : "s"},{" "}
+                  {flat.childCount ?? 0} child{(flat.childCount ?? 0) === 1 ? "" : "ren"},{" "}
+                  {flat.seniorCitizenCount ?? 0} senior citizen
+                  {(flat.seniorCitizenCount ?? 0) === 1 ? "" : "s"}
+                </dd>
+              </div>
               <div className="col-span-2">
                 <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
                   Occupancy
@@ -188,8 +315,15 @@ export function AccountPage() {
           )}
         </ShSection>
 
-        <ShSection title="Profile" description="For security and society records.">
-          <form className="space-y-2.5" onSubmit={saveProfile}>
+        <ShSection
+          title="Profile"
+          description={
+            flat
+              ? "Household details are shared with everyone in this flat."
+              : "For security and society records."
+          }
+        >
+          <form className="space-y-2.5" onSubmit={saveProfile} data-testid="account-profile-form">
             <ShFormGrid>
               <ShField label="Emergency contact" htmlFor="account-emergency-contact">
                 <input
@@ -201,16 +335,98 @@ export function AccountPage() {
                   onChange={(e) => setEmergencyContact(e.target.value)}
                 />
               </ShField>
-              <ShField label="Vehicle number" htmlFor="account-vehicle-number">
-                <input
-                  id="account-vehicle-number"
-                  data-testid="account-vehicle-number"
-                  className="input"
-                  placeholder="MH12AB1234"
-                  value={vehicleNumber}
-                  onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
-                />
-              </ShField>
+              {flat ? (
+                <>
+                  <fieldset className="sh-span-2">
+                    <legend className="label mb-1">PNG gas connection</legend>
+                    <div className="flex gap-4 text-sm">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="account-png-gas"
+                          data-testid="account-png-yes"
+                          checked={pngGasConnection}
+                          onChange={() => setPngGasConnection(true)}
+                        />
+                        Taken
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="account-png-gas"
+                          data-testid="account-png-no"
+                          checked={!pngGasConnection}
+                          onChange={() => setPngGasConnection(false)}
+                        />
+                        Not taken
+                      </label>
+                    </div>
+                  </fieldset>
+                  <fieldset className="sh-span-2">
+                    <legend className="label mb-1">Family members in this flat</legend>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <ShField label="Adults" htmlFor="account-adults">
+                        <input
+                          id="account-adults"
+                          data-testid="account-adults"
+                          className="input"
+                          type="number"
+                          min={0}
+                          max={50}
+                          value={adultCount}
+                          onChange={(e) => setAdultCount(e.target.value)}
+                        />
+                      </ShField>
+                      <ShField label="Children" htmlFor="account-children">
+                        <input
+                          id="account-children"
+                          data-testid="account-children"
+                          className="input"
+                          type="number"
+                          min={0}
+                          max={50}
+                          value={childCount}
+                          onChange={(e) => setChildCount(e.target.value)}
+                        />
+                      </ShField>
+                      <ShField label="Senior citizens" htmlFor="account-seniors">
+                        <input
+                          id="account-seniors"
+                          data-testid="account-seniors"
+                          className="input"
+                          type="number"
+                          min={0}
+                          max={50}
+                          value={seniorCitizenCount}
+                          onChange={(e) => setSeniorCitizenCount(e.target.value)}
+                        />
+                      </ShField>
+                    </div>
+                  </fieldset>
+                  <VehicleFields
+                    kind="two_wheeler"
+                    label="Two-wheelers"
+                    included={remainingTw}
+                    rows={twoWheelers}
+                    onChange={setTwoWheelers}
+                    testIdPrefix="account"
+                    registrationOptional
+                  />
+                  <VehicleFields
+                    kind="four_wheeler"
+                    label="Four-wheelers"
+                    included={remainingFw}
+                    rows={fourWheelers}
+                    onChange={setFourWheelers}
+                    testIdPrefix="account"
+                    registrationOptional
+                  />
+                </>
+              ) : (
+                <p className="sh-span-2 text-sm text-black/55">
+                  PNG, family counts, and vehicles can be updated after an admin links a flat.
+                </p>
+              )}
             </ShFormGrid>
             <button className="btn btn-primary" type="submit">
               Save profile

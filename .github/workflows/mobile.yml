@@ -114,6 +114,17 @@ jobs:
             echo "Set GitHub variable MOBILE_API_BASE_URL on this environment."
             exit 1
           fi
+          case "$MOBILE_API_BASE_URL" in
+            https://societyhub-api.onrender.com|https://societyhub-api.onrender.com/)
+              echo "Wrong API host. Set MOBILE_API_BASE_URL to https://societyhub-api-ece6.onrender.com"
+              exit 1
+              ;;
+          esac
+          if ! curl -fsS --max-time 90 "$MOBILE_API_BASE_URL/health" | grep -q 'society-hub-api'; then
+            echo "MOBILE_API_BASE_URL/health is not the SocietyHub API."
+            curl -sS --max-time 20 "$MOBILE_API_BASE_URL/health" || true
+            exit 1
+          fi
           flutter build appbundle --release \
             --dart-define=ENV="$MOBILE_ENV" \
             --dart-define=API_BASE_URL="$MOBILE_API_BASE_URL" \
@@ -210,6 +221,17 @@ jobs:
         run: |
           if [ -z "$MOBILE_API_BASE_URL" ]; then
             echo "Set GitHub variable MOBILE_API_BASE_URL on this environment."
+            exit 1
+          fi
+          case "$MOBILE_API_BASE_URL" in
+            https://societyhub-api.onrender.com|https://societyhub-api.onrender.com/)
+              echo "Wrong API host. Set MOBILE_API_BASE_URL to https://societyhub-api-ece6.onrender.com"
+              exit 1
+              ;;
+          esac
+          if ! curl -fsS --max-time 90 "$MOBILE_API_BASE_URL/health" | grep -q 'society-hub-api'; then
+            echo "MOBILE_API_BASE_URL/health is not the SocietyHub API."
+            curl -sS --max-time 20 "$MOBILE_API_BASE_URL/health" || true
             exit 1
           fi
           flutter build ipa --release \

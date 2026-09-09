@@ -10,7 +10,7 @@ import '../helpers/test_harness.dart';
 
 void main() {
   testWidgets('admin can submit single resident onboard (no CSV UI)', (tester) async {
-    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.physicalSize = const Size(800, 2600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -61,7 +61,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(AppKeys.onboardForm), findsOneWidget);
-    expect(find.textContaining('CSV'), findsWidgets);
+    expect(find.textContaining('family members'), findsWidgets);
     expect(find.textContaining('web Client App'), findsWidgets);
 
     await tester.enterText(find.byKey(AppKeys.onboardName), 'New Person');

@@ -103,12 +103,27 @@ void main() {
           'floor': 1,
           'parkingSlot': 'P-1',
           'isOwner': true,
+          'pngGasConnection': true,
+          'adultCount': 2,
+          'twoWheelerCount': 1,
+          'fourWheelerCount': 0,
         },
+        'vehicles': [
+          {
+            'kind': 'two_wheeler',
+            'registrationNumber': 'MH12TW0001',
+            'parkingPurchased': false,
+            'parkingSlot': null,
+          },
+        ],
       });
       expect(profile.societyName, 'Keshav Heights');
       expect(profile.flat!.label, 'A-101');
       expect(profile.flat!.floor, 1);
       expect(profile.flat!.isOwner, isTrue);
+      expect(profile.flat!.twoWheelerCount, 1);
+      expect(profile.vehicles, hasLength(1));
+      expect(profile.vehicles.first.kind, 'two_wheeler');
     });
   });
 
@@ -128,8 +143,30 @@ void main() {
           'id': 'f1',
           'number': '101',
           'wingName': 'A',
+          'twoWheelerCount': 2,
+          'fourWheelerCount': 1,
         }).label,
         'A-101',
+      );
+      expect(
+        FlatDto.fromJson({
+          'id': 'f1',
+          'number': '101',
+          'wingName': 'A',
+          'twoWheelerCount': 2,
+        }).twoWheelerCount,
+        2,
+      );
+      expect(
+        FlatDto.fromJson({
+          'id': 'f1',
+          'number': '101',
+          'wingName': 'A',
+          'adultCount': 2,
+          'childCount': 1,
+          'seniorCitizenCount': 1,
+        }).adultCount,
+        2,
       );
       expect(
         FlatDto.fromJson({

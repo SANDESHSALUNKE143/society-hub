@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { vehicleParkingQuotaMessage } from "@society-hub/types";
 
 export const requestOtpSchema = z.object({
   phone: z.string().min(10).max(15),
@@ -50,12 +51,62 @@ export const selectTenantSchema = z.object({
   tenantId: z.string().uuid(),
 });
 
-export const onboardResidentSchema = z.object({
-  name: z.string().min(1).max(120),
-  phone: z.string().min(10).max(15),
-  flatId: z.string().uuid(),
-  email: z.string().email().max(200),
+export const residentVehicleKindEnum = z.enum(["two_wheeler", "four_wheeler"]);
+
+export const residentVehicleSchema = z.object({
+  kind: residentVehicleKindEnum,
+  registrationNumber: z.preprocess(
+    (v) => (v == null || (typeof v === "string" && v.trim() === "") ? null : v),
+    z.string().min(4).max(32).nullable(),
+  ),
+  parkingPurchased: z.boolean().optional().default(false),
+  parkingSlot: z.string().max(32).optional().nullable(),
 });
+
+function refineVehicleQuota(
+  vehicles:
+    | Array<{
+        kind: "two_wheeler" | "four_wheeler";
+        parkingPurchased?: boolean;
+      }>
+    | undefined,
+  ctx: z.RefinementCtx,
+) {
+  if (!vehicles?.length) return;
+  const message = vehicleParkingQuotaMessage(vehicles);
+  if (message) {
+    ctx.addIssue({ code: "custom", path: ["vehicles"], message });
+  }
+}
+
+export const optionalFamilyCountSchema = z.coerce
+  .number()
+  .int()
+  .min(0)
+  .max(50)
+  .optional();
+
+export const onboardResidentSchema = z
+  .object({
+    name: z.string().min(1).max(120),
+    phone: z.string().min(10).max(15),
+    flatId: z.string().uuid(),
+    email: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+      z.string().email().max(200).optional().nullable(),
+    ),
+    floor: z.coerce.number().int().min(0).max(200).optional().nullable(),
+    parkingSlot: z.string().max(32).optional().nullable(),
+    isOwner: z.boolean().optional().default(true),
+    emergencyContact: z.string().max(40).optional().nullable(),
+    vehicleNumber: z.string().max(32).optional().nullable(),
+    vehicles: z.array(residentVehicleSchema).max(20).optional(),
+    pngGasConnection: z.boolean().optional(),
+    adultCount: optionalFamilyCountSchema,
+    childCount: optionalFamilyCountSchema,
+    seniorCitizenCount: optionalFamilyCountSchema,
+  })
+  .superRefine((val, ctx) => refineVehicleQuota(val.vehicles, ctx));
 
 export const createComplaintSchema = z.object({
   title: z.string().min(3).max(200),
@@ -175,19 +226,26 @@ export const createFlatSchema = z.object({
   details: z.record(z.string(), z.string()).optional().nullable(),
 });
 
-export const residentImportRowSchema = z.object({
-  name: z.string().min(1).max(120),
-  phone: z.string().min(10).max(15),
-  email: z.string().email().max(200).optional().nullable(),
-  flatNumber: z.string().min(1).max(32),
-  wingName: z.string().min(1).max(120).optional().nullable(),
-  floor: z.coerce.number().int().min(0).max(200).optional().nullable(),
-  parkingSlot: z.string().max(32).optional().nullable(),
-  isOwner: z.boolean().optional().default(true),
-  emergencyContact: z.string().max(40).optional().nullable(),
-  vehicleNumber: z.string().max(32).optional().nullable(),
-  sendInvite: z.boolean().optional().default(false),
-});
+export const residentImportRowSchema = z
+  .object({
+    name: z.string().min(1).max(120),
+    phone: z.string().min(10).max(15),
+    email: z.string().email().max(200).optional().nullable(),
+    flatNumber: z.string().min(1).max(32),
+    wingName: z.string().min(1).max(120).optional().nullable(),
+    floor: z.coerce.number().int().min(0).max(200).optional().nullable(),
+    parkingSlot: z.string().max(32).optional().nullable(),
+    isOwner: z.boolean().optional().default(true),
+    emergencyContact: z.string().max(40).optional().nullable(),
+    vehicleNumber: z.string().max(32).optional().nullable(),
+    vehicles: z.array(residentVehicleSchema).max(20).optional(),
+    pngGasConnection: z.boolean().optional(),
+    adultCount: optionalFamilyCountSchema,
+    childCount: optionalFamilyCountSchema,
+    seniorCitizenCount: optionalFamilyCountSchema,
+    sendInvite: z.boolean().optional().default(false),
+  })
+  .superRefine((val, ctx) => refineVehicleQuota(val.vehicles, ctx));
 
 export const residentImportSchema = z.object({
   rows: z.array(residentImportRowSchema).min(1).max(500),
@@ -211,11 +269,18 @@ export const createInvitationSchema = z.object({
     .default(["email"]),
 });
 
-export const updateResidentProfileSchema = z.object({
-  name: z.string().min(1).max(120).optional(),
-  emergencyContact: z.string().max(40).optional().nullable(),
-  vehicleNumber: z.string().max(32).optional().nullable(),
-});
+export const updateResidentProfileSchema = z
+  .object({
+    name: z.string().min(1).max(120).optional(),
+    emergencyContact: z.string().max(40).optional().nullable(),
+    vehicleNumber: z.string().max(32).optional().nullable(),
+    vehicles: z.array(residentVehicleSchema).max(20).optional(),
+    pngGasConnection: z.boolean().optional(),
+    adultCount: optionalFamilyCountSchema,
+    childCount: optionalFamilyCountSchema,
+    seniorCitizenCount: optionalFamilyCountSchema,
+  })
+  .superRefine((val, ctx) => refineVehicleQuota(val.vehicles, ctx));
 
 export const generateBillsSchema = z.object({
   periodYm: z

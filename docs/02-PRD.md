@@ -26,7 +26,7 @@ SocietyHub is a multi-tenant SaaS for housing societies. The **product roadmap i
 | App | Audience | Modes |
 |-----|----------|--------|
 | `apps/client-app` (`app.localhost:5173`) | Society members | **Admin \| Resident** toggle (like Fassport Raise \| Invest). Staff: Chairperson, Secretary, Treasurer, Cashier, Committee. Residents/tenants: Resident mode only. |
-| `apps/manage` (`manage.localhost:5174`) | SocietyHub **platform employees** only | Create societies, add people to a society team. Day-to-day society admin is **not** here — add yourself to the society team and use Client App Admin. |
+| `apps/manage` (`manage.localhost:5174`) | SocietyHub **platform employees** only | Create societies, list/add/remove a society team. Day-to-day society admin is **not** here — add yourself to the society team and use Client App Admin. |
 
 Both share one API (`apps/api`) and `packages/sdk`.
 
@@ -62,6 +62,7 @@ Secretary / Treasurer / Committee / Tenant refinements and full RBAC matrix appl
 | Onboard flats / residents | ✓ | |
 | Login / logout | ✓ | ✓ |
 | Raise complaint | ✓ (optional) | ✓ |
+| Update Account household details (linked flat) | ✓ | ✓ |
 | View own complaints + status | ✓ | ✓ |
 | View all society complaints + status | ✓ | |
 | Update complaint status | ✓ | |
@@ -163,13 +164,20 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 - FR-AUTH-3: User can **set a PIN** after successful OTP or SSO; later sessions may unlock with PIN per Architecture (hashed at rest; never stored plaintext).
 - FR-AUTH-4: **Logout** clears session.
 - FR-AUTH-5: Admin can **onboard** residents (and admin users) with mobile and flat binding before first login.
+- FR-AUTH-6: Android login shows the **installed version**. If Play has a newer build, show an **Update** button that opens the in-app update or Play listing.
 
 ### 7.2 Society & resident onboarding (MVP)
 
 - FR-ONB-1: Admin onboarding for the pilot society (or Super Admin creates society + first Admin).
-- FR-ONB-2: Admin registers residents against **flats** (flat number required for auto-fill).
+- FR-ONB-2: Admin registers residents against **flats** (flat number required for auto-fill). The single-resident form captures the same fields as CSV import: name, phone, email, wing, flat, floor, parking slot, owner vs occupant, emergency contact, vehicles, PNG gas connection, and **family member counts** (Adult, Child, Senior citizen). **A flat may have multiple family members**; each person is a separate resident with their own mobile (OTP). Email is optional and must be unique if provided. Parking included slots (FR-ONB-7) apply to the **flat**, not per person.
 - FR-ONB-3: Buildings/wings only as needed to uniquely identify flats for the pilot.
 - FR-ONB-4: Society Admin can add, update (name / email / mobile / role), and remove society team members in Client App Admin. A team member cannot remove themselves.
+- FR-ONB-5: Society Admin can list all onboarded residents in Client App Admin (name, mobile, email, flat). Adding stays on Onboard resident. Searchable directory / move-out is Phase 2 (FR-RES-*).
+- FR-ONB-6: Platform employees on Manage society detail can list that society's team, add members (email, mobile, role), and remove members. They cannot remove themselves. Contact/role edits stay in Client App Admin.
+- FR-ONB-7: Each flat includes **2 two-wheeler** and **1 four-wheeler** parking by default. Admins can record more than one bike and more than one car; any vehicle beyond those included slots must be marked as **purchased parking** (optional slot label). **CSV import may skip registration numbers** and record only counts in `twoWheelers` / `fourWheelers` (for example `2` and `1`). Count-only extras beyond the included slots are stored as purchased parking.
+- FR-ONB-8: Onboard records whether the flat has taken a **PNG gas connection** (yes / no).
+- FR-ONB-9: Onboard records how many people live in the flat by age group: **Adult**, **Child**, and **Senior citizen**. These counts are per **flat** (shared by everyone onboarded to that flat). CSV columns: `adults`, `children`, `seniorCitizens`.
+- FR-ONB-10: A resident with a linked flat can update the same household details from **Account**: emergency contact, PNG gas, Adult / Child / Senior citizen counts, and their vehicles (registration optional). Family and PNG apply to the **flat**. Vehicle parking quota (FR-ONB-7) is enforced across the household.
 
 ### 7.3 Complaint management (MVP)
 
@@ -215,7 +223,7 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 - FR-SOC-4: Assign/revoke Secretary, Treasurer, Committee, Society Admin roles.
 - FR-RES-1: Register owners against flats; searchable directory.
 - FR-RES-2: Onboard tenants to flats; move-in/move-out updates occupancy; owner remains on record.
-- FR-RES-3: Resident updates profile (phone, emergency contact, vehicle); visible to Secretary; audited.
+- FR-RES-3: Resident updates profile (phone, emergency contact, vehicle); visible to Secretary; audited. **MVP Account** also covers FR-ONB-10 household fields (PNG, family counts, vehicles) for a linked flat.
 - FR-RES-4: Upload/retrieve tenant verification documents via Azure Blob for authorized roles.
 
 ### 7.6 Phase 2 — complaints (advanced)

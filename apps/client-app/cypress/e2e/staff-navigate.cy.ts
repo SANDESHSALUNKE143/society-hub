@@ -33,6 +33,7 @@ describe("Client App staff (Admin mode) navigation", () => {
     cy.get('[data-testid="app-mode-toggle"]').should("be.visible");
     cy.get('[data-testid="app-mode-admin"]').should("have.class", "bg-white");
 
+    cy.get('nav a[href="/residents"]').should("be.visible");
     cy.get('nav a[href="/onboard"]').should("be.visible");
     cy.get('nav a[href="/invites"]').scrollIntoView().should("be.visible");
     cy.get('nav a[href="/team"]').scrollIntoView().should("be.visible");
@@ -50,6 +51,7 @@ describe("Client App staff (Admin mode) navigation", () => {
     cy.get('[data-testid="app-mode-admin"]').should("not.have.class", "bg-white");
 
     cy.get('nav a[href="/onboard"]').should("not.exist");
+    cy.get('nav a[href="/residents"]').should("not.exist");
     cy.contains('nav a[href="/complaints"]', "My complaints").should("be.visible");
 
     cy.reload();
@@ -90,5 +92,31 @@ describe("Client App staff (Admin mode) navigation", () => {
     cy.get('[data-testid="team-remove-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"]').should(
       "be.visible",
     );
+  });
+
+  it("opens Residents with the onboarded list", () => {
+    cy.intercept("GET", "**/v1/admin/residents", {
+      statusCode: 200,
+      body: [
+        {
+          userId: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+          name: "Demo Resident",
+          email: "resident@example.com",
+          phone: "8888888888",
+          flatId: "flat-1",
+          flatNumber: "101",
+          wingName: "A",
+          isOwner: true,
+        },
+      ],
+    }).as("residents");
+
+    cy.visit("/residents");
+    cy.wait("@residents");
+    cy.get('[data-testid="residents-page"]').should("be.visible");
+    cy.get('[data-testid="residents-table"]').should("be.visible");
+    cy.contains("td", "Demo Resident").should("be.visible");
+    cy.contains("td", "A-101").should("be.visible");
+    cy.get('[data-testid="residents-onboard"]').should("be.visible").and("contain", "Add family member");
   });
 });

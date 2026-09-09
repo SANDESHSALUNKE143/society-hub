@@ -249,7 +249,7 @@ curl http://127.0.0.1:3000/health
 | Email / password | Manage (platform): `superadmin@societyhub.local` / `Test@1234` |
 | OTP (mobile) | Client App Chairperson `9999999999` · Resident `8888888888` · code `123456` |
 
-Use **Manage** (`manage.localhost:5174`) for SocietyHub platform employees (create societies, add staff to a society team). Use **Client App** (`app.localhost:5173`) for society **Admin \| Resident** modes.
+Use **Manage** (`manage.localhost:5174`) for SocietyHub platform employees (create societies, list/add/remove staff on a society team). Use **Client App** (`app.localhost:5173`) for society **Admin \| Resident** modes.
 
 ---
 

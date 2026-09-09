@@ -119,6 +119,12 @@ class FlatDto {
     required this.wingName,
     this.floor,
     this.parkingSlot,
+    this.pngGasConnection = false,
+    this.twoWheelerCount = 0,
+    this.fourWheelerCount = 0,
+    this.adultCount = 0,
+    this.childCount = 0,
+    this.seniorCitizenCount = 0,
   });
 
   final String id;
@@ -126,6 +132,12 @@ class FlatDto {
   final String? wingName;
   final int? floor;
   final String? parkingSlot;
+  final bool pngGasConnection;
+  final int twoWheelerCount;
+  final int fourWheelerCount;
+  final int adultCount;
+  final int childCount;
+  final int seniorCitizenCount;
 
   factory FlatDto.fromJson(Map<String, dynamic> json) {
     return FlatDto(
@@ -134,6 +146,12 @@ class FlatDto {
       wingName: json['wingName'] as String?,
       floor: (json['floor'] as num?)?.toInt(),
       parkingSlot: json['parkingSlot'] as String?,
+      pngGasConnection: json['pngGasConnection'] as bool? ?? false,
+      twoWheelerCount: (json['twoWheelerCount'] as num?)?.toInt() ?? 0,
+      fourWheelerCount: (json['fourWheelerCount'] as num?)?.toInt() ?? 0,
+      adultCount: (json['adultCount'] as num?)?.toInt() ?? 0,
+      childCount: (json['childCount'] as num?)?.toInt() ?? 0,
+      seniorCitizenCount: (json['seniorCitizenCount'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -266,6 +284,29 @@ class ComplaintDto {
   }
 }
 
+class ResidentVehicleDto {
+  const ResidentVehicleDto({
+    required this.kind,
+    required this.registrationNumber,
+    required this.parkingPurchased,
+    required this.parkingSlot,
+  });
+
+  final String kind;
+  final String? registrationNumber;
+  final bool parkingPurchased;
+  final String? parkingSlot;
+
+  factory ResidentVehicleDto.fromJson(Map<String, dynamic> json) {
+    return ResidentVehicleDto(
+      kind: json['kind'] as String? ?? 'four_wheeler',
+      registrationNumber: json['registrationNumber'] as String?,
+      parkingPurchased: json['parkingPurchased'] as bool? ?? false,
+      parkingSlot: json['parkingSlot'] as String?,
+    );
+  }
+}
+
 class ProfileFlatDto {
   const ProfileFlatDto({
     required this.id,
@@ -275,6 +316,12 @@ class ProfileFlatDto {
     required this.floor,
     required this.parkingSlot,
     required this.isOwner,
+    this.pngGasConnection = false,
+    this.adultCount = 0,
+    this.childCount = 0,
+    this.seniorCitizenCount = 0,
+    this.twoWheelerCount = 0,
+    this.fourWheelerCount = 0,
   });
 
   final String id;
@@ -284,6 +331,12 @@ class ProfileFlatDto {
   final int? floor;
   final String? parkingSlot;
   final bool isOwner;
+  final bool pngGasConnection;
+  final int adultCount;
+  final int childCount;
+  final int seniorCitizenCount;
+  final int twoWheelerCount;
+  final int fourWheelerCount;
 
   factory ProfileFlatDto.fromJson(Map<String, dynamic> json) {
     return ProfileFlatDto(
@@ -294,6 +347,12 @@ class ProfileFlatDto {
       floor: (json['floor'] as num?)?.toInt(),
       parkingSlot: json['parkingSlot'] as String?,
       isOwner: json['isOwner'] as bool? ?? false,
+      pngGasConnection: json['pngGasConnection'] as bool? ?? false,
+      adultCount: (json['adultCount'] as num?)?.toInt() ?? 0,
+      childCount: (json['childCount'] as num?)?.toInt() ?? 0,
+      seniorCitizenCount: (json['seniorCitizenCount'] as num?)?.toInt() ?? 0,
+      twoWheelerCount: (json['twoWheelerCount'] as num?)?.toInt() ?? 0,
+      fourWheelerCount: (json['fourWheelerCount'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -310,6 +369,7 @@ class ResidentProfileDto {
     required this.vehicleNumber,
     required this.societyName,
     required this.flat,
+    this.vehicles = const [],
   });
 
   final String userId;
@@ -317,15 +377,20 @@ class ResidentProfileDto {
   final String? vehicleNumber;
   final String? societyName;
   final ProfileFlatDto? flat;
+  final List<ResidentVehicleDto> vehicles;
 
   factory ResidentProfileDto.fromJson(Map<String, dynamic> json) {
     final flatJson = json['flat'] as Map<String, dynamic>?;
+    final vehiclesJson = json['vehicles'] as List<dynamic>? ?? const [];
     return ResidentProfileDto(
       userId: json['userId'] as String,
       emergencyContact: json['emergencyContact'] as String?,
       vehicleNumber: json['vehicleNumber'] as String?,
       societyName: json['societyName'] as String?,
       flat: flatJson == null ? null : ProfileFlatDto.fromJson(flatJson),
+      vehicles: vehiclesJson
+          .map((e) => ResidentVehicleDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 }

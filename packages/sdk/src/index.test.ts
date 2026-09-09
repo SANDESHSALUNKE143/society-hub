@@ -83,6 +83,7 @@ describe("sdk client", () => {
     await client.changePassword("oldpass12", "newpass12");
     await client.logout("ref");
     await client.listFlats();
+    await client.listResidents();
     await client.onboardResident({
       name: "R",
       phone: "7777777777",
@@ -259,19 +260,22 @@ describe("sdk client", () => {
     await client.listSocieties();
     await client.createSociety({ name: "Keshav Heights" });
     await client.getSociety("s1");
+    await client.listSocietyTeam("s1");
     await client.addSocietyTeamMember("s1", {
       email: "ops@societyhub.local",
       phone: "8888888888",
       role: "secretary",
     });
+    await client.removeSocietyTeamMember("s1", "u1");
     await client.listBuildings("s1");
     await client.createBuilding("s1", "Tower A");
     await client.listWings("b1");
     await client.createWing("b1", "A");
     await client.listFlatsForWing("w1");
     await client.createFlat("w1", "101");
-    expect(paths.length).toBe(10);
+    expect(paths.length).toBe(12);
     expect(paths.some((p) => p.includes("/v1/manage/societies/s1/team"))).toBe(true);
+    expect(paths.some((p) => p.includes("/v1/manage/societies/s1/team/u1"))).toBe(true);
   });
 
   test("invitation, bill, and payment helpers", async () => {

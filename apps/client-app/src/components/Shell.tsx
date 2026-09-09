@@ -17,6 +17,7 @@ const adminSections: NavSection[] = [
     title: "Operations",
     items: [
       { to: "/complaints", label: "Complaints", icon: "complaints" },
+      { to: "/residents", label: "Residents", icon: "team" },
       { to: "/onboard", label: "Onboard resident", icon: "onboard" },
       { to: "/invites", label: "Invites", icon: "invites" },
       { to: "/team", label: "Team", icon: "team" },

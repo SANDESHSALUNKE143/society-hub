@@ -14,6 +14,8 @@ abstract final class AppKeys {
   static const loginSubmit = Key('login-submit');
   static const loginError = Key('login-error');
   static const loginBusy = Key('login-busy');
+  static const loginVersion = Key('login-version');
+  static const loginUpdate = Key('login-update');
   static const accountPrivacy = Key('account-privacy');
 
   static const modeAdmin = Key('app-mode-admin');
@@ -41,6 +43,11 @@ abstract final class AppKeys {
   static const accountFlatNumber = Key('account-flat-number');
   static const accountEmergencyContact = Key('account-emergency-contact');
   static const accountVehicleNumber = Key('account-vehicle-number');
+  static const accountAdults = Key('account-adults');
+  static const accountChildren = Key('account-children');
+  static const accountSeniors = Key('account-seniors');
+  static const accountPngYes = Key('account-png-yes');
+  static const accountPngNo = Key('account-png-no');
 
   static const onboardForm = Key('onboard-form');
   static const onboardName = Key('onboard-name');

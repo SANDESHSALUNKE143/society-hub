@@ -7,6 +7,7 @@ import '../../../auth/google_id_token.dart';
 import '../../../auth/login_errors.dart';
 import '../../../auth/session.dart';
 import '../../../core/app_keys.dart';
+import '../../../core/app_version.dart';
 import '../../../core/theme.dart';
 import '../../../shared/widgets.dart';
 
@@ -100,7 +101,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           children: [
             Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 88),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: ShCard(
@@ -185,6 +186,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     ),
                   ),
                 ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: _LoginVersionFooter(
+                info: ref.watch(installedAppInfoProvider),
+                onUpdate: () => ref.read(appVersionSourceProvider).startUpdate(),
               ),
             ),
             if (_busy)
@@ -379,5 +387,42 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         onPressed: _signInGoogle,
       ),
     ];
+  }
+}
+
+class _LoginVersionFooter extends StatelessWidget {
+  const _LoginVersionFooter({required this.info, required this.onUpdate});
+
+  final AsyncValue<InstalledAppInfo> info;
+  final Future<void> Function() onUpdate;
+
+  @override
+  Widget build(BuildContext context) {
+    return info.when(
+      data: (value) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Installed version ${value.versionLabel}',
+              key: AppKeys.loginVersion,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.black54, fontSize: 13),
+            ),
+            if (value.updateAvailable) ...[
+              const SizedBox(height: 8),
+              OutlinedButton(
+                key: AppKeys.loginUpdate,
+                onPressed: () => onUpdate(),
+                child: const Text('Update'),
+              ),
+            ],
+          ],
+        ),
+      ),
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+    );
   }
 }

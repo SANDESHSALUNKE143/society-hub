@@ -19,6 +19,7 @@ import type {
   ActivityEventDto,
   PlatformUserDto,
   TeamMemberDto,
+  SocietyResidentDto,
   VisitorDto,
   ParkingSlotDto,
   BookingDto,
@@ -185,17 +186,43 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
     updateProfile: (body: {
       emergencyContact?: string | null;
       vehicleNumber?: string | null;
+      pngGasConnection?: boolean;
+      adultCount?: number;
+      childCount?: number;
+      seniorCitizenCount?: number;
+      vehicles?: Array<{
+        kind: "two_wheeler" | "four_wheeler";
+        registrationNumber?: string | null;
+        parkingPurchased?: boolean;
+        parkingSlot?: string | null;
+      }>;
     }) =>
       request<ResidentProfileDto>("/v1/auth/profile", {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
     listFlats: () => request<FlatDto[]>("/v1/admin/flats"),
+    listResidents: () => request<SocietyResidentDto[]>("/v1/admin/residents"),
     onboardResident: (body: {
       name: string;
       phone: string;
       flatId: string;
       email?: string | null;
+      floor?: number | null;
+      parkingSlot?: string | null;
+      isOwner?: boolean;
+      emergencyContact?: string | null;
+      vehicleNumber?: string | null;
+      vehicles?: Array<{
+        kind: "two_wheeler" | "four_wheeler";
+        registrationNumber?: string | null;
+        parkingPurchased?: boolean;
+        parkingSlot?: string | null;
+      }>;
+      pngGasConnection?: boolean;
+      adultCount?: number;
+      childCount?: number;
+      seniorCitizenCount?: number;
     }) =>
       request<{ user: UserDto }>("/v1/admin/residents", {
         method: "POST",
@@ -213,6 +240,16 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         isOwner?: boolean;
         emergencyContact?: string | null;
         vehicleNumber?: string | null;
+        vehicles?: Array<{
+          kind: "two_wheeler" | "four_wheeler";
+          registrationNumber: string | null;
+          parkingPurchased?: boolean;
+          parkingSlot?: string | null;
+        }>;
+        pngGasConnection?: boolean;
+        adultCount?: number;
+        childCount?: number;
+        seniorCitizenCount?: number;
         sendInvite?: boolean;
       }>;
       sendInvites?: boolean;
@@ -278,6 +315,8 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         body: JSON.stringify(body),
       }),
     getSociety: (id: string) => request<SocietyDto>(`/v1/societies/${id}`),
+    listSocietyTeam: (societyId: string) =>
+      request<TeamMemberDto[]>(`/v1/manage/societies/${societyId}/team`),
     addSocietyTeamMember: (
       societyId: string,
       body: {
@@ -302,6 +341,10 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
       }>(`/v1/manage/societies/${societyId}/team`, {
         method: "POST",
         body: JSON.stringify(body),
+      }),
+    removeSocietyTeamMember: (societyId: string, userId: string) =>
+      request<{ ok: true }>(`/v1/manage/societies/${societyId}/team/${userId}`, {
+        method: "DELETE",
       }),
 
     listPlatformUsers: (q?: string) => {

@@ -63,7 +63,7 @@ Local AAB (same signing): `apps/mobile/README.md` + `android/key.properties` (gi
 
 | Service | Typical URL | Deploys from |
 |---------|-------------|----------------|
-| API | `https://societyhub-api.onrender.com` | `main` (Docker) |
+| API | `https://societyhub-api-ece6.onrender.com` | `main` (Docker). Render added the `-ece6` suffix; do **not** use `societyhub-api.onrender.com` (that host is not this API). |
 | Client App | `https://societyhub-client.onrender.com` | `main` (static) |
 | Manage | `https://societyhub-manage.onrender.com` | `main` (static) |
 

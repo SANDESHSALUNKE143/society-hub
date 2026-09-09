@@ -42,7 +42,7 @@ Note outputs `api_url`, `client_url`, `manage_url`. If they differ from `https:/
 
 ## First boot
 
-1. `GET {api_url}/health` — expect `{ "ok": true, "service": "society-hub-api" }`. Cold start can take ~1 min.
+1. `GET {api_url}/health` — expect `{ "ok": true, "service": "society-hub-api" }`. Cold start can take ~1 min. Render often serves this as `https://societyhub-api-ece6.onrender.com`, **not** `https://societyhub-api.onrender.com`. Use the Terraform `api_url` output (and the same value for GitHub `MOBILE_API_BASE_URL`).
 2. Seed once (free has no shell). Temporarily set the API start command in the dashboard to:
    `sh -c "bun run src/db/migrate.ts && bun run src/db/seed.ts && bun run src/index.ts"`  
    deploy, then change it back to the image default (`/app/api-start.sh`).

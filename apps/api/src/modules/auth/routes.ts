@@ -42,7 +42,7 @@ import {
   requireAuth,
   resolveMembership,
 } from "../../lib/auth-context";
-import { getProfileDto, upsertProfile } from "../profile/routes";
+import { applyResidentProfilePatch, getProfileDto } from "../profile/routes";
 import {
   claimsFromGoogleIdToken,
   findOnboardedGoogleUser,
@@ -498,6 +498,6 @@ export const authRoutes = new Elysia({ prefix: "/v1/auth" })
   .patch("/profile", async ({ auth, body }) => {
     const claims = requireAuth(auth);
     const parsed = updateResidentProfileSchema.parse(body);
-    await upsertProfile(claims.tenantId, claims.sub, parsed);
+    await applyResidentProfilePatch(claims.tenantId, claims.sub, parsed);
     return getProfileDto(claims.tenantId, claims.sub);
   });

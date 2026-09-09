@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import type { SocietyDto } from "@society-hub/types";
+import type { SocietyDto, TeamMemberDto } from "@society-hub/types";
 import { ApiClientError } from "@society-hub/sdk";
 import { useAuth } from "../auth";
 import { Icon } from "../components/icons";
@@ -19,7 +19,21 @@ const TEAM_ROLES = [
   { value: "committee", label: "Committee member" },
 ] as const;
 
-function AddTeamMemberForm({ societyId }: { societyId: string }) {
+function roleLabel(role: string) {
+  return TEAM_ROLES.find((r) => r.value === role)?.label ?? role;
+}
+
+function errMessage(err: unknown, fallback: string) {
+  return err instanceof ApiClientError ? err.body.message : fallback;
+}
+
+function AddTeamMemberForm({
+  societyId,
+  onAdded,
+}: {
+  societyId: string;
+  onAdded: () => Promise<void> | void;
+}) {
   const { client } = useAuth();
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -47,6 +61,7 @@ function AddTeamMemberForm({ societyId }: { societyId: string }) {
       setEmail("");
       setPhone("");
       setName("");
+      await onAdded();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.body.message : "Failed to add team member");
     } finally {
@@ -139,20 +154,121 @@ function AddTeamMemberForm({ societyId }: { societyId: string }) {
   );
 }
 
+function SocietyTeamList({
+  members,
+  busy,
+  currentUserId,
+  onRemove,
+}: {
+  members: TeamMemberDto[] | null;
+  busy: boolean;
+  currentUserId: string | undefined;
+  onRemove: (member: TeamMemberDto) => void;
+}) {
+  if (members === null) {
+    return <p className="text-sm text-black/50">Loading team…</p>;
+  }
+  if (members.length === 0) {
+    return (
+      <div className="empty-state" data-testid="team-empty">
+        No team members yet.
+      </div>
+    );
+  }
+  return (
+    <div className="table-wrap">
+      <table className="data-table" data-testid="team-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Role</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {members.map((m) => (
+            <tr key={`${m.userId}-${m.role}`}>
+              <td>{m.name ?? "—"}</td>
+              <td>{m.email ?? "—"}</td>
+              <td>{m.phone ?? "—"}</td>
+              <td>
+                <span className="badge">{roleLabel(m.role)}</span>
+              </td>
+              <td>
+                {m.userId !== currentUserId ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    data-testid={`team-remove-${m.userId}`}
+                    disabled={busy}
+                    onClick={() => onRemove(m)}
+                  >
+                    Remove
+                  </button>
+                ) : (
+                  <span className="text-xs text-black/45">You</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function SocietyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { client, user } = useAuth();
   const [society, setSociety] = useState<SocietyDto | null>(null);
+  const [members, setMembers] = useState<TeamMemberDto[] | null>(null);
+  const [teamError, setTeamError] = useState<string | null>(null);
+  const [removeMessage, setRemoveMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const loadTeam = useCallback(() => {
+    if (!id) return Promise.resolve();
+    setTeamError(null);
+    return client
+      .listSocietyTeam(id)
+      .then((rows) => setMembers(rows))
+      .catch((err) => {
+        setMembers([]);
+        setTeamError(errMessage(err, "Failed to load society team"));
+      });
+  }, [client, id]);
 
   useEffect(() => {
     if (!id) return;
     client.getSociety(id).then(setSociety).catch(() => undefined);
-  }, [client, id]);
+    void loadTeam();
+  }, [client, id, loadTeam]);
 
   if (user?.role !== "superadmin") {
     return <Navigate to="/login" replace />;
   }
   if (!id) return null;
+  const societyId = id;
+
+  async function onRemove(m: TeamMemberDto) {
+    if (m.userId === user?.id) return;
+    const label = m.name ?? m.email ?? m.phone ?? "this person";
+    if (!window.confirm(`Remove ${label} from the society team?`)) return;
+    setBusy(true);
+    setRemoveMessage(null);
+    setTeamError(null);
+    try {
+      await client.removeSocietyTeamMember(societyId, m.userId);
+      setRemoveMessage("Team member removed.");
+      await loadTeam();
+    } catch (err) {
+      setTeamError(errMessage(err, "Failed to remove team member"));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div>
@@ -182,13 +298,24 @@ export function SocietyDetailPage() {
         </a>
       </div>
 
-      <h2 className="mb-3 font-semibold">Add to society team</h2>
+      <h2 className="mb-3 font-semibold">Society team</h2>
       <p className="mb-3 text-sm text-black/55">
-        SocietyHub employees who need Client App Admin access must be added here. Include
-        their mobile number so they can sign in with OTP. Day-to-day society management
-        (residents, complaints, bills) happens in the Client App.
+        People with Client App Admin access for this society. SocietyHub employees who need
+        that access must be added here. Include their mobile number so they can sign in with
+        OTP. Day-to-day society management (residents, complaints, bills) happens in the
+        Client App.
       </p>
-      <AddTeamMemberForm societyId={id} />
+      {teamError && <p className="mb-3 text-sm text-[var(--danger)]">{teamError}</p>}
+      <SocietyTeamList
+        members={members}
+        busy={busy}
+        currentUserId={user?.id}
+        onRemove={onRemove}
+      />
+      {removeMessage && <p className="mt-3 text-sm text-[var(--leaf)]">{removeMessage}</p>}
+
+      <h3 className="mb-3 mt-8 font-semibold">Add to society team</h3>
+      <AddTeamMemberForm societyId={id} onAdded={loadTeam} />
 
       <div className="mt-10" data-testid="society-planned-controls">
         <div className="mb-3 flex flex-wrap items-center gap-2">
