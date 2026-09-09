@@ -122,7 +122,7 @@ keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
 | Play internal | Same + `ENABLE_PLAY_UPLOAD=true` + `upload_play` | Draft on **internal** only. Off until the Play app exists. Never production. |
 | iOS IPA | Same triggers **and** `ENABLE_IOS_IPA=true` | Skipped until Apple secrets; see Go-Live |
 
-GitHub **variables** (per environment `staging` / `prod`): `MOBILE_API_BASE_URL`, `GOOGLE_SERVER_CLIENT_ID`, `PRIVACY_POLICY_URL`. Optional: `ENABLE_PLAY_UPLOAD`, `ENABLE_IOS_IPA`.
+GitHub **variables** (environment `prod` for store jobs): `MOBILE_API_BASE_URL`, `GOOGLE_SERVER_CLIENT_ID`, `PRIVACY_POLICY_URL`. Optional: `ENABLE_PLAY_UPLOAD`, `ENABLE_IOS_IPA`.
 
 GitHub **secrets** (Android): `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS`. Later: `PLAY_SERVICE_ACCOUNT_JSON`.
 

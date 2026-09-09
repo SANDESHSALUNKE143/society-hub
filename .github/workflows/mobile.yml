@@ -15,11 +15,6 @@ on:
       - ".github/workflows/mobile.yml"
   workflow_dispatch:
     inputs:
-      environment:
-        description: API environment for store binaries
-        type: choice
-        options: [staging, prod]
-        default: staging
       build_ios:
         description: Build IPA (requires ENABLE_IOS_IPA=true and ASC secrets)
         type: boolean
@@ -70,7 +65,7 @@ jobs:
     defaults:
       run:
         working-directory: apps/mobile
-    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'prod' }}
+    environment: prod
 
     steps:
       - uses: actions/checkout@v4
@@ -113,7 +108,7 @@ jobs:
           MOBILE_API_BASE_URL: ${{ vars.MOBILE_API_BASE_URL }}
           GOOGLE_SERVER_CLIENT_ID: ${{ vars.GOOGLE_SERVER_CLIENT_ID }}
           PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
-          MOBILE_ENV: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'prod' }}
+          MOBILE_ENV: prod
         run: |
           if [ -z "$MOBILE_API_BASE_URL" ]; then
             echo "Set GitHub variable MOBILE_API_BASE_URL on this environment."
@@ -143,7 +138,7 @@ jobs:
       (github.event_name != 'workflow_dispatch' || github.event.inputs.upload_play == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'prod' }}
+    environment: prod
 
     steps:
       - uses: actions/download-artifact@v4
@@ -172,7 +167,7 @@ jobs:
     defaults:
       run:
         working-directory: apps/mobile
-    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'prod' }}
+    environment: prod
 
     steps:
       - uses: actions/checkout@v4
@@ -195,7 +190,7 @@ jobs:
           MOBILE_API_BASE_URL: ${{ vars.MOBILE_API_BASE_URL }}
           GOOGLE_SERVER_CLIENT_ID: ${{ vars.GOOGLE_SERVER_CLIENT_ID }}
           PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
-          MOBILE_ENV: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'prod' }}
+          MOBILE_ENV: prod
         run: |
           if [ -z "$MOBILE_API_BASE_URL" ]; then
             echo "Set GitHub variable MOBILE_API_BASE_URL on this environment."
