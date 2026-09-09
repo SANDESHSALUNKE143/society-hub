@@ -63,7 +63,7 @@
 |-------|---------|
 | `bills` | Period bill per flat |
 | `bill_line_items` | Line amounts/descriptions |
-| `payments` | Razorpay or manual payment rows |
+| `payments` | Offline UPI proof (pending review) or staff-recorded cash/cheque/NEFT; Razorpay columns reserved for later |
 
 ### Notices and notifications
 
@@ -139,12 +139,19 @@ erDiagram
 - `status`: Unpaid | Partial | Paid | Overdue | Void
 - Unique constraint: one non-void bill per flat per period (per tenant)
 
+### societies (payment account)
+
+- `upi_id`, `account_name`, `account_number`, `ifsc` — shown to residents for offline pay
+- `qr_blob_path`, `qr_content_type` — optional society QR image
+
 ### payments
 
-- `bill_id`, `amount`, `mode`: razorpay | cash | cheque | neft
-- `provider_payment_id` / `provider_order_id` for Razorpay (unique for idempotency)
-- `reference` for offline modes
-- `status`: created | captured | failed | cancelled
+- `bill_id`, `amount`, `method`: upi | cash | cheque | neft | razorpay (razorpay unused until Phase 2 checkout)
+- `status`: pending (screenshot submitted) | success (acknowledged / staff-recorded) | failed (rejected)
+- `proof_blob_path` / `proof_content_type` for resident UPI screenshot
+- `review_note` when staff acknowledge or reject
+- `provider_payment_id` / `provider_order_id` reserved for future Razorpay
+- `receipt_number` issued on success
 
 ### notices
 

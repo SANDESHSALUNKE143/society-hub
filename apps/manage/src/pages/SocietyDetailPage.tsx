@@ -22,6 +22,7 @@ const TEAM_ROLES = [
 function AddTeamMemberForm({ societyId }: { societyId: string }) {
   const { client } = useAuth();
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState<(typeof TEAM_ROLES)[number]["value"]>("chairperson");
   const [message, setMessage] = useState<string | null>(null);
@@ -36,13 +37,15 @@ function AddTeamMemberForm({ societyId }: { societyId: string }) {
     try {
       const res = await client.addSocietyTeamMember(societyId, {
         email: email || undefined,
+        phone: phone || undefined,
         name: name || undefined,
         role,
       });
       setMessage(
-        `Added as ${res.role} on ${res.societyName}. They can sign in at ${APP_URL} in Admin mode.`,
+        `Added as ${res.role} on ${res.societyName}. They can sign in with this mobile (OTP) at ${APP_URL} in Admin mode.`,
       );
       setEmail("");
+      setPhone("");
       setName("");
     } catch (err) {
       setError(err instanceof ApiClientError ? err.body.message : "Failed to add team member");
@@ -68,6 +71,25 @@ function AddTeamMemberForm({ societyId }: { societyId: string }) {
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+      </div>
+      <div>
+        <label className="label" htmlFor="team-phone">
+          Mobile
+        </label>
+        <input
+          id="team-phone"
+          data-testid="add-team-phone"
+          className="input"
+          type="tel"
+          inputMode="numeric"
+          autoComplete="tel"
+          minLength={10}
+          maxLength={15}
+          placeholder="10-digit mobile"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
           required
         />
       </div>
@@ -162,8 +184,9 @@ export function SocietyDetailPage() {
 
       <h2 className="mb-3 font-semibold">Add to society team</h2>
       <p className="mb-3 text-sm text-black/55">
-        SocietyHub employees who need Client App Admin access must be added here. Day-to-day
-        society management (residents, complaints, bills) happens in the Client App.
+        SocietyHub employees who need Client App Admin access must be added here. Include
+        their mobile number so they can sign in with OTP. Day-to-day society management
+        (residents, complaints, bills) happens in the Client App.
       </p>
       <AddTeamMemberForm societyId={id} />
 

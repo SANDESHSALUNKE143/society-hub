@@ -41,6 +41,7 @@ describe("Manage sidebar navigation", () => {
 
     cy.url().should("include", "/societies/22222222-2222-2222-2222-222222222222");
     cy.get('[data-testid="add-team-form"]').should("be.visible");
+    cy.get('[data-testid="add-team-phone"]').should("be.visible");
     cy.get('[data-testid="society-planned-controls"]').should("be.visible");
   });
 

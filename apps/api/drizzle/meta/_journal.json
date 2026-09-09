@@ -50,6 +50,13 @@
       "when": 1784470000000,
       "tag": "0006_flat_floor_parking",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1788934000000,
+      "tag": "0007_offline_upi_payments",
+      "breakpoints": true
     }
   ]
 }

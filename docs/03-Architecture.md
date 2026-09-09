@@ -190,7 +190,7 @@ sequenceDiagram
   API->>DB: Update bill status
 ```
 
-Manual cash/cheque/NEFT recorded by Treasurer in the same `payments` model with `mode` discriminant.
+Residents pay offline via society UPI/QR and upload a screenshot (`payments.status = pending`) until Admin/Treasurer acknowledges. Manual cash/cheque/NEFT is recorded by staff in the same `payments` model. Razorpay checkout is future.
 
 ## 12. Data architecture summary
 

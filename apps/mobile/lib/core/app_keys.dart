@@ -45,4 +45,19 @@ abstract final class AppKeys {
   static const onboardName = Key('onboard-name');
   static const onboardPhone = Key('onboard-phone');
   static const onboardSubmit = Key('onboard-submit');
+
+  static const teamPage = Key('team-page');
+  static const addTeamForm = Key('add-team-form');
+  static const addTeamEmail = Key('add-team-email');
+  static const addTeamPhone = Key('add-team-phone');
+  static const addTeamName = Key('add-team-name');
+  static const addTeamSubmit = Key('add-team-submit');
+  static const teamList = Key('team-list');
+  static const editTeamForm = Key('edit-team-form');
+  static const editTeamPhone = Key('edit-team-phone');
+  static const editTeamEmail = Key('edit-team-email');
+  static const editTeamSave = Key('edit-team-save');
+
+  static Key teamEdit(String userId) => Key('team-edit-$userId');
+  static Key teamRemove(String userId) => Key('team-remove-$userId');
 }

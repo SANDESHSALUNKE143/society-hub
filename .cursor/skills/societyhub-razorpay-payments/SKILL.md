@@ -10,7 +10,7 @@ description: >-
 
 ## Rules
 
-- Online pay via **Razorpay** (UPI/cards/netbanking).
+- **Product now:** offline UPI/QR + screenshot review (see PRD FR-PAY-1–5). **Future:** online pay via **Razorpay** (UPI/cards/netbanking).
 - Verify webhook signatures; process **idempotently** (unique provider payment id).
 - Update bill status: Unpaid → Partial/Paid as amounts dictate.
 - Treasurer can record cash/cheque/NEFT with reference in same `payments` model.

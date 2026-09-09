@@ -254,6 +254,7 @@ describe("sdk client", () => {
     await client.getSociety("s1");
     await client.addSocietyTeamMember("s1", {
       email: "ops@societyhub.local",
+      phone: "8888888888",
       role: "secretary",
     });
     await client.listBuildings("s1");
@@ -283,6 +284,10 @@ describe("sdk client", () => {
     await client.myPayments();
     await client.recordPayment({ flatId: "f1", amountPaise: 1000, method: "cash" });
     await client.payBillMock("bill1");
+    await client.getPaymentAccount();
+    await client.updatePaymentAccount({ upiId: "society@upi" });
+    await client.acknowledgePayment("p1");
+    await client.rejectPayment("p1", "Unclear screenshot");
     expect(true).toBe(true);
   });
 
@@ -303,6 +308,13 @@ describe("sdk client", () => {
     await client.listAuditLogs();
     await client.listAuditLogs("bill");
     await client.listTeam();
+    await client.addTeamMember({
+      email: "ops@societyhub.local",
+      phone: "8888888888",
+      role: "secretary",
+    });
+    await client.updateTeamMember("u1", { phone: "8888888889" });
+    await client.removeTeamMember("u1");
     expect(true).toBe(true);
   });
 
