@@ -153,7 +153,7 @@ Google Auth Platform allows **one SHA-1 per Android client**. Sign-In matches **
 
 If Create says **package name and fingerprint are already in use**, that SHA-1 is already registered — in **this** project, another GCP project on the same Google account, or a deleted client still held for ~30 days. Sign-In only works when package + SHA-1 live in **`societyhub-507013`** (same project as the Web client). If the fingerprint is owned by a different project, delete it there, wait, then create it here.
 
-**Play login error `10:` / `10:, null, null)`** is Google Play Services **DEVELOPER_ERROR**. It happens on the phone *before* our API runs. Causes: Play signing SHA-1 missing from this project, Flutter `serverClientId` set to an **Android** client ID, or the plugin calling `signOut()` before `signIn()`. Use OTP until the SHA-1s above show under [Clients](https://console.cloud.google.com/auth/clients?project=societyhub-507013) and a new Play build (`1.0.5+` — Web client in Android `default_web_client_id`, no pre-signOut) is installed. If consent is **Testing**, add the tester Gmail on the OAuth audience list.
+**Play login error `10:` / `10:, null, null)`** is Google Play Services **DEVELOPER_ERROR**. It happens on the phone *before* our API runs. Causes: Play signing SHA-1 missing from this project, Flutter `serverClientId` set to an **Android** client ID, or the deprecated Google Sign-In SDK on current Play Services. Use OTP until the SHA-1s above show under [Clients](https://console.cloud.google.com/auth/clients?project=societyhub-507013) and a new Play build (`1.0.6+` — Credential Manager / `google_sign_in` 7) is installed. If consent is **Testing**, add the tester Gmail on the OAuth audience list.
 
 Print local fingerprints (does not print passwords):
 
@@ -494,6 +494,6 @@ Do **not** create production RG until staging UAT is green.
 - [x] Hosted API `/health` ok (`https://societyhub-api-ece6.onrender.com`)
 - [ ] OTP login on hosted Client App (confirm after `DEV_AUTH=false`)
 - [x] Play Console account (personal, Engineers Bay)
-- [x] Play app + AAB on **internal** track (`1.0.4+5`; next upload `1.0.5+6` for Google error 10)
+- [x] Play app + AAB on **internal** track (`1.0.5+6`; next upload `1.0.6+7` for Google error 10)
 - [ ] Confirm Google Sign-In on a **Play internal** install (wait after PQC client; add consent testers if needed)
 - [ ] Apple Developer + App Store Connect (next; not required for Android)

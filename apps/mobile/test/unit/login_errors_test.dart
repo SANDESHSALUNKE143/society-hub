@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:societyhub_mobile/api/models.dart';
 import 'package:societyhub_mobile/auth/login_errors.dart';
 
@@ -83,6 +84,24 @@ void main() {
   test('maps a cancelled Google picker', () {
     expect(
       loginErrorText(StateError('Google sign-in was cancelled. Try again.')),
+      contains('cancelled'),
+    );
+  });
+
+  test('maps Credential Manager configuration errors without leaking dumps', () {
+    expect(
+      loginErrorText(
+        const GoogleSignInException(
+          code: GoogleSignInExceptionCode.clientConfigurationError,
+          description: 'serverClientId must be provided on Android',
+        ),
+      ),
+      contains('error 10'),
+    );
+    expect(
+      loginErrorText(
+        const GoogleSignInException(code: GoogleSignInExceptionCode.canceled),
+      ),
       contains('cancelled'),
     );
   });
