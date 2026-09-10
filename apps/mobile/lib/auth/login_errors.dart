@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import '../api/models.dart';
 
@@ -22,6 +23,14 @@ String loginErrorText(Object error) {
           : error.message.trim().isEmpty
               ? 'Sign-in failed. Try OTP or email.'
               : error.message,
+    };
+  }
+
+  if (error is GoogleSignInException) {
+    return switch (error.code) {
+      GoogleSignInExceptionCode.canceled =>
+        'Google sign-in was cancelled. Try again, or use OTP or email.',
+      _ => _playGoogleSetupHint,
     };
   }
 
