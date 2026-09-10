@@ -29,8 +29,9 @@ class SocietyHubApi {
             Dio(
               BaseOptions(
                 baseUrl: config.baseUrl,
-                connectTimeout: const Duration(seconds: 15),
-                receiveTimeout: const Duration(seconds: 30),
+                // Render Hobby cold-starts can take ~60s; keep headroom.
+                connectTimeout: const Duration(seconds: 90),
+                receiveTimeout: const Duration(seconds: 90),
                 headers: {
                   'Accept': 'application/json',
                   'Content-Type': 'application/json',
@@ -126,18 +127,30 @@ class SocietyHubApi {
 
   ApiException _mapError(DioException e) {
     final data = e.response?.data;
-    if (data is Map<String, dynamic>) {
+    if (data is Map) {
+      final map = Map<String, dynamic>.from(data);
+      final apiMessage = map['message'] as String?;
+      if (apiMessage != null && apiMessage.trim().isNotEmpty) {
+        return ApiException(
+          code: map['code'] as String? ?? 'http_error',
+          message: apiMessage,
+          statusCode: e.response?.statusCode,
+          details: map['details'],
+        );
+      }
+    }
+    final status = e.response?.statusCode;
+    if (status == 404 || status == 502 || status == 503) {
       return ApiException(
-        code: data['code'] as String? ?? 'http_error',
-        message: data['message'] as String? ?? e.message ?? 'Request failed',
-        statusCode: e.response?.statusCode,
-        details: data['details'],
+        code: 'http_error',
+        message: 'Cannot reach the SocietyHub server.',
+        statusCode: status,
       );
     }
     return ApiException(
       code: 'http_error',
       message: e.message ?? 'Request failed',
-      statusCode: e.response?.statusCode,
+      statusCode: status,
     );
   }
 
@@ -337,16 +350,39 @@ class SocietyHubApi {
     );
   }
 
+  Future<List<ParkingSlotDto>> listResidentParkings() {
+    return _request(
+      '/v1/parking',
+      parse: (json) => (json as List<dynamic>)
+          .map((e) => ParkingSlotDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
   Future<ResidentProfileDto> updateProfile({
     String? emergencyContact,
     String? vehicleNumber,
+    bool? pngGasConnection,
+    int? adultCount,
+    int? childCount,
+    int? seniorCitizenCount,
+    String? parkingSlot,
+    String? parkingSlotId,
+    List<Map<String, Object?>>? vehicles,
   }) {
     return _request(
       '/v1/profile',
       method: 'PATCH',
       data: {
         'emergencyContact': emergencyContact,
-        'vehicleNumber': vehicleNumber,
+        if (vehicleNumber != null) 'vehicleNumber': vehicleNumber,
+        if (pngGasConnection != null) 'pngGasConnection': pngGasConnection,
+        if (adultCount != null) 'adultCount': adultCount,
+        if (childCount != null) 'childCount': childCount,
+        if (seniorCitizenCount != null) 'seniorCitizenCount': seniorCitizenCount,
+        if (parkingSlot != null) 'parkingSlot': parkingSlot,
+        if (parkingSlotId != null) 'parkingSlotId': parkingSlotId,
+        if (vehicles != null) 'vehicles': vehicles,
       },
       parse: (json) =>
           ResidentProfileDto.fromJson(json as Map<String, dynamic>),
@@ -371,11 +407,163 @@ class SocietyHubApi {
     );
   }
 
+  Future<List<ParkingSlotDto>> listParkings() {
+    return _request(
+      '/v1/admin/parkings',
+      parse: (json) => (json as List<dynamic>)
+          .map((e) => ParkingSlotDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Future<List<TeamMemberDto>> listTeam() {
+    return _request(
+      '/v1/team',
+      parse: (json) => (json as List<dynamic>)
+          .map((e) => TeamMemberDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Future<({String userId, String role, String societyName})> addTeamMember({
+    String? email,
+    String? phone,
+    String? name,
+    String role = 'committee',
+  }) {
+    return _request(
+      '/v1/team',
+      method: 'POST',
+      data: {
+        if (email != null && email.isNotEmpty) 'email': email,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (name != null && name.isNotEmpty) 'name': name,
+        'role': role,
+      },
+      parse: (json) {
+        final map = json as Map<String, dynamic>;
+        return (
+          userId: map['userId'] as String,
+          role: map['role'] as String,
+          societyName: map['societyName'] as String? ?? '',
+        );
+      },
+    );
+  }
+
+  Future<TeamMemberDto> updateTeamMember(
+    String userId, {
+    String? email,
+    String? phone,
+    String? name,
+    String? role,
+  }) {
+    return _request(
+      '/v1/team/$userId',
+      method: 'PATCH',
+      data: {
+        if (email != null && email.isNotEmpty) 'email': email,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (name != null && name.isNotEmpty) 'name': name,
+        if (role != null && role.isNotEmpty) 'role': role,
+      },
+      parse: (json) => TeamMemberDto.fromJson(json as Map<String, dynamic>),
+    );
+  }
+
+  Future<void> removeTeamMember(String userId) {
+    return _request(
+      '/v1/team/$userId',
+      method: 'DELETE',
+      parse: (_) {},
+    );
+  }
+
+  Future<List<SocietyResidentDto>> listResidents() {
+    return _request(
+      '/v1/admin/residents',
+      parse: (json) => (json as List<dynamic>)
+          .map((e) => SocietyResidentDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Future<List<SocietyResidentDto>> listHouseholdMembers() {
+    return _request(
+      '/v1/household/members',
+      parse: (json) => (json as List<dynamic>)
+          .map((e) => SocietyResidentDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Future<UserDto> addHouseholdMember({
+    required String name,
+    required String phone,
+    String? email,
+  }) {
+    return _request(
+      '/v1/household/members',
+      method: 'POST',
+      data: {
+        'name': name,
+        'phone': phone,
+        if (email != null && email.isNotEmpty) 'email': email,
+      },
+      parse: (json) {
+        final map = json as Map<String, dynamic>;
+        final user = map['user'] as Map<String, dynamic>? ?? map;
+        return UserDto.fromJson(user);
+      },
+    );
+  }
+
+  Future<UserDto> updateHouseholdMember({
+    required String userId,
+    required String name,
+    required String phone,
+    String? email,
+  }) {
+    return _request(
+      '/v1/household/members/$userId',
+      method: 'PATCH',
+      data: {
+        'name': name,
+        'phone': phone,
+        if (email != null && email.isNotEmpty) 'email': email,
+      },
+      parse: (json) {
+        final map = json as Map<String, dynamic>;
+        final user = map['user'] as Map<String, dynamic>? ?? map;
+        return UserDto.fromJson(user);
+      },
+    );
+  }
+
+  Future<void> removeHouseholdMember(String userId) {
+    return _request(
+      '/v1/household/members/$userId',
+      method: 'DELETE',
+      parse: (_) {},
+    );
+  }
+
   Future<UserDto> onboardResident({
     required String name,
     required String phone,
     required String flatId,
     String? email,
+    int? floor,
+    String? parkingSlot,
+    String? parkingSlotId,
+    bool isOwner = true,
+    bool editOwner = false,
+    String? emergencyContact,
+    bool? pngGasConnection,
+    int? adultCount,
+    int? childCount,
+    int? seniorCitizenCount,
+    List<Map<String, Object?>>? vehicles,
   }) {
     return _request(
       '/v1/admin/residents',
@@ -385,6 +573,19 @@ class SocietyHubApi {
         'phone': phone,
         'flatId': flatId,
         if (email != null && email.isNotEmpty) 'email': email,
+        if (floor != null) 'floor': floor,
+        if (parkingSlot != null && parkingSlot.isNotEmpty) 'parkingSlot': parkingSlot,
+        if (parkingSlotId != null && parkingSlotId.isNotEmpty)
+          'parkingSlotId': parkingSlotId,
+        'isOwner': isOwner,
+        if (editOwner) 'editOwner': true,
+        if (emergencyContact != null && emergencyContact.isNotEmpty)
+          'emergencyContact': emergencyContact,
+        if (pngGasConnection != null) 'pngGasConnection': pngGasConnection,
+        if (adultCount != null) 'adultCount': adultCount,
+        if (childCount != null) 'childCount': childCount,
+        if (seniorCitizenCount != null) 'seniorCitizenCount': seniorCitizenCount,
+        if (vehicles != null) 'vehicles': vehicles,
       },
       parse: (json) {
         final map = json as Map<String, dynamic>;

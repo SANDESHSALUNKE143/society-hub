@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Matches `apps/client-app` Hindu / temple palette (saffron + kumkum + gold).
 abstract final class AppColors {
@@ -17,12 +16,15 @@ abstract final class AppColors {
 }
 
 ThemeData buildAppTheme() {
-  final baseText = GoogleFonts.outfitTextTheme();
-  final display = GoogleFonts.cormorantGaramond();
-
-  return ThemeData(
+  // Roboto / sans-serif only. Outfit and some OEM serif faces drop U+0020
+  // on Samsung Play installs, so login copy ran together.
+  final base = ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
+    fontFamily: 'sans-serif',
+  );
+
+  return base.copyWith(
     scaffoldBackgroundColor: AppColors.paper,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.saffron,
@@ -32,7 +34,7 @@ ThemeData buildAppTheme() {
       onSurface: AppColors.ink,
       error: AppColors.danger,
     ),
-    textTheme: baseText.apply(
+    textTheme: base.textTheme.apply(
       bodyColor: AppColors.ink,
       displayColor: AppColors.leafDark,
     ),
@@ -40,11 +42,7 @@ ThemeData buildAppTheme() {
       backgroundColor: AppColors.card.withValues(alpha: 0.9),
       foregroundColor: AppColors.leafDark,
       elevation: 0,
-      titleTextStyle: display.copyWith(
-        fontSize: 22,
-        fontWeight: FontWeight.w700,
-        color: AppColors.leafDark,
-      ),
+      titleTextStyle: displayStyle(size: 22),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -63,6 +61,7 @@ ThemeData buildAppTheme() {
         borderSide: const BorderSide(color: AppColors.leaf, width: 1.5),
       ),
       labelStyle: const TextStyle(
+        fontFamily: 'sans-serif',
         fontWeight: FontWeight.w600,
         fontSize: 14,
         color: AppColors.ink,
@@ -74,7 +73,11 @@ ThemeData buildAppTheme() {
         foregroundColor: const Color(0xFFFFFDF8),
         minimumSize: const Size.fromHeight(48),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+        textStyle: const TextStyle(
+          fontFamily: 'sans-serif',
+          fontWeight: FontWeight.w600,
+          fontSize: 16,
+        ),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -97,10 +100,12 @@ ThemeData buildAppTheme() {
 }
 
 TextStyle displayStyle({double size = 24, Color color = AppColors.leafDark}) {
-  return GoogleFonts.cormorantGaramond(
+  return TextStyle(
     fontSize: size,
     fontWeight: FontWeight.w700,
     color: color,
-    letterSpacing: 0.01,
+    height: 1.15,
+    letterSpacing: 0,
+    fontFamily: 'sans-serif',
   );
 }

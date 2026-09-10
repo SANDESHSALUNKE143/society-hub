@@ -83,12 +83,21 @@ describe("sdk client", () => {
     await client.changePassword("oldpass12", "newpass12");
     await client.logout("ref");
     await client.listFlats();
+    await client.listSocietyResidents();
+    await client.listResidents();
     await client.onboardResident({
       name: "R",
       phone: "7777777777",
       flatId: "66666666-6666-6666-6666-666666666666",
       email: "r@e.com",
     });
+    await client.importResidents({
+      rows: [{ name: "R", phone: "7777777777", flatNumber: "101" }],
+    });
+    await client.listPlatformUsers("ops");
+    await client.getPlatformUser("u1");
+    await client.listUserActivity("u1");
+    await client.listPlatformActivity();
     await client.listComplaints(1, 10);
     await client.getComplaint("c1");
     await client.createComplaint({
@@ -231,13 +240,36 @@ describe("sdk client", () => {
     });
     await client.listMemberships();
     await client.selectTenant("11111111-1111-1111-1111-111111111111");
-    await client.updateProfile({ vehicleNumber: "MH12AB1234" });
+    await client.updateProfile({
+      vehicleNumber: "MH12AB1234",
+      communicationPreferences: { email: true, push: false },
+      vehicles: [
+        {
+          kind: "four_wheeler",
+          registrationNumber: "MH12AB1234",
+          parkingPurchased: false,
+        },
+      ],
+    });
+    await client.listHouseholdMembers();
+    await client.addHouseholdMember({ name: "Kid", phone: "8888888881" });
+    await client.updateHouseholdMember("u-kid", {
+      name: "Kid",
+      phone: "8888888881",
+    });
+    await client.removeHouseholdMember("u-kid");
+    await client.removeResident("u-kid");
     expect(paths).toEqual([
       "http://api.test/v1/auth/memberships",
       "http://api.test/v1/auth/select-tenant",
       // Profile edits go to the canonical /v1/profile route, which also
-      // accepts the display name and communication preferences.
+      // accepts the display name, communication preferences, and vehicles.
       "http://api.test/v1/profile",
+      "http://api.test/v1/household/members",
+      "http://api.test/v1/household/members",
+      "http://api.test/v1/household/members/u-kid",
+      "http://api.test/v1/household/members/u-kid",
+      "http://api.test/v1/admin/residents/by-user/u-kid",
     ]);
   });
 
@@ -254,18 +286,54 @@ describe("sdk client", () => {
     await client.listSocieties();
     await client.createSociety({ name: "Keshav Heights" });
     await client.getSociety("s1");
+    await client.listSocietyTeam("s1");
     await client.addSocietyTeamMember("s1", {
       email: "ops@societyhub.local",
+      phone: "8888888888",
       role: "secretary",
     });
+    await client.removeSocietyTeamMember("s1", "u1");
+    await client.listManageSocietyFlats("s1");
+    await client.addManageSocietyFlat("s1", {
+      wing: "A",
+      floor: 3,
+      flatNumber: "101",
+    });
+    await client.importManageSocietyFlats("s1", [
+      { wing: "B", floor: 1, flatNumber: "201" },
+    ]);
+    await client.updateManageSocietyFlat("s1", "f1", {
+      wing: "A",
+      floor: 4,
+      flatNumber: "102",
+    });
+    await client.deleteManageSocietyFlat("s1", "f1");
+    await client.listManageSocietyParkings("s1");
+    await client.addManageSocietyParking("s1", {
+      kind: "puzzle",
+      wing: "A",
+      slotNumber: "12",
+    });
+    await client.importManageSocietyParkings("s1", [
+      { kind: "open", slotNumber: "OP-1" },
+    ]);
+    await client.updateManageSocietyParking("s1", "p1", {
+      kind: "open",
+      slotNumber: "OP-2",
+    });
+    await client.deleteManageSocietyParking("s1", "p1");
+    await client.listParkings();
     await client.listBuildings("s1");
     await client.createBuilding("s1", "Tower A");
     await client.listWings("b1");
     await client.createWing("b1", "A");
     await client.listFlatsForWing("w1");
     await client.createFlat("w1", "101");
-    expect(paths.length).toBe(10);
+    expect(paths.length).toBe(23);
     expect(paths.some((p) => p.includes("/v1/manage/societies/s1/team"))).toBe(true);
+    expect(paths.some((p) => p.includes("/v1/manage/societies/s1/flats"))).toBe(true);
+    expect(paths.some((p) => p.includes("/v1/manage/societies/s1/parkings"))).toBe(true);
+    expect(paths.some((p) => p.includes("/v1/manage/societies/s1/team/u1"))).toBe(true);
   });
 
   test("invitation, bill, and payment helpers", async () => {
@@ -285,6 +353,13 @@ describe("sdk client", () => {
     await client.myPayments();
     await client.recordPayment({ flatId: "f1", amountPaise: 1000, method: "cash" });
     await client.payBillMock("bill1");
+    await client.getPaymentAccount();
+    await client.updatePaymentAccount({ upiId: "society@upi" });
+    const screenshot = new File(["x"], "proof.png", { type: "image/png" });
+    await client.uploadPaymentQr(screenshot);
+    await client.submitOfflinePayment("bill1", screenshot);
+    await client.acknowledgePayment("p1");
+    await client.rejectPayment("p1", "Unclear screenshot");
     expect(true).toBe(true);
   });
 
@@ -305,6 +380,13 @@ describe("sdk client", () => {
     await client.listAuditLogs();
     await client.listAuditLogs("bill");
     await client.listTeam();
+    await client.addTeamMember({
+      email: "ops@societyhub.local",
+      phone: "8888888888",
+      role: "secretary",
+    });
+    await client.updateTeamMember("u1", { phone: "8888888889" });
+    await client.removeTeamMember("u1");
     expect(true).toBe(true);
   });
 

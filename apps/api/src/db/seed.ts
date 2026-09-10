@@ -25,6 +25,9 @@ const FLAT_ID = "66666666-6666-6666-6666-666666666666";
 
 const SUPERADMIN_USERNAME = "superadmin";
 const SUPERADMIN_PASSWORD = process.env.SUPERADMIN_PASSWORD ?? "Test@1234";
+const SUPERADMIN_EMAIL =
+  process.env.SUPERADMIN_EMAIL ?? "superadmin@societyhub.local";
+const SUPERADMIN_NAME = process.env.SUPERADMIN_NAME ?? "Platform Superadmin";
 
 /**
  * A live, verified owner membership. `activeKey: "Y"` is what marks the row as
@@ -35,6 +38,16 @@ const ACTIVE_OWNER_MEMBERSHIP = {
   isOwner: true,
   residentType: "owner",
   isPrimary: true,
+  status: "active",
+  verificationStatus: "approved",
+  activeKey: "Y",
+} as const;
+
+/** Chairperson is a resident of the same flat but must not be a second owner (FR-ONB-2). */
+const ACTIVE_FAMILY_MEMBERSHIP = {
+  isOwner: false,
+  residentType: "family",
+  isPrimary: false,
   status: "active",
   verificationStatus: "approved",
   activeKey: "Y",
@@ -121,7 +134,7 @@ async function ensureSociety() {
     tenantId: TENANT_ID,
     userId: ADMIN_USER_ID,
     flatId: FLAT_ID,
-    ...ACTIVE_OWNER_MEMBERSHIP,
+    ...ACTIVE_FAMILY_MEMBERSHIP,
   });
 
   return true;
@@ -154,7 +167,7 @@ async function ensureChairpersonResident() {
     tenantId: TENANT_ID,
     userId: ADMIN_USER_ID,
     flatId: FLAT_ID,
-    ...ACTIVE_OWNER_MEMBERSHIP,
+    ...ACTIVE_FAMILY_MEMBERSHIP,
   });
   console.log("Linked chairperson (9999999999) to flat 101 for Resident mode");
 }
@@ -172,8 +185,8 @@ async function ensureSuperadmin() {
       .update(users)
       .set({
         passwordHash,
-        name: "Platform Superadmin",
-        email: "superadmin@societyhub.local",
+        name: SUPERADMIN_NAME,
+        email: SUPERADMIN_EMAIL,
         isDeleted: false,
       })
       .where(eq(users.id, existing.id));
@@ -204,8 +217,8 @@ async function ensureSuperadmin() {
     id: SUPERADMIN_USER_ID,
     username: SUPERADMIN_USERNAME,
     passwordHash,
-    name: "Platform Superadmin",
-    email: "superadmin@societyhub.local",
+    name: SUPERADMIN_NAME,
+    email: SUPERADMIN_EMAIL,
   });
 
   await db.insert(userRoles).values({
@@ -229,7 +242,7 @@ async function main() {
   } else {
     console.log("Keshav Heights already present");
   }
-  console.log(`Superadmin email: superadmin@societyhub.local`);
+  console.log(`Superadmin email: ${SUPERADMIN_EMAIL}`);
   console.log("Superadmin password: (from SUPERADMIN_PASSWORD or default seed)");
 }
 

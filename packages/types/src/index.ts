@@ -111,8 +111,69 @@ export type FlatDto = {
   wingId?: string;
   floor?: number | null;
   parkingSlot?: string | null;
+  pngGasConnection?: boolean;
+  twoWheelerCount?: number;
+  fourWheelerCount?: number;
+  adultCount?: number;
+  childCount?: number;
+  seniorCitizenCount?: number;
   details?: Record<string, string> | null;
 };
+
+/** Included parking per flat until society settings override this (FR-ONB-7). */
+export const INCLUDED_TWO_WHEELER_PARKING = 2;
+export const INCLUDED_FOUR_WHEELER_PARKING = 1;
+
+export type ResidentVehicleKind = "two_wheeler" | "four_wheeler";
+
+export type ResidentVehicleDto = {
+  kind: ResidentVehicleKind;
+  registrationNumber: string | null;
+  parkingPurchased: boolean;
+  parkingSlot: string | null;
+};
+
+/** Expand a CSV/API count into vehicle rows (no plates). Extras are purchased. */
+export function vehiclesFromKindCount(
+  kind: ResidentVehicleKind,
+  count: number,
+): Array<{
+  kind: ResidentVehicleKind;
+  registrationNumber: null;
+  parkingPurchased: boolean;
+}> {
+  const n = Math.max(0, Math.floor(count));
+  const included =
+    kind === "two_wheeler"
+      ? INCLUDED_TWO_WHEELER_PARKING
+      : INCLUDED_FOUR_WHEELER_PARKING;
+  return Array.from({ length: n }, (_, i) => ({
+    kind,
+    registrationNumber: null,
+    parkingPurchased: i >= included,
+  }));
+}
+
+export function vehicleParkingQuotaMessage(
+  vehicles: Array<{
+    kind: ResidentVehicleKind;
+    parkingPurchased?: boolean;
+  }>,
+): string | null {
+  const two = vehicles.filter((v) => v.kind === "two_wheeler");
+  const four = vehicles.filter((v) => v.kind === "four_wheeler");
+  for (let i = 0; i < two.length; i++) {
+    if (i >= INCLUDED_TWO_WHEELER_PARKING && !two[i]!.parkingPurchased) {
+      return `Two-wheeler ${i + 1} needs purchased parking (first ${INCLUDED_TWO_WHEELER_PARKING} included)`;
+    }
+  }
+  for (let i = 0; i < four.length; i++) {
+    if (i >= INCLUDED_FOUR_WHEELER_PARKING && !four[i]!.parkingPurchased) {
+      return `Four-wheeler ${i + 1} needs purchased parking (first ${INCLUDED_FOUR_WHEELER_PARKING} included)`;
+    }
+  }
+  return null;
+}
 
 export type Paginated<T> = {
   items: T[];
@@ -281,13 +342,6 @@ export type ResidentDocumentDto = {
   downloadPath: string;
 };
 
-export type ResidentVehicleDto = {
-  id: string;
-  slotNumber: string;
-  vehicleNumber: string | null;
-  type: string;
-};
-
 export type ResidentDetailDto = ResidentSummaryDto & {
   societyName: string | null;
   remarks: string | null;
@@ -393,6 +447,7 @@ export type ResidentProfileDto = {
   emergencyContactPhone: string | null;
   vehicleNumber: string | null;
   communicationPreferences: CommunicationPreferences;
+  vehicles: ResidentVehicleDto[];
   societyName: string | null;
   /** The signed-in user's active membership in the current society. */
   membership: {
@@ -414,6 +469,12 @@ export type ResidentProfileDto = {
     buildingName: string | null;
     floor: number | null;
     parkingSlot: string | null;
+    pngGasConnection: boolean;
+    adultCount: number;
+    childCount: number;
+    seniorCitizenCount: number;
+    twoWheelerCount: number;
+    fourWheelerCount: number;
     isOwner: boolean;
   } | null;
 };
@@ -431,8 +492,16 @@ export type BillDto = {
   createdAt: string;
 };
 
-export type PaymentMethod = "razorpay" | "cash" | "cheque" | "neft";
+export type PaymentMethod = "razorpay" | "cash" | "cheque" | "neft" | "upi";
 export type PaymentStatus = "pending" | "success" | "failed";
+
+export type PaymentAccountDto = {
+  upiId: string | null;
+  accountName: string | null;
+  accountNumber: string | null;
+  ifsc: string | null;
+  qrUrl: string | null;
+};
 
 export type PaymentDto = {
   id: string;
@@ -443,6 +512,8 @@ export type PaymentDto = {
   method: PaymentMethod;
   status: PaymentStatus;
   receiptNumber: string | null;
+  proofUrl: string | null;
+  reviewNote: string | null;
   createdAt: string;
 };
 
@@ -567,12 +638,45 @@ export type ResidentImportPreviewDto = {
   rows: ResidentImportPreviewRowDto[];
 };
 
+export type SocietyFlatInput = {
+  wing: string;
+  floor: number;
+  flatNumber: string;
+};
+
+export type ParkingKind = "puzzle" | "open";
+
+export type SocietyParkingInput = {
+  kind: ParkingKind;
+  wing: string | null;
+  floor: number | null;
+  slotNumber: string;
+};
+
+export type SocietyFlatImportResultDto = {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: ResidentImportRowError[];
+};
+
 export type TeamMemberDto = {
   userId: string;
   name: string | null;
   email: string | null;
   phone: string | null;
   role: Role;
+};
+
+export type SocietyResidentDto = {
+  userId: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  flatId: string;
+  flatNumber: string;
+  wingName: string | null;
+  isOwner: boolean;
 };
 
 export type VisitorDto = {
@@ -595,6 +699,9 @@ export type ParkingSlotDto = {
   slotNumber: string;
   vehicleNumber: string | null;
   type: string;
+  kind: ParkingKind;
+  wing: string | null;
+  floor: number | null;
   createdAt: string;
 };
 

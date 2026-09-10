@@ -10,6 +10,8 @@ export const ActivityType = {
   USER_GOOGLE_LOGIN: "user.google_login",
   SOCIETY_CREATED: "society.created",
   SOCIETY_TEAM_MEMBER_ADDED: "society.team_member_added",
+  SOCIETY_TEAM_MEMBER_UPDATED: "society.team_member_updated",
+  SOCIETY_TEAM_MEMBER_REMOVED: "society.team_member_removed",
   COMPLAINT_CREATED: "complaint.created",
   COMPLAINT_STATUS_CHANGED: "complaint.status_changed",
   COMPLAINT_COMMENT_ADDED: "complaint.comment_added",

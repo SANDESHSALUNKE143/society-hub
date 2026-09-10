@@ -37,6 +37,8 @@
 | `buildings` | Buildings within society |
 | `wings` | Wings within building |
 | `flats` | Flats within wing |
+| `parking_slots` | Society parking inventory: puzzle (wing + number) or open (number). Optional link to a flat. |
+| `resident_vehicles` | Registered two-wheelers / four-wheelers per resident (parking included vs purchased) |
 | `society_settings` | SLA days, billing defaults, notification prefs |
 
 ### Identity and residents
@@ -46,7 +48,7 @@
 | `users` | Login identity (phone, email, google subject). **Global — no `tenant_id`.** |
 | `otp_challenges` | OTP request/verify records |
 | `user_roles` | Role per user per tenant |
-| `residents` | **Society membership + flat occupancy period** — see §5 |
+| `residents` | **Society membership + flat occupancy period** — see §5. One active owner per flat (`is_owner`). |
 | `resident_profiles` | Per-society profile: emergency contact, vehicle note, channel preferences |
 | `resident_family_members` | Household members of a membership (may have no login) |
 | `verification_documents` | Metadata + blob path + review state for verification docs |
@@ -69,7 +71,7 @@
 |-------|---------|
 | `bills` | Period bill per flat |
 | `bill_line_items` | Line amounts/descriptions |
-| `payments` | Razorpay or manual payment rows |
+| `payments` | Offline UPI proof (pending review) or staff-recorded cash/cheque/NEFT; Razorpay columns reserved for later |
 
 ### Notices and notifications
 
@@ -95,6 +97,7 @@ erDiagram
   societies ||--o| society_settings : has
   flats ||--o{ residents : occupied_by
   users ||--o{ residents : linked
+  users ||--o{ resident_vehicles : registers
   users ||--o{ user_roles : has
   residents ||--o{ resident_family_members : household
   residents ||--o{ verification_documents : submits
@@ -121,7 +124,8 @@ Full rationale in [implementation/phase-1-domain.md](implementation/phase-1-doma
 
 - `resident_type`: `owner` | `tenant` | `family`; `is_primary` separates the primary owner/tenant
   from co-owners and additional occupants
-- `is_owner` is kept as a **derived mirror** of `resident_type = 'owner'` for backward compatibility
+- `is_owner` is kept as a **derived mirror** of `resident_type = 'owner'` for backward compatibility.
+  **One active owner per flat:** `is_owner` is true for exactly one currently occupying row per flat.
 - `status`: `invited` | `pending_verification` | `active` | `suspended` | `moved_out` | `rejected`
   — transitions are enforced in `apps/api/src/lib/resident-lifecycle.ts`; `moved_out` is terminal
 - `verification_status`: `pending` | `under_review` | `approved` | `rejected`, plus `verified_by`,
@@ -139,6 +143,8 @@ NULL` is the single predicate for "currently occupies".
 
 Indexes: `(tenant_id)`, `(tenant_id, user_id)`, `(tenant_id, flat_id, active_key)`,
 `(tenant_id, status)`, `(tenant_id, verification_status)`.
+
+Login identity is **mobile**; `users.email` is optional and unique when set.
 
 ### resident_family_members
 
@@ -171,6 +177,33 @@ Per-society profile for a user: structured emergency contact
 (`emergency_contact_name/relation/phone`), `vehicle_number`, and `communication_prefs_json`
 (`{"inApp":true,"push":true,"email":true,"whatsapp":false,"sms":false}`). The older free-text
 `emergency_contact` column is deprecated but retained.
+
+`resident_profiles.vehicle_number` remains a convenience copy of the first four-wheeler plate (else first two-wheeler) for older profile UI. Residents with a linked flat can update household PNG, family counts, and their `resident_vehicles` via `PATCH /v1/profile` (FR-ONB-10).
+
+### flats (onboard extras)
+
+- `floor` nullable int
+- `parking_slot` varchar — primary slot label for the flat (matches `parking_slots.slot_number` when assigned)
+- `png_gas_connection` boolean, default false — whether this flat has taken a PNG gas connection
+- `adult_count`, `child_count`, `senior_citizen_count` — household size by age group (non-negative ints, default 0)
+
+### parking_slots
+
+- `kind`: `puzzle` | `open` (default `open` for older rows)
+- `wing` nullable varchar — required for puzzle (A / B / C / D typical)
+- `floor` nullable int — unused for inventory (kept for older rows)
+- `slot_number` — puzzle unique with kind + wing; open unique by number among open slots
+- `flat_id` nullable — set when a household uses this slot
+- `type` — legacy vehicle hint (`car` / `bike`); inventory kind is `kind`, not `type`
+
+### resident_vehicles
+
+- `user_id` + `tenant_id` — the onboarded resident
+- `kind`: `two_wheeler` | `four_wheeler`
+- `registration_number` nullable — CSV count-only import may omit plates
+- `parking_purchased` — required true when this vehicle is beyond the included quota for the **flat** (2 two-wheelers and 1 four-wheeler, counted across all family members)
+- `parking_slot` optional label for that vehicle
+- `sort_order` — display / quota order (first N of each kind on the flat use included parking)
 
 ### complaints
 
@@ -207,12 +240,19 @@ Per-society profile for a user: structured emergency contact
 - `status`: Unpaid | Partial | Paid | Overdue | Void
 - Unique constraint: one non-void bill per flat per period (per tenant)
 
+### societies (payment account)
+
+- `upi_id`, `account_name`, `account_number`, `ifsc` — shown to residents for offline pay
+- `qr_blob_path`, `qr_content_type` — optional society QR image
+
 ### payments
 
-- `bill_id`, `amount`, `mode`: razorpay | cash | cheque | neft
-- `provider_payment_id` / `provider_order_id` for Razorpay (unique for idempotency)
-- `reference` for offline modes
-- `status`: created | captured | failed | cancelled
+- `bill_id`, `amount`, `method`: upi | cash | cheque | neft | razorpay (razorpay unused until Phase 2 checkout)
+- `status`: pending (screenshot submitted) | success (acknowledged / staff-recorded) | failed (rejected)
+- `proof_blob_path` / `proof_content_type` for resident UPI screenshot
+- `review_note` when staff acknowledge or reject
+- `provider_payment_id` / `provider_order_id` reserved for future Razorpay
+- `receipt_number` issued on success
 
 ### notices
 

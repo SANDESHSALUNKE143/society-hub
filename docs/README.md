@@ -2,12 +2,12 @@
 
 Functional and technical specification for SocietyHub.
 
-**How to read:** follow `00` → `09`. Product behavior is in the PRD; stack overview in Tech Stack; system design in Architecture; schemas in Database; **HTTP API** in [09-API](09-API.md). **Local run:** [08-Local-Development](08-Local-Development.md). Agents treat this folder as source of truth ([prompts/cursor-system.md](prompts/cursor-system.md), root [AGENTS.md](../AGENTS.md)).
+**How to read:** follow `00` → `12`. Product behavior is in the PRD; stack overview in Tech Stack; system design in Architecture; schemas in Database; **HTTP API** in [09-API](09-API.md). **Local run:** [08-Local-Development](08-Local-Development.md). **Pipelines:** [12-CICD](12-CICD.md). Agents treat this folder as source of truth ([prompts/cursor-system.md](prompts/cursor-system.md), root [AGENTS.md](../AGENTS.md)).
 
 **Pilot:** Keshav Heights Society  
 **Phase 1:** two responsive web apps — **`apps/client-app`** (residents) + **`apps/manage`** (admin) — working **Complaints** + auth/onboard, plus **Society & Resident Management 2.0** (directory, membership lifecycle, verification, documents, family, flat occupancy, invitations, society team — see [implementation/phase-1-domain](implementation/phase-1-domain.md)); other planned modules shown as **Coming soon**.  
 **Phase 2:** implement Coming soon for real (billing, payments, notices, …) — see [PRD](02-PRD.md).  
-**Future:** Flutter, WhatsApp, visitor, parking, etc.
+**Native mobile:** Flutter in `apps/mobile/` — **Android on Play** (internal/closed, package `com.societyhub.societyhub_mobile`); **iOS Simulator locally** (bundle `com.societyhub.societyhubMobile`, App Store listing next). Web MVP unchanged. Preview URLs and run commands: root [README.md](../README.md).
 
 ## Document index
 
@@ -23,6 +23,10 @@ Functional and technical specification for SocietyHub.
 | [07-Tech-Stack](07-Tech-Stack.md) | **Full tech stack explanation** (what & why) |
 | [08-Local-Development](08-Local-Development.md) | **Install, MySQL Workbench, run API + web + manage locally** |
 | [09-API](09-API.md) | **REST `/v1` developer guide** (auth, roles, inventory, examples — Fassport-style) |
+| [10-Go-Live](10-Go-Live.md) | **Cheapest Workspace + Azure host + Google SSO + Play/App Store + CI/CD** |
+| [11-Engineers-Bay-Workspace](11-Engineers-Bay-Workspace.md) | **Company domain live:** `engineersbay.in`, Base plan, mail setup status |
+| [12-CICD](12-CICD.md) | **Current pipelines:** git flow, CI, Promote preview, Mobile AAB, Render, secrets |
+| [Play CI/CD Drive note](SocietyHub-Play-CICD-GDrive-Note.txt) | **Operator cheat-sheet** for Play internal + GitHub secrets (copy to Drive; no keys) |
 | [PRODUCT-SUMMARY](PRODUCT-SUMMARY.md) | What exists today, verified against the codebase |
 | [implementation/phase-1-domain](implementation/phase-1-domain.md) | **Society & Resident Management domain** — user vs membership vs occupancy, lifecycle, verification, invitations |
 | [implementation/phase-1-resident-management-assessment](implementation/phase-1-resident-management-assessment.md) | Pre-implementation survey of what already existed |
@@ -47,14 +51,14 @@ See the dedicated guide: **[07-Tech-Stack.md](07-Tech-Stack.md)** (what we use, 
 | Web | React + TypeScript + Vite + Tailwind (+ headless/Radix) |
 | Auth | OTP via MSG91 + Google SSO + PIN |
 | Speech | Browser Web Speech API (client-side) |
-| Hosting | Azure Container Apps + Static Web Apps + Azure Database for MySQL (see `devops/`) |
+| Hosting | Render Hobby preview now; Azure Container Apps + Static Web Apps + MySQL after UAT (see `devops/`) |
 | Tests (when implementing) | Vitest + Playwright |
 
 **Phase 2 stack (when needed):** Redis + BullMQ, Resend, Firebase web push, Razorpay.
 
 ### Future
 
-- Flutter native apps (`apps/mobile/android`, `apps/mobile/ios` placeholders)
+- iOS App Store (same Flutter project; after Android internal track)
 - WhatsApp Business API notifications
 - Microservices / Kubernetes
 - Visitor, parking, clubhouse, vendor marketplace, AI assistant, builder edition
@@ -65,5 +69,5 @@ See the dedicated guide: **[07-Tech-Stack.md](07-Tech-Stack.md)** (what we use, 
 - Root [AGENTS.md](../AGENTS.md)
 - Project skills: [`.cursor/skills/`](../.cursor/skills/)
 - DevOps / Azure: [`devops/`](../devops/README.md)
-- Mobile placeholders: [`apps/mobile/`](../apps/mobile/README.md)
+- Mobile (Flutter Android): [`apps/mobile/`](../apps/mobile/README.md)
 - Implementation backlog: GitHub Issues on this repository

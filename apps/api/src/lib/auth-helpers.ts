@@ -50,6 +50,37 @@ export function canUseAdminMode(role: Role) {
   return isSocietyStaffRole(role) || isPlatformRole(role);
 }
 
+/** Default login role: platform first so Super Admin can open Manage. */
+export function pickDefaultRole(roles: Role[]): Role | undefined {
+  if (!roles.length) return undefined;
+  const normalized = roles.map(normalizeRole);
+  const platform = normalized.find((r) => isPlatformRole(r));
+  if (platform) return platform;
+  const staff = SOCIETY_STAFF_ROLES.filter((r) => r !== "admin").find((r) =>
+    normalized.includes(r),
+  );
+  if (staff) return staff;
+  return normalized.find((r) => isResidentLikeRole(r)) ?? normalized[0];
+}
+
+/** One membership per society — Client App switches Admin | Resident in-app. */
+export function collapseMembershipsByTenant<T extends { tenantId: string; role: Role }>(
+  rows: T[],
+): T[] {
+  const byTenant = new Map<string, T[]>();
+  for (const row of rows) {
+    const list = byTenant.get(row.tenantId) ?? [];
+    list.push(row);
+    byTenant.set(row.tenantId, list);
+  }
+  return [...byTenant.values()].map((group) => {
+    const preferred = pickDefaultRole(group.map((g) => g.role));
+    return (
+      group.find((g) => normalizeRole(g.role) === preferred) ?? group[0]!
+    );
+  });
+}
+
 export function requireAuth(auth: AccessClaims | null): AccessClaims {
   if (!auth) throw new AppError(401, "unauthorized", "Authentication required");
   return auth;

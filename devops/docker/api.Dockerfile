@@ -24,9 +24,12 @@ COPY --from=deps /app /app
 COPY apps/api apps/api
 COPY packages packages
 COPY turbo.json tsconfig.base.json package.json ./
+COPY devops/docker/api-start.sh /app/api-start.sh
+RUN chmod +x /app/api-start.sh
 WORKDIR /app/apps/api
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3000/health || exit 1
+# Render injects PORT (often 10000). Shell form so ${PORT} expands.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:${PORT:-3000}/health || exit 1
 USER bun
-CMD ["bun", "run", "src/index.ts"]
+CMD ["/app/api-start.sh"]

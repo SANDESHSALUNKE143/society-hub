@@ -1,25 +1,24 @@
 # GitHub Actions (CI/CD)
 
-Enable these workflows **after Phase 1 application code exists** and Azure resources are provisioned.
+**Branch flow:** [PIPELINE.md](../PIPELINE.md) — feature → `staging` → Promote preview → `main` → Render.
 
-## Plan
+Live workflows live in [`.github/workflows/`](../../.github/workflows/).  
+Full buy/host/SSO checklist: [docs/10-Go-Live.md](../../docs/10-Go-Live.md).
 
 | Workflow | Trigger | Action |
 |----------|---------|--------|
-| CI | PR / push to `main` or `feature/*` | Lint, typecheck, test, build |
-| Deploy staging | Push to `main` (or manual) | Build/push images → Container Apps staging |
-| Deploy production | Manual / tag `v*` with environment approval | Promote same image digest to production |
+| `ci.yml` | PR / push to `staging` or `main` | MySQL service, migrate, seed, `bun run quality`, Terraform fmt/validate |
+| `promote-guard.yml` | PR into `main` | Fail unless the head branch is `staging` |
+| `promote-preview.yml` | Manual | Merge `staging` → `main` (Render then auto-deploys) |
+| `mobile.yml` | Changes under `apps/mobile/` | `flutter analyze` + `flutter test` |
+| `deploy-staging.yml` | Manual | Azure only — idle until secrets exist |
+| `deploy-production.yml` | Manual + `production` reviewers | Azure only — idle until secrets exist |
 
-Use **OIDC** login to Azure (`azure/login` with federated credentials).
+Examples in this folder are historical templates. Prefer the workflows under `.github/workflows/`.
 
-## Examples
+## Required GitHub config
 
-- [deploy-staging.yml.example](deploy-staging.yml.example)  
-- [deploy-production.yml.example](deploy-production.yml.example)  
+- Environments: `staging`, `production` (production = required reviewers)
+- Secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `ACR_NAME`, `ACR_LOGIN_SERVER`, `AZURE_RESOURCE_GROUP`, `CONTAINER_APP_NAME`, `SWA_TOKEN_CLIENT`, `SWA_TOKEN_MANAGE`, `VITE_API_URL`
 
-Copy into `.github/workflows/` and replace placeholders when ready — keep examples here until then so the Spec-first repo stays clear.
-
-## Required GitHub config (later)
-
-- Environment `staging`, `production` (production = required reviewers)
-- Secrets / variables: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `ACR_LOGIN_SERVER`
+Use **OIDC** (`azure/login` federated credentials). Do not store a long-lived Azure password.

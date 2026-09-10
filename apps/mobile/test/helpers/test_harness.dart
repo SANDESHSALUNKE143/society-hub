@@ -9,6 +9,7 @@ import 'package:societyhub_mobile/api/models.dart';
 import 'package:societyhub_mobile/api/society_hub_api.dart';
 import 'package:societyhub_mobile/auth/session.dart';
 import 'package:societyhub_mobile/config/api_config.dart';
+import 'package:societyhub_mobile/core/app_version.dart';
 
 const testApiBase = 'http://api.test';
 
@@ -136,9 +137,25 @@ Map<String, dynamic> profileJson({
             'buildingName': 'Tower 1',
             'floor': 1,
             'parkingSlot': 'P-12',
+            'pngGasConnection': true,
+            'adultCount': 2,
+            'childCount': 1,
+            'seniorCitizenCount': 1,
+            'twoWheelerCount': 0,
+            'fourWheelerCount': 1,
             'isOwner': true,
           }
         : null,
+    'vehicles': withFlat
+        ? [
+            {
+              'kind': 'four_wheeler',
+              'registrationNumber': 'MH12AB1234',
+              'parkingPurchased': false,
+              'parkingSlot': null,
+            },
+          ]
+        : [],
   };
 }
 
@@ -175,14 +192,15 @@ List<Override> testSessionOverrides({
   UserDto? user,
   AppMode mode = AppMode.admin,
   SocietyHubApi? api,
+  ApiConfig config = const ApiConfig(baseUrl: testApiBase, env: 'dev'),
+  AppVersionSource versionSource = const FakeAppVersionSource(),
 }) {
   FlutterSecureStorage.setMockInitialValues({});
   return <Override>[
     skipSessionRestoreProvider.overrideWithValue(true),
     secureStorageProvider.overrideWithValue(const FlutterSecureStorage()),
-    apiConfigProvider.overrideWithValue(
-      const ApiConfig(baseUrl: testApiBase, env: 'dev'),
-    ),
+    apiConfigProvider.overrideWithValue(config),
+    appVersionSourceProvider.overrideWithValue(versionSource),
   ];
 }
 
@@ -205,10 +223,11 @@ Future<ProviderContainer> createSeededContainer({
 Widget wrapForWidgetTest({
   required Widget child,
   List<Override> overrides = const [],
+  AppVersionSource versionSource = const FakeAppVersionSource(),
 }) {
   return ProviderScope(
     overrides: [
-      ...testSessionOverrides(),
+      ...testSessionOverrides(versionSource: versionSource),
       ...overrides,
     ],
     child: MaterialApp(

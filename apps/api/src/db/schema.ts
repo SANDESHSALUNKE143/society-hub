@@ -35,6 +35,13 @@ export const societies = mysqlTable("societies", {
   timezone: varchar("timezone", { length: 64 }).notNull().default("Asia/Kolkata"),
   slaDays: int("sla_days").notNull().default(3),
   billingDefaults: text("billing_defaults"),
+  /** Offline UPI / bank details residents use to pay (Razorpay is future). */
+  upiId: varchar("upi_id", { length: 80 }),
+  accountName: varchar("account_name", { length: 120 }),
+  accountNumber: varchar("account_number", { length: 40 }),
+  ifsc: varchar("ifsc", { length: 20 }),
+  qrBlobPath: varchar("qr_blob_path", { length: 500 }),
+  qrContentType: varchar("qr_content_type", { length: 120 }),
   ...timestamps,
 });
 
@@ -72,6 +79,11 @@ export const flats = mysqlTable(
     floor: int("floor"),
     /** Primary parking slot label linked to this flat (optional). */
     parkingSlot: varchar("parking_slot", { length: 32 }),
+    /** Whether this flat has taken a PNG gas connection. */
+    pngGasConnection: boolean("png_gas_connection").notNull().default(false),
+    adultCount: int("adult_count").notNull().default(0),
+    childCount: int("child_count").notNull().default(0),
+    seniorCitizenCount: int("senior_citizen_count").notNull().default(0),
     /** Extensible JSON bag for society-specific flat attributes. */
     detailsJson: text("details_json"),
     ...timestamps,
@@ -154,7 +166,7 @@ export const residents = mysqlTable(
     userId: char("user_id", { length: 36 }).notNull(),
     flatId: char("flat_id", { length: 36 }).notNull(),
     /** Derived mirror of `residentType === 'owner'`; kept for existing callers. */
-    isOwner: boolean("is_owner").notNull().default(true),
+    isOwner: boolean("is_owner").notNull().default(false),
     residentType: mysqlEnum("resident_type", ["owner", "tenant", "family"])
       .notNull()
       .default("owner"),
@@ -186,7 +198,7 @@ export const residents = mysqlTable(
     moveOutReason: varchar("move_out_reason", { length: 200 }),
     remarks: varchar("remarks", { length: 500 }),
     /** `'Y'` while occupying, NULL otherwise — see the note above. */
-    activeKey: char("active_key", { length: 1 }),
+    activeKey: char("active_key", { length: 1 }).default("Y"),
     ...timestamps,
   },
   (t) => [
@@ -435,6 +447,24 @@ export const residentProfiles = mysqlTable(
   ],
 );
 
+export const residentVehicles = mysqlTable(
+  "resident_vehicles",
+  {
+    id: id(),
+    tenantId: tenantId(),
+    userId: char("user_id", { length: 36 }).notNull(),
+    kind: mysqlEnum("kind", ["two_wheeler", "four_wheeler"]).notNull(),
+    registrationNumber: varchar("registration_number", { length: 32 }),
+    parkingPurchased: boolean("parking_purchased").notNull().default(false),
+    parkingSlot: varchar("parking_slot", { length: 32 }),
+    sortOrder: int("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    index("resident_vehicles_tenant_user_idx").on(t.tenantId, t.userId),
+  ],
+);
+
 export const verificationDocuments = mysqlTable(
   "verification_documents",
   {
@@ -526,13 +556,16 @@ export const payments = mysqlTable(
     billId: char("bill_id", { length: 36 }),
     flatId: char("flat_id", { length: 36 }).notNull(),
     amountPaise: int("amount_paise").notNull(),
-    method: mysqlEnum("method", ["razorpay", "cash", "cheque", "neft"]).notNull(),
+    method: mysqlEnum("method", ["razorpay", "cash", "cheque", "neft", "upi"]).notNull(),
     status: mysqlEnum("status", ["pending", "success", "failed"])
       .notNull()
       .default("pending"),
     razorpayOrderId: varchar("razorpay_order_id", { length: 120 }),
     razorpayPaymentId: varchar("razorpay_payment_id", { length: 120 }),
     receiptNumber: varchar("receipt_number", { length: 64 }),
+    proofBlobPath: varchar("proof_blob_path", { length: 500 }),
+    proofContentType: varchar("proof_content_type", { length: 120 }),
+    reviewNote: varchar("review_note", { length: 500 }),
     ...timestamps,
   },
   (t) => [
@@ -640,6 +673,9 @@ export const parkingSlots = mysqlTable(
     slotNumber: varchar("slot_number", { length: 32 }).notNull(),
     vehicleNumber: varchar("vehicle_number", { length: 32 }),
     type: varchar("type", { length: 32 }).notNull().default("car"),
+    kind: mysqlEnum("kind", ["puzzle", "open"]).notNull().default("open"),
+    wing: varchar("wing", { length: 32 }),
+    floor: int("floor"),
     ...timestamps,
   },
   (t) => [index("parking_slots_tenant_idx").on(t.tenantId)],

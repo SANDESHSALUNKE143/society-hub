@@ -103,12 +103,63 @@ void main() {
           'floor': 1,
           'parkingSlot': 'P-1',
           'isOwner': true,
+          'pngGasConnection': true,
+          'adultCount': 2,
+          'twoWheelerCount': 1,
+          'fourWheelerCount': 0,
         },
+        'vehicles': [
+          {
+            'kind': 'two_wheeler',
+            'registrationNumber': 'MH12TW0001',
+            'parkingPurchased': false,
+            'parkingSlot': null,
+          },
+        ],
       });
       expect(profile.societyName, 'Keshav Heights');
       expect(profile.flat!.label, 'A-101');
       expect(profile.flat!.floor, 1);
       expect(profile.flat!.isOwner, isTrue);
+      expect(profile.flat!.twoWheelerCount, 1);
+      expect(profile.vehicles, hasLength(1));
+      expect(profile.vehicles.first.kind, 'two_wheeler');
+    });
+  });
+
+  group('SocietyResidentDto', () {
+    test('parses household member and display name', () {
+      final person = SocietyResidentDto.fromJson({
+        'userId': 'u2',
+        'name': 'Kid',
+        'email': null,
+        'phone': '8888888881',
+        'flatId': 'f1',
+        'flatNumber': '101',
+        'wingName': 'A',
+        'isOwner': false,
+      });
+      expect(person.displayName, 'Kid');
+      expect(person.isOwner, isFalse);
+    });
+  });
+
+  group('ParkingSlotDto', () {
+    test('parses puzzle parking label', () {
+      final slot = ParkingSlotDto.fromJson({
+        'id': 'p1',
+        'flatId': null,
+        'flatNumber': null,
+        'slotNumber': '101',
+        'vehicleNumber': null,
+        'type': 'car',
+        'kind': 'puzzle',
+        'wing': 'A',
+        'floor': 1,
+        'createdAt': '2026-01-01T00:00:00.000Z',
+      });
+      expect(slot.kind, 'puzzle');
+      expect(slot.label, 'A · 101');
     });
   });
 
@@ -128,8 +179,30 @@ void main() {
           'id': 'f1',
           'number': '101',
           'wingName': 'A',
+          'twoWheelerCount': 2,
+          'fourWheelerCount': 1,
         }).label,
         'A-101',
+      );
+      expect(
+        FlatDto.fromJson({
+          'id': 'f1',
+          'number': '101',
+          'wingName': 'A',
+          'twoWheelerCount': 2,
+        }).twoWheelerCount,
+        2,
+      );
+      expect(
+        FlatDto.fromJson({
+          'id': 'f1',
+          'number': '101',
+          'wingName': 'A',
+          'adultCount': 2,
+          'childCount': 1,
+          'seniorCitizenCount': 1,
+        }).adultCount,
+        2,
       );
       expect(
         FlatDto.fromJson({
@@ -139,6 +212,21 @@ void main() {
         }).label,
         '202',
       );
+    });
+  });
+
+  group('TeamMemberDto', () {
+    test('parses contact fields and displayName fallback', () {
+      final member = TeamMemberDto.fromJson({
+        'userId': 'u2',
+        'name': null,
+        'email': 'ops@example.com',
+        'phone': '8888888888',
+        'role': 'secretary',
+      });
+      expect(member.displayName, 'ops@example.com');
+      expect(member.phone, '8888888888');
+      expect(member.role, 'secretary');
     });
   });
 

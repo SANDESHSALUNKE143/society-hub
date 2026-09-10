@@ -28,9 +28,11 @@ import {
   storeDocument,
 } from "../residents/documents";
 import { upsertProfile } from "./upsert-profile";
+import { applyResidentProfilePatch, vehicleCountsForFlat } from "./apply-patch";
+import { listResidentVehicles } from "../admin/onboard-resident";
 
 /** Shared with auth/routes.ts so `PATCH /v1/auth/profile` (used by the SDK) stays in sync. */
-export { upsertProfile };
+export { upsertProfile, applyResidentProfilePatch };
 
 /** The signed-in user's live membership in the current society, if any. */
 async function findOwnMembership(tenantId: string, userId: string) {
@@ -82,6 +84,10 @@ export async function getProfileDto(
           number: flats.number,
           floor: flats.floor,
           parkingSlot: flats.parkingSlot,
+          pngGasConnection: flats.pngGasConnection,
+          adultCount: flats.adultCount,
+          childCount: flats.childCount,
+          seniorCitizenCount: flats.seniorCitizenCount,
           wingName: wings.name,
           buildingName: buildings.name,
         })
@@ -92,12 +98,14 @@ export async function getProfileDto(
         .limit(1)
     : [];
 
-  const [family, documents] = membership
-    ? await Promise.all([
-        listFamilyMembers(tenantId, membership.id),
-        listDocuments(tenantId, membership.id),
-      ])
-    : [[], []];
+  const [family, documents, vehicles] = await Promise.all([
+    membership ? listFamilyMembers(tenantId, membership.id) : Promise.resolve([]),
+    membership ? listDocuments(tenantId, membership.id) : Promise.resolve([]),
+    listResidentVehicles(tenantId, userId),
+  ]);
+  const vehicleCounts = flatRow
+    ? await vehicleCountsForFlat(tenantId, flatRow.id)
+    : { twoWheelerCount: 0, fourWheelerCount: 0 };
 
   return {
     userId,
@@ -112,6 +120,7 @@ export async function getProfileDto(
     communicationPreferences: parseCommunicationPreferences(
       profile?.communicationPrefsJson,
     ),
+    vehicles,
     societyName: society?.name ?? null,
     membership: membership
       ? {
@@ -126,8 +135,6 @@ export async function getProfileDto(
         }
       : null,
     family,
-    // Residents see their own documents' metadata; the file itself still
-    // requires a separate authenticated fetch.
     documents: documents.map((d) => ({
       ...d,
       downloadPath: `/v1/profile/documents/${d.id}/file`,
@@ -140,6 +147,12 @@ export async function getProfileDto(
           buildingName: flatRow.buildingName ?? null,
           floor: flatRow.floor ?? null,
           parkingSlot: flatRow.parkingSlot ?? null,
+          pngGasConnection: Boolean(flatRow.pngGasConnection),
+          adultCount: Number(flatRow.adultCount ?? 0),
+          childCount: Number(flatRow.childCount ?? 0),
+          seniorCitizenCount: Number(flatRow.seniorCitizenCount ?? 0),
+          twoWheelerCount: vehicleCounts.twoWheelerCount,
+          fourWheelerCount: vehicleCounts.fourWheelerCount,
           isOwner: membership?.residentType === "owner",
         }
       : null,
@@ -161,7 +174,15 @@ export const profileRoutes = new Elysia({ prefix: "/v1/profile" })
         .set({ name: parsed.name, updatedBy: claims.sub })
         .where(eq(users.id, claims.sub));
     }
-    await upsertProfile(claims.tenantId, claims.sub, parsed);
+    await applyResidentProfilePatch(claims.tenantId, claims.sub, parsed);
+    if (
+      parsed.emergencyContactName !== undefined ||
+      parsed.emergencyContactRelation !== undefined ||
+      parsed.emergencyContactPhone !== undefined ||
+      parsed.communicationPreferences !== undefined
+    ) {
+      await upsertProfile(claims.tenantId, claims.sub, parsed);
+    }
     return getProfileDto(claims.tenantId, claims.sub);
   })
   /** Residents upload their own verification documents; admins review them. */

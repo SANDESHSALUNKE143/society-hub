@@ -10,7 +10,7 @@
 
 | Image | Source | Runtime role |
 |-------|--------|----------------|
-| `societyhub-api` | `apps/api` | Bun + Elysia API |
+| `societyhub-api` | `apps/api` | Bun + Elysia API (Render preview + later Azure) |
 | `societyhub-client-app` | `apps/client-app` build → nginx (or Azure Static Web Apps) |
 | `societyhub-manage` | `apps/manage` build → nginx (or Azure Static Web Apps) |
 

@@ -147,6 +147,11 @@ body {
   color: #6b5300;
 }
 
+.badge-progress {
+  background: color-mix(in srgb, var(--saffron) 18%, transparent);
+  color: var(--leaf);
+}
+
 .table-wrap {
   overflow-x: auto;
   border-radius: 0.75rem;

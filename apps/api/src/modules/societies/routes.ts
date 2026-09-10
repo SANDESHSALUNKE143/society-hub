@@ -327,6 +327,10 @@ export const wingRoutes = new Elysia({ prefix: "/v1/wings" })
       wingName: wing.name,
       floor: f.floor,
       parkingSlot: f.parkingSlot,
+      pngGasConnection: Boolean(f.pngGasConnection),
+      adultCount: f.adultCount ?? 0,
+      childCount: f.childCount ?? 0,
+      seniorCitizenCount: f.seniorCitizenCount ?? 0,
       details: parseDetails(f.detailsJson),
     }));
   })

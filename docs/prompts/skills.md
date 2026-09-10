@@ -16,6 +16,6 @@ Project Cursor skills for the locked technical stack. Each skill is a folder und
 | Resend email | [societyhub-resend-email](../../.cursor/skills/societyhub-resend-email/SKILL.md) | Transactional email |
 | Firebase notifications | [societyhub-firebase-notifications](../../.cursor/skills/societyhub-firebase-notifications/SKILL.md) | Web push |
 | Razorpay payments | [societyhub-razorpay-payments](../../.cursor/skills/societyhub-razorpay-payments/SKILL.md) | Checkout and webhooks |
-| Flutter (future) | [societyhub-flutter-future](../../.cursor/skills/societyhub-flutter-future/SKILL.md) | Native Android/iOS — auth, API client, security, deploy (**not MVP**) |
+| Flutter (Android first) | [societyhub-flutter-future](../../.cursor/skills/societyhub-flutter-future/SKILL.md) | Native Client App — Play now, iOS listing next |
 
 Agent entrypoint: [AGENTS.md](../../AGENTS.md).

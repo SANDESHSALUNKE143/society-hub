@@ -261,6 +261,10 @@ export async function importResidentsCsvRows(
           number: row.flatNumber,
           floor: row.floor ?? null,
           parkingSlot: row.parkingSlot ?? null,
+          pngGasConnection: row.pngGasConnection ?? false,
+          adultCount: row.adultCount ?? 0,
+          childCount: row.childCount ?? 0,
+          seniorCitizenCount: row.seniorCitizenCount ?? 0,
           createdBy: actorUserId,
           updatedBy: actorUserId,
         });
@@ -294,12 +298,33 @@ export async function importResidentsCsvRows(
             : flat.parkingSlot;
         const floorChanged = nextFloor !== flat.floor;
         const parkingChanged = (nextParking ?? null) !== (flat.parkingSlot ?? null);
-        if (floorChanged || parkingChanged) {
+        const nextPng =
+          row.pngGasConnection !== undefined
+            ? row.pngGasConnection
+            : Boolean(flat.pngGasConnection);
+        const pngChanged = nextPng !== Boolean(flat.pngGasConnection);
+        const nextAdults =
+          row.adultCount !== undefined ? row.adultCount : flat.adultCount;
+        const nextChildren =
+          row.childCount !== undefined ? row.childCount : flat.childCount;
+        const nextSeniors =
+          row.seniorCitizenCount !== undefined
+            ? row.seniorCitizenCount
+            : flat.seniorCitizenCount;
+        const familyChanged =
+          nextAdults !== flat.adultCount ||
+          nextChildren !== flat.childCount ||
+          nextSeniors !== flat.seniorCitizenCount;
+        if (floorChanged || parkingChanged || pngChanged || familyChanged) {
           await db
             .update(flats)
             .set({
               floor: nextFloor ?? null,
               parkingSlot: nextParking ?? null,
+              pngGasConnection: nextPng,
+              adultCount: nextAdults,
+              childCount: nextChildren,
+              seniorCitizenCount: nextSeniors,
               updatedBy: actorUserId,
             })
             .where(eq(flats.id, flat.id));
@@ -313,7 +338,15 @@ export async function importResidentsCsvRows(
           }
           index.flatRows = index.flatRows.map((f) =>
             f.id === flat!.id
-              ? { ...f, floor: nextFloor ?? null, parkingSlot: nextParking ?? null }
+              ? {
+                  ...f,
+                  floor: nextFloor ?? null,
+                  parkingSlot: nextParking ?? null,
+                  pngGasConnection: nextPng,
+                  adultCount: nextAdults,
+                  childCount: nextChildren,
+                  seniorCitizenCount: nextSeniors,
+                }
               : f,
           );
         }
@@ -327,8 +360,14 @@ export async function importResidentsCsvRows(
         email: row.email ?? null,
         flatId: flat.id,
         residentType: residentTypeOf(row),
+        isOwner: row.isOwner,
         emergencyContact: row.emergencyContact,
         vehicleNumber: row.vehicleNumber,
+        vehicles: row.vehicles,
+        pngGasConnection: row.pngGasConnection,
+        adultCount: row.adultCount,
+        childCount: row.childCount,
+        seniorCitizenCount: row.seniorCitizenCount,
       });
 
       if (outcome.created) result.created += 1;

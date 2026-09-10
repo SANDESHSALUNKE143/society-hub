@@ -16,5 +16,8 @@
   "dependencies": {
     "@society-hub/types": "workspace:*",
     "jose": "^6.0.11"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0"
   }
 }

@@ -32,6 +32,7 @@ import {
   requireRole,
   requireSocietyStaff,
 } from "../../lib/auth-context";
+import { resolveComplaintFlatId } from "./resolve-complaint-flat";
 
 function slaDueAt(days: number) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000)
@@ -259,17 +260,12 @@ export const complaintRoutes = new Elysia({ prefix: "/v1/complaints" })
     ]);
     const parsed = createComplaintSchema.parse(body);
 
-    // Residents use their linked flat; staff/superadmin may pick a flat in-body.
-    let flatId = claims.flatId ?? parsed.flatId ?? null;
-    if (!flatId) {
-      throw new AppError(
-        400,
-        "no_flat",
-        isStaffRole(claims.role)
-          ? "Select a flat to raise this complaint"
-          : "User is not linked to a flat; cannot raise complaint",
-      );
-    }
+    // Residents use their linked flat; staff may pick any tenant flat in-body.
+    const flatId = resolveComplaintFlatId({
+      role: claims.role,
+      linkedFlatId: claims.flatId,
+      requestedFlatId: parsed.flatId,
+    });
 
     const [flat] = await db
       .select()
@@ -283,11 +279,6 @@ export const complaintRoutes = new Elysia({ prefix: "/v1/complaints" })
       )
       .limit(1);
     if (!flat) throw new AppError(404, "flat_not_found", "Flat not found");
-
-    // Residents may only raise against their own linked flat.
-    if (!isStaffRole(claims.role) && claims.flatId && flatId !== claims.flatId) {
-      throw new AppError(403, "forbidden", "Cannot raise complaint for another flat");
-    }
 
     const [society] = await db
       .select({ slaDays: societies.slaDays, name: societies.name })

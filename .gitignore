@@ -22,3 +22,10 @@ coverage
 
 # Local complaint media uploads (runtime)
 uploads/
+
+# Render Terraform local state and secrets
+devops/terraform/render/.terraform/
+devops/terraform/render/*.tfstate
+devops/terraform/render/*.tfstate.*
+devops/terraform/render/terraform.tfvars
+devops/render/.env.tidb

@@ -213,6 +213,7 @@ export function ResidentsPage() {
   ];
 
   return (
+    <div data-testid="residents-page">
     <ShPage wide>
       <ShPageHeader
         title="Residents"
@@ -323,5 +324,6 @@ export function ResidentsPage() {
         />
       )}
     </ShPage>
+    </div>
   );
 }

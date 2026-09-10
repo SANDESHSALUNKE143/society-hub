@@ -1,24 +1,43 @@
-# DevOps — SocietyHub (Azure)
+# DevOps — SocietyHub
 
-Infrastructure and deployment assets for **staging** and **production** on **Azure**, with a **cost-saving** bias and **Docker**-based packaging.
+Infrastructure and deployment for SocietyHub. **Now:** free preview on **Render**. **Later (paid):** Azure after Phase 1 UAT.
 
-## When this is used
+## Free preview (Render) — use this now
+
+$0 Hobby workspace. Terraform in [`terraform/render/`](terraform/render/). Limits: [`render/LIMITATIONS.md`](render/LIMITATIONS.md).
+
+| Piece | Where |
+|-------|--------|
+| API | Render free Docker web service (`devops/docker/api.Dockerfile`) |
+| Client + Manage | Render static sites (Vite `dist/`) |
+| Database | TiDB Serverless (MySQL protocol) — not Render Postgres |
+| CI | `.github/workflows/ci.yml` on `staging` / `main` |
+| CD preview | Promote `staging` → `main` → Render auto-deploy ([PIPELINE.md](PIPELINE.md)) |
+
+**Do not** provision Azure until UAT. **Do not** add a Render card or pick Pro.
+
+## When Azure is used
 
 | Phase | What happens |
 |-------|----------------|
-| **Now (Spec + Phase 1 development)** | Keep this folder as the source of truth for how we will deploy. Flesh out Dockerfiles when `apps/api` and `apps/client-app` exist. **Do not** provision paid Azure production until Phase 1 app is ready. |
-| **After Phase 1 development** | Provision staging → deploy containers → pilot UAT → then production. |
+| **Now (Spec + Phase 1 development)** | Keep `azure/` as the paid target. Run the Render preview instead. |
+| **After Phase 1 UAT** | Provision Azure staging → deploy containers → then production. |
 | **Phase 2 product** | Scale workers, Redis, payments webhooks; still prefer Container Apps over AKS. |
 
 Product Phase 1 = complaint-portal MVP ([PRD](../docs/02-PRD.md)).  
-Deployment of Phase 1 is a **follow-on DevOps phase**, not part of coding the first features.
+**Cheapest buy + SSO + store + CI/CD checklist:** [docs/10-Go-Live.md](../docs/10-Go-Live.md).  
+GitHub Actions are in [`.github/workflows/`](../.github/workflows/). Preview CD is Render auto-deploy; Azure deploy stays **manual** until Azure secrets exist.
 
 ## Folder layout
 
 ```text
 devops/
   README.md                 ← this file
+  PIPELINE.md               ← feature → staging → main → Render
   COST.md                   ← cost-saving principles and SKU choices
+  render/
+    LIMITATIONS.md          ← free-tier caveats vs Azure later
+  terraform/render/         ← Render Hobby preview (Terraform)
   docker/
     README.md               ← container strategy
     api.Dockerfile          ← template for apps/api (finalize during build)

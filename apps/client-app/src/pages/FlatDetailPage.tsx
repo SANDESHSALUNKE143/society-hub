@@ -15,7 +15,7 @@ import {
   ShPage,
   ShPageHeader,
   ShSection,
-  ShTabs,
+  ShCountTabs,
   VERIFICATION_STATUS_LABELS,
   flatLabel,
   occupancyBadgeClass,
@@ -131,7 +131,7 @@ export function FlatDetailPage() {
         }
       />
 
-      <ShTabs
+      <ShCountTabs
         testId="flat-tabs"
         active={tab}
         onChange={setTab}
@@ -231,18 +231,22 @@ export function FlatDetailPage() {
       {tab === "vehicles" && (
         <ShSection
           title="Vehicles"
-          description="From the society parking records linked to this flat."
+          description="Two-wheelers and four-wheelers recorded for this household."
           testId="flat-vehicles"
         >
           {flat.vehicles.length === 0 ? (
             <p className="empty-state">No vehicles recorded.</p>
           ) : (
             <ul className="space-y-1.5 text-sm">
-              {flat.vehicles.map((v) => (
-                <li key={v.id} className="flex items-center gap-2">
-                  <span className="badge">{v.type}</span>
-                  <span className="font-medium">{v.vehicleNumber ?? "No number"}</span>
-                  <span className="text-black/45">Slot {v.slotNumber}</span>
+              {flat.vehicles.map((v, i) => (
+                <li key={`${v.kind}-${v.registrationNumber ?? i}`} className="flex items-center gap-2">
+                  <span className="badge">
+                    {v.kind === "two_wheeler" ? "Two-wheeler" : "Four-wheeler"}
+                  </span>
+                  <span className="font-medium">{v.registrationNumber ?? "No number"}</span>
+                  {v.parkingSlot ? (
+                    <span className="text-black/45">Slot {v.parkingSlot}</span>
+                  ) : null}
                 </li>
               ))}
             </ul>

@@ -33,7 +33,7 @@
     {
       "idx": 4,
       "version": "5",
-      "when": 1784420000000,
+      "when": 1784410000000,
       "tag": "0004_portal_roles",
       "breakpoints": true
     },
@@ -54,8 +54,50 @@
     {
       "idx": 7,
       "version": "5",
-      "when": 1784500000000,
-      "tag": "0007_resident_management",
+      "when": 1788934000000,
+      "tag": "0007_offline_upi_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1788960000000,
+      "tag": "0008_resident_vehicles_png",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1788965000000,
+      "tag": "0009_vehicle_registration_nullable",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1788970000000,
+      "tag": "0010_flat_family_counts",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1788978000000,
+      "tag": "0011_parking_kind_wing_floor",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1788982000000,
+      "tag": "0012_one_owner_per_flat",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1789030000000,
+      "tag": "0013_resident_management",
       "breakpoints": true
     }
   ]

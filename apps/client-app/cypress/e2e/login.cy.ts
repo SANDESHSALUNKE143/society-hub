@@ -60,4 +60,53 @@ describe("Resident login", () => {
     cy.wait("@loginFailed");
     cy.get('[data-testid="login-error"]').should("be.visible");
   });
+
+  it("signs in via the Google tab with a dev phone token", () => {
+    cy.intercept("POST", "**/v1/auth/google", {
+      statusCode: 200,
+      body: {
+        user: {
+          id: "33333333-3333-3333-3333-333333333333",
+          phone: "8888888888",
+          email: "resident@keshav.local",
+          name: "Asha Rao",
+          username: null,
+          role: "resident",
+          tenantId: "22222222-2222-2222-2222-222222222222",
+          flatId: "flat-1",
+          flatNumber: "A-101",
+          hasPin: false,
+        },
+        tokens: { accessToken: "dev-access", refreshToken: "dev-refresh", expiresIn: 900 },
+        memberships: [
+          { tenantId: "22222222-2222-2222-2222-222222222222", societyName: "Keshav Heights", role: "resident" },
+        ],
+      },
+    }).as("googleLogin");
+    cy.intercept("GET", "**/v1/auth/memberships", {
+      statusCode: 200,
+      body: [{ tenantId: "22222222-2222-2222-2222-222222222222", societyName: "Keshav Heights", role: "resident" }],
+    });
+
+    cy.visit("/login");
+    cy.get('[data-testid="login-mode-google"]').click();
+    cy.get("#phone-g").type("8888888888");
+    cy.contains("button", "Continue with Google (dev)").click();
+    cy.wait("@googleLogin");
+    cy.url().should("include", "/dashboard");
+  });
+
+  it("shows an error when Google login is not onboarded", () => {
+    cy.intercept("POST", "**/v1/auth/google", {
+      statusCode: 403,
+      body: { code: "not_onboarded", message: "Phone is not onboarded" },
+    }).as("googleDenied");
+
+    cy.visit("/login");
+    cy.get('[data-testid="login-mode-google"]').click();
+    cy.get("#phone-g").type("7000000004");
+    cy.contains("button", "Continue with Google (dev)").click();
+    cy.wait("@googleDenied");
+    cy.get('[data-testid="login-error"]').should("be.visible");
+  });
 });

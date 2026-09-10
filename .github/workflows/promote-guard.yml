@@ -1,0 +1,23 @@
+name: Promote guard
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  from-staging:
+    name: Main accepts only staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require head branch staging
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_HEAD_REF}" != "staging" ]; then
+            echo "PRs into main must come from staging (preview promote)."
+            echo "Open a PR against staging instead, then run Promote preview."
+            exit 1
+          fi

@@ -83,6 +83,8 @@ void main() {
     expect(find.byKey(AppKeys.complaintsList), findsOneWidget);
     expect(find.text('Gate issue'), findsOneWidget);
     expect(find.text('Water leak'), findsOneWidget);
+    expect(find.text('Ticket ID'), findsWidgets);
+    expect(find.text('Flat 101'), findsOneWidget);
 
     await tester.enterText(find.byKey(AppKeys.complaintsSearch), 'gate');
     await tester.pumpAndSettle();
@@ -119,5 +121,113 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(AppKeys.complaintsEmpty), findsOneWidget);
+  });
+
+  testWidgets('resident files against linked flat only', (tester) async {
+    final bundle = MockApiBundle();
+    final container = ProviderContainer(overrides: testSessionOverrides());
+    addTearDown(container.dispose);
+    await container.read(sessionProvider.notifier).setSession(
+          fixtureUser(role: 'resident', flatNumber: '101'),
+          fixtureTokens(),
+        );
+    container.read(sessionProvider.notifier).setMode(AppMode.resident);
+    container.read(sessionProvider.notifier).replaceApiForTest(bundle.api);
+
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, _) => const NewComplaintPage(),
+        ),
+        GoRoute(
+          path: '/home/complaints',
+          builder: (_, _) => const Scaffold(body: Text('LIST')),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(AppKeys.newComplaintLinkedFlat), findsOneWidget);
+    expect(find.text('Filing for flat 101'), findsOneWidget);
+    expect(find.byKey(AppKeys.newComplaintFlatPicker), findsNothing);
+    expect(find.byKey(AppKeys.newComplaintNoFlat), findsNothing);
+  });
+
+  testWidgets('unlinked resident cannot pick a society flat', (tester) async {
+    final bundle = MockApiBundle();
+    final container = ProviderContainer(overrides: testSessionOverrides());
+    addTearDown(container.dispose);
+    await container.read(sessionProvider.notifier).setSession(
+          fixtureUser(role: 'resident'),
+          fixtureTokens(),
+        );
+    container.read(sessionProvider.notifier).setMode(AppMode.resident);
+    container.read(sessionProvider.notifier).replaceApiForTest(bundle.api);
+
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, _) => const NewComplaintPage(),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(AppKeys.newComplaintNoFlat), findsOneWidget);
+    expect(find.byKey(AppKeys.newComplaintFlatPicker), findsNothing);
+  });
+
+  testWidgets('staff in admin mode can pick a society flat', (tester) async {
+    final bundle = MockApiBundle();
+    bundle.adapter.onGet(
+      '/v1/admin/flats',
+      (server) => server.reply(200, [
+        {'id': 'f9', 'number': '909', 'wingName': 'B'},
+      ]),
+    );
+
+    final container = ProviderContainer(overrides: testSessionOverrides());
+    addTearDown(container.dispose);
+    await container.read(sessionProvider.notifier).setSession(
+          fixtureUser(role: 'chairperson'),
+          fixtureTokens(),
+        );
+    container.read(sessionProvider.notifier).replaceApiForTest(bundle.api);
+
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, _) => const NewComplaintPage(),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(AppKeys.newComplaintFlatPicker), findsOneWidget);
+    expect(find.text('Filing for flat'), findsNothing);
   });
 }

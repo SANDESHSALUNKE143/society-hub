@@ -113,9 +113,9 @@ Use Swagger for live schemas. This Markdown guide is the **narrative + inventory
 
 **Rules**
 
-1. Platform users manage societies and **add people to a society team** via Manage (`POST /v1/manage/societies/:id/team`).
+1. Platform users manage societies, **list/add/remove a society team**, and **add/edit/remove flats** (wing, floor, flat number) via Manage (`/v1/manage/societies/:id/team` and `/flats`).
 2. Manage platform employees (`superadmin`) may also sign in to the **Client App** and use **Admin mode** on any society by default (same Client Admin APIs as society staff).
-3. Society staff use **Client App Admin** for bills, notices, complaints triage, structure, etc.
+3. Society staff use **Client App Admin** for bills, notices, complaints triage, listing structure, etc.
 4. Residents use **Client App Resident** for their flat’s complaints, dues, notices, profile, visitors/bookings.
 5. Cross-tenant access is denied (`403 forbidden`) unless the caller is `superadmin` (platform routes / Client Admin across societies) or has membership in that society.
 
@@ -132,7 +132,8 @@ Allowed role enum values:
 1. `POST /v1/auth/password/login` as `superadmin@societyhub.local`
 2. `POST /v1/societies` — create society (+ optional chairperson fields)
 3. `POST /v1/manage/societies/{societyId}/team` — ensure a SocietyHub user is on the society staff team
-4. Chairperson signs in via OTP / password and uses Client App Admin
+4. `GET /v1/manage/societies/{societyId}/team` — list current society staff (shown on Manage society detail)
+5. Chairperson signs in via OTP / password and uses Client App Admin
 
 `POST /v1/societies` body example:
 
@@ -160,9 +161,9 @@ Save `id` as `societyId` / `tenantId`.
 
 ### C. Onboard a resident and raise a complaint
 
-1. Staff: `POST /v1/admin/residents` with `name`, `phone`, `email`, `flatId`
-2. Resident: OTP verify with that phone
-3. `POST /v1/complaints` (resident uses linked flat; staff must pass `flatId`)
+1. Staff pick a flat, then `POST /v1/admin/residents` for the **owner** (`isOwner: true`) with `name`, `phone`, `flatId`, plus optional `email` and the same onboard fields as CSV. A flat has **one owner**; later people on that flat are family even if `isOwner: true` is sent. To change the current owner’s name, mobile, or email, send `editOwner: true` (keeps that person as the only owner; a new phone must not belong to someone else). `GET /v1/admin/residents` lists people (several rows may share a flat). Match by **phone** unless `editOwner` is set. Email must be unique if set.
+2. Owner resident: `POST /v1/household/members` with `name`, `phone`, optional `email` to add family members on that flat. `GET /v1/household/members` lists the household for anyone linked to that flat (including society staff with a resident row).
+3. Any household member: OTP verify with their phone, then `POST /v1/complaints` (resident uses linked flat only; staff must pass `flatId` when they have no linked flat, or to file for another lot)
 4. Staff: `PATCH /v1/complaints/{id}/status`, `POST /v1/complaints/{id}/comments`
 5. Optional: `POST /v1/complaints/{id}/attachments` (`multipart/form-data`, field `file`)
 
@@ -199,9 +200,12 @@ Verification statuses: `pending`, `under_review`, `approved`, `rejected`
 
 1. Staff: `POST /v1/bills/generate` with `{ "periodYm": "2026-07", "amountPaise": 500000 }`
 2. Resident: `GET /v1/bills/mine`
-3. Pay (dev mock): `POST /v1/payments/mock` `{ "billId": "..." }` **or** `POST /v1/bills/{id}/pay`
-4. Offline cash: staff `POST /v1/payments` with `method: "cash"|"cheque"|"neft"`
-5. Receipt: `GET /v1/payments/{id}/receipt`
+3. Staff publish pay details: `PATCH /v1/payments/account` `{ "upiId", "accountName?", "accountNumber?", "ifsc?" }` and optional `POST /v1/payments/account/qr` (`file`)
+4. Resident offline pay: `POST /v1/payments/offline` multipart `{ billId, file }` (screenshot) → status `pending`
+5. Staff review: `POST /v1/payments/{id}/acknowledge` or `/reject` (credits or leaves bill unpaid)
+6. Staff in-person: `POST /v1/payments` with `method: "cash"|"cheque"|"neft"` (immediate credit)
+7. Receipt: `GET /v1/payments/{id}/receipt` after acknowledgement
+8. **Future Razorpay:** `POST /v1/payments/mock` and `/v1/bills/{id}/pay` stay as local/dev only — not the resident product path
 6. Void: staff `DELETE /v1/bills/{id}`
 
 Amounts are always **integer paise** (₹1 = 100).
@@ -241,7 +245,7 @@ Auth required unless noted. **Staff** = society staff roles. **Platform** = `sup
 |--------|------|------|-------|
 | POST | `/otp/request` | No | `{ phone }` → optional `devCode` |
 | POST | `/otp/verify` | No | `{ phone, code }` → tokens |
-| POST | `/google` | No | Dev: `{ idToken: "dev:<phone>" }` |
+| POST | `/google` | No | `{ idToken }` — Google ID token (`aud` must match `GOOGLE_CLIENT_ID`); or `dev:<phone>` when `DEV_AUTH=true` |
 | POST | `/password/login` | No | `{ email, password }` |
 | POST | `/password/forgot` | No | `{ email }` → optional `devCode` |
 | POST | `/password/reset` | No | `{ email, code, newPassword }` |
@@ -251,16 +255,16 @@ Auth required unless noted. **Staff** = society staff roles. **Platform** = `sup
 | POST | `/refresh` | No | `{ refreshToken }` |
 | POST | `/logout` | Yes | `{ refreshToken }` revokes refresh |
 | GET | `/me` | Yes | Current user DTO |
-| GET | `/memberships` | Yes | Societies the user can enter |
+| GET | `/memberships` | Yes | One row per society the user can enter. Several roles in the same society collapse to the preferred staff role (chairperson before committee). Client App Admin \| Resident is the in-app switch, not this list. |
 | POST | `/select-tenant` | Yes | `{ tenantId }` → new tokens |
-| PATCH | `/profile` | Yes | Alias of profile upsert (SDK) |
+| PATCH | `/profile` | Yes | Alias of `PATCH /v1/profile` (SDK) |
 
 ### 6.3 Profile (resident self-service) — `/v1/profile`
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/` | Yes | Full `ResidentProfileDto`: identity, society, flat, **membership** (status, verification, rejection reason, move-in/out), family, documents, communication preferences |
-| PATCH | `/` | Yes | Partial upsert. Accepts `name`, structured emergency contact, `vehicleNumber`, `communicationPreferences`. **Cannot** change flat, resident type, membership status or verification — those require an Admin. |
+| GET | `/` | Yes | Full `ResidentProfileDto`: identity, society, flat (PNG, family counts, parking), **membership** (status, verification, rejection reason, move-in/out), family, documents, communication preferences, and this user's `vehicles` |
+| PATCH | `/` | Yes | Partial upsert. Accepts `name`, structured emergency contact, `vehicleNumber`, `communicationPreferences`, `vehicles`, PNG, `adultCount` / `childCount` / `seniorCitizenCount`, allotted `parkingSlot` / `parkingSlotId`. Household fields need a linked flat (`400 no_flat` otherwise). **Cannot** change resident type, membership status or verification — those require an Admin. |
 | POST | `/documents` | Yes | `multipart` field `file` + `docType`, `documentNumber?`, `expiresAt?`. Image or PDF, ≤10 MB. |
 | GET | `/documents/:id/file` | Yes | Streams the caller's **own** document. Another resident gets `403`; another society gets `404`. |
 
@@ -268,9 +272,21 @@ Auth required unless noted. **Staff** = society staff roles. **Platform** = `sup
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
+| GET | `/:id/team` | Platform | List society staff (`TeamMemberDto[]`). 404 if society missing |
 | POST | `/:id/team` | Platform | Add/update society staff membership |
+| DELETE | `/:id/team/:userId` | Platform | Soft-remove staff roles (cannot remove self) |
+| GET | `/:id/flats` | Platform | List flats (wing, floor, number) |
+| POST | `/:id/flats` | Platform | Add one flat `{ wing, floor, flatNumber }`. Creates a default building/wing if needed. Duplicate number in another wing → `409 flat_number_taken`. Same wing+number updates floor. Re-adding a deleted number restores that flat. |
+| PATCH | `/:id/flats/:flatId` | Platform | Update wing, floor, and number. `409 flat_number_taken` if the number belongs to another flat. |
+| DELETE | `/:id/flats/:flatId` | Platform | Soft-delete. `409 flat_in_use` if residents are still linked. |
+| POST | `/:id/flats/import` | Platform | Bulk `{ rows: [{ wing, floor, flatNumber }] }` (max 2000). Returns `{ created, updated, skipped, errors }` |
+| GET | `/:id/parkings` | Platform | List parking slots (kind, wing, number, assigned flat) |
+| POST | `/:id/parkings` | Platform | Add one `{ kind, wing?, slotNumber }`. Puzzle needs wing. Parking number is the slot only (101, not A-101); a leading wing prefix is stripped. Duplicate puzzle identity (wing + number) or open number → `409 parking_number_taken`. Re-adding a deleted identity restores the row. |
+| PATCH | `/:id/parkings/:parkingId` | Platform | Update kind / wing / number. `409 parking_number_taken` if that identity belongs to another slot. |
+| DELETE | `/:id/parkings/:parkingId` | Platform | Soft-delete. `409 parking_in_use` if a flat still uses this slot. |
+| POST | `/:id/parkings/import` | Platform | Bulk `{ rows }` (max 2000). Returns `{ created, updated, skipped, errors }` |
 
-Body: `{ email? , phone?, name?, role }` — email **or** phone required. Role defaults to `chairperson`.
+Body (POST team): `{ email? , phone?, name?, role }` — email **or** phone required. Role defaults to `chairperson`.
 
 ### 6.5 Societies & structure
 
@@ -294,12 +310,22 @@ Body: `{ email? , phone?, name?, role }` — email **or** phone required. Role d
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/v1/admin/flats` | Staff | Flat picker — all flats with floor + parking |
+| GET | `/v1/admin/flats` | Staff | Flat picker (floor, parking, PNG, household `twoWheelerCount` / `fourWheelerCount`) |
+| GET | `/v1/admin/parkings` | Staff | Parking inventory for onboard (puzzle / open) |
 | GET | `/v1/admin/structure` | Staff | Nested buildings→wings→flats |
 | GET | `/v1/admin/team` | Staff | Society team |
+| POST | `/v1/team` | Staff | Add team member `{ email?, phone?, name?, role }` — email or phone required |
+| PATCH | `/v1/team/:userId` | Staff | Update name / email / mobile / role |
+| DELETE | `/v1/team/:userId` | Staff | Soft-remove staff roles (cannot remove self) |
 | POST | `/v1/admin/invites` | Staff | Same as invitations create |
 | POST | `/v1/admin/residents/import/preview` | Staff | **Dry run** — validates rows against the live structure and reports per-row `action` (`create`/`update`/`unchanged`/`skip`), errors and warnings. Writes nothing. |
-| POST | `/v1/admin/residents/import` | Staff | Applies the import. Rejects the **whole file** when any row is invalid unless `allowPartial: true`. |
+| POST | `/v1/admin/residents/import` | Staff | Applies the import. CSV rows include vehicles (`twoWheelers` / `fourWheelers` as a count or registration list), PNG, and family counts. Rejects the **whole file** when any row is invalid unless `allowPartial: true`. |
+| DELETE | `/v1/admin/residents/by-user/:userId` | Staff | Soft-remove a family member from the society. `409 cannot_remove_owner` for the flat owner. |
+| GET | `/v1/admin/society-residents` | Staff | Simple household list (`SocietyResidentDto[]`) for onboard. Paginated directory is `GET /v1/admin/residents`. |
+| GET | `/v1/household/members` | Linked flat (resident or staff) | People on the caller’s flat |
+| POST | `/v1/household/members` | Flat owner | Add a family member `{ name, phone, email? }`. They can OTP-login and raise complaints. |
+| PATCH | `/v1/household/members/:userId` | Flat owner | Update a family member’s name, mobile, or email. |
+| DELETE | `/v1/household/members/:userId` | Flat owner | Remove a family member. Cannot remove the owner. |
 
 ### 6.6a Residents — `/v1/admin/residents`
 
@@ -308,7 +334,7 @@ All staff-only and tenant-scoped: a resident in another society returns `404`.
 | Method | Path | Notes |
 |--------|------|-------|
 | GET | `/` | **Server-side** directory. Query: `page`, `limit` (≤100), `search` (name/phone/email/flat), `buildingId`, `wingId`, `flatId`, `residentType`, `status`, `verificationStatus`, `sort` (`name`\|`flat`\|`createdAt`\|`status`), `order`. Returns `Paginated<ResidentSummaryDto>`. |
-| POST | `/` | Onboard/move a resident in. `{ name, phone, email, flatId, residentType?, isPrimary?, moveInDate?, remarks? }`. If the person already occupies a *different* flat, that period is closed first. |
+| POST | `/` | Onboard/move a resident in. `{ name, phone, email?, flatId, residentType?, isPrimary?, moveInDate?, remarks? }` plus household fields (`vehicles`, parking, PNG, family counts). `editOwner: true` updates the current owner; `editUserId` updates that person. First person on a vacant flat is the owner. If the person already occupies a *different* flat, that period is closed first. |
 | GET | `/:id` | `ResidentDetailDto` — membership, flat, roles, emergency contact, family, documents, vehicles, other memberships |
 | PATCH | `/:id` | `{ name?, phone?, email?, residentType?, isPrimary?, moveInDate?, remarks? }` |
 | POST | `/:id/verify` | Approve verification → `active` |
@@ -382,7 +408,7 @@ When `DEV_AUTH=true`, create responses include `devToken` so testers can accept 
 |--------|------|------|-------|
 | GET | `/v1/complaints` | Yes | Staff: all; resident: own |
 | GET | `/v1/complaints/:id` | Yes | |
-| POST | `/v1/complaints` | Resident/staff | Staff needs `flatId` if no linked flat |
+| POST | `/v1/complaints` | Resident/staff | **FR-CMP-1:** resident uses the logged-in flat (body `flatId` for another lot is `403`). Staff may pass `flatId`; required if they have no linked flat |
 | PATCH | `/v1/complaints/:id/status` | Staff | |
 | GET | `/v1/complaints/:id/comments` | Yes | |
 | POST | `/v1/complaints/:id/comments` | Yes | `{ body }` |
@@ -407,14 +433,22 @@ When `DEV_AUTH=true`, create responses include `devToken` so testers can accept 
 |--------|------|------|-------|
 | GET | `/` | Staff | Paginated |
 | GET | `/mine` | Yes | |
-| POST | `/` | Staff | Offline record |
-| POST | `/mock` | Yes | Dev pay by `billId` |
-| GET | `/:id/receipt` | Yes | |
-| POST | `/razorpay/webhook` | No* | Dev mock; production must verify signature |
+| GET | `/account` | Yes | Society UPI / QR / bank details |
+| PATCH | `/account` | Staff | Set UPI ID and account fields |
+| POST | `/account/qr` | Staff | Upload QR image (`file`) |
+| GET | `/account/qr` | Yes | QR image (`?access_token=` allowed) |
+| POST | `/offline` | Yes | Resident screenshot vs `billId` → `pending` |
+| POST | `/` | Staff | Immediate cash/cheque/NEFT credit |
+| POST | `/:id/acknowledge` | Staff | Credit pending UPI proof; mark bill paid |
+| POST | `/:id/reject` | Staff | Reject proof; bill stays unpaid |
+| GET | `/:id/proof` | Yes | Screenshot (`?access_token=` allowed) |
+| POST | `/mock` | Yes | Dev Razorpay mock (not product UI) |
+| GET | `/:id/receipt` | Yes | After success |
+| POST | `/razorpay/webhook` | No* | Future Razorpay; local mock only |
 
 \*Webhook is unauthenticated in local/dev mock form. Production must verify Razorpay signature before trusting the body.
 
-Payment methods: `razorpay`, `cash`, `cheque`, `neft`
+Payment methods: `upi` (resident screenshot), `cash`, `cheque`, `neft` (staff), `razorpay` (future)
 
 ### 6.11 Notices — `/v1/notices`
 
@@ -443,7 +477,7 @@ Payment methods: `razorpay`, `cash`, `cheque`, `neft`
 | Prefix | Create body highlights | Auth create/list/delete |
 |--------|------------------------|-------------------------|
 | `/v1/visitors` | `visitorName`, optional `flatId`, `purpose` | Resident create; list own/staff |
-| `/v1/parking` | `slotNumber`, optional `flatId`, `vehicleNumber` | Staff |
+| `/v1/parking` | `slotNumber`, optional `flatId`, `vehicleNumber` | GET any signed-in user (Account / Onboard pickers); create/delete Staff |
 | `/v1/bookings` | `facilityName`, `startAt`, `endAt`, optional `flatId` | Resident/staff; MySQL datetime `YYYY-MM-DD HH:MM:SS` |
 | `/v1/assets` | `name`, optional category/location | Staff |
 | `/v1/vendors` | `name`, optional phone/email | Staff |
@@ -504,18 +538,13 @@ Staff without a linked flat:
 { "billId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" }
 ```
 
-### D. Offline payment
+### D. Offline UPI payment (product path)
 
-`POST /v1/payments`
+Resident: `POST /v1/payments/offline` as `multipart/form-data` with `billId` + screenshot `file`.
 
-```json
-{
-  "flatId": "66666666-6666-6666-6666-666666666666",
-  "billId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-  "amountPaise": 500000,
-  "method": "cash"
-}
-```
+Staff credit: `POST /v1/payments/{id}/acknowledge`
+
+Staff in-person cash still uses `POST /v1/payments` `{ method: "cash"|"cheque"|"neft" }`.
 
 ### E. Publish notice
 
@@ -538,10 +567,20 @@ Then `POST /v1/notices/{id}/publish`.
 ```json
 {
   "email": "ops@societyhub.local",
+  "phone": "8888888888",
   "name": "Platform Ops",
   "role": "secretary"
 }
 ```
+
+`GET /v1/manage/societies/{societyId}/team` returns the current staff list.  
+`DELETE /v1/manage/societies/{societyId}/team/{userId}` removes staff access (cannot remove yourself).
+
+Society Admin can also manage the current society's team:
+
+- `POST /v1/team` — same body
+- `PATCH /v1/team/{userId}` — `{ "email"?, "phone"?, "name"?, "role"? }`
+- `DELETE /v1/team/{userId}` — remove staff access (cannot remove yourself)
 
 ### G. Razorpay webhook (dev)
 

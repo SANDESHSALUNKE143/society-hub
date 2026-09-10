@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { vehicleParkingQuotaMessage } from "@society-hub/types";
 
 export const requestOtpSchema = z.object({
   phone: z.string().min(10).max(15),
@@ -80,16 +81,69 @@ export const familyRelationshipEnum = z.enum([
   "other",
 ]);
 
-export const onboardResidentSchema = z.object({
-  name: z.string().min(1).max(120),
-  phone: z.string().min(10).max(15),
-  flatId: z.string().uuid(),
-  email: z.string().email().max(200),
-  residentType: residentTypeEnum.optional().default("owner"),
-  isPrimary: z.boolean().optional().default(true),
-  moveInDate: z.string().max(40).optional().nullable(),
-  remarks: z.string().max(500).optional().nullable(),
+export const residentVehicleKindEnum = z.enum(["two_wheeler", "four_wheeler"]);
+
+export const residentVehicleSchema = z.object({
+  kind: residentVehicleKindEnum,
+  registrationNumber: z.preprocess(
+    (v) => (v == null || (typeof v === "string" && v.trim() === "") ? null : v),
+    z.string().min(4).max(32).nullable(),
+  ),
+  parkingPurchased: z.boolean().optional().default(false),
+  parkingSlot: z.string().max(32).optional().nullable(),
 });
+
+function refineVehicleQuota(
+  vehicles:
+    | Array<{
+        kind: "two_wheeler" | "four_wheeler";
+        parkingPurchased?: boolean;
+      }>
+    | undefined,
+  ctx: z.RefinementCtx,
+) {
+  if (!vehicles?.length) return;
+  const message = vehicleParkingQuotaMessage(vehicles);
+  if (message) {
+    ctx.addIssue({ code: "custom", path: ["vehicles"], message });
+  }
+}
+
+export const optionalFamilyCountSchema = z.coerce
+  .number()
+  .int()
+  .min(0)
+  .max(50)
+  .optional();
+
+export const onboardResidentSchema = z
+  .object({
+    name: z.string().min(1).max(120),
+    phone: z.string().min(10).max(15),
+    flatId: z.string().uuid(),
+    email: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+      z.string().email().max(200).optional().nullable(),
+    ),
+    residentType: residentTypeEnum.optional().default("owner"),
+    isPrimary: z.boolean().optional().default(true),
+    moveInDate: z.string().max(40).optional().nullable(),
+    remarks: z.string().max(500).optional().nullable(),
+    floor: z.coerce.number().int().min(0).max(200).optional().nullable(),
+    parkingSlot: z.string().max(32).optional().nullable(),
+    parkingSlotId: z.string().uuid().optional().nullable(),
+    isOwner: z.boolean().optional(),
+    editOwner: z.boolean().optional(),
+    editUserId: z.string().uuid().optional(),
+    emergencyContact: z.string().max(40).optional().nullable(),
+    vehicleNumber: z.string().max(32).optional().nullable(),
+    vehicles: z.array(residentVehicleSchema).max(20).optional(),
+    pngGasConnection: z.boolean().optional(),
+    adultCount: optionalFamilyCountSchema,
+    childCount: optionalFamilyCountSchema,
+    seniorCitizenCount: optionalFamilyCountSchema,
+  })
+  .superRefine((val, ctx) => refineVehicleQuota(val.vehicles, ctx));
 
 /** Admin-side resident directory query — server-side search/filter/sort/page. */
 export const residentListQuerySchema = z.object({
@@ -158,6 +212,15 @@ export const uploadDocumentMetaSchema = z.object({
 
 export const rejectDocumentSchema = z.object({
   reason: z.string().min(3).max(500),
+});
+
+export const addHouseholdMemberSchema = z.object({
+  name: z.string().min(1).max(120),
+  phone: z.string().min(10).max(15),
+  email: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+    z.string().email().max(200).optional().nullable(),
+  ),
 });
 
 export const createComplaintSchema = z.object({
@@ -233,6 +296,24 @@ export const societyStaffRoleEnum = z.enum([
   "committee",
 ]);
 
+export const addSocietyTeamMemberSchema = z.object({
+  email: z.string().email().max(200).optional(),
+  phone: z.string().min(10).max(15).optional(),
+  name: z.string().min(1).max(120).optional(),
+  role: societyStaffRoleEnum.default("chairperson"),
+});
+
+export const updateSocietyTeamMemberSchema = z
+  .object({
+    email: z.string().email().max(200).optional(),
+    phone: z.string().min(10).max(15).optional(),
+    name: z.string().min(1).max(120).optional(),
+    role: societyStaffRoleEnum.optional(),
+  })
+  .refine((d) => d.email || d.phone || d.name || d.role, {
+    message: "at least one field is required",
+  });
+
 export const createSocietySchema = z.object({
   name: z.string().min(1).max(200),
   address: z.string().max(500).optional().nullable(),
@@ -260,20 +341,63 @@ export const createFlatSchema = z.object({
   details: z.record(z.string(), z.string()).optional().nullable(),
 });
 
-export const residentImportRowSchema = z.object({
-  name: z.string().min(1).max(120),
-  phone: z.string().min(10).max(15),
-  email: z.string().email().max(200).optional().nullable(),
-  flatNumber: z.string().min(1).max(32),
-  wingName: z.string().min(1).max(120).optional().nullable(),
-  floor: z.coerce.number().int().min(0).max(200).optional().nullable(),
-  parkingSlot: z.string().max(32).optional().nullable(),
-  isOwner: z.boolean().optional().default(true),
-  residentType: residentTypeEnum.optional(),
-  emergencyContact: z.string().max(40).optional().nullable(),
-  vehicleNumber: z.string().max(32).optional().nullable(),
-  sendInvite: z.boolean().optional().default(false),
+/** Platform Manage: one flat identified by wing + floor + number (FR-ONB-3). */
+export const createSocietyFlatSchema = z.object({
+  wing: z.string().trim().min(1).max(120),
+  floor: z.coerce.number().int().min(0).max(200),
+  flatNumber: z.string().trim().min(1).max(32),
 });
+
+export const importSocietyFlatsSchema = z.object({
+  rows: z.array(createSocietyFlatSchema).min(1).max(2000),
+});
+
+export const PARKING_KINDS = ["puzzle", "open"] as const;
+
+/** Platform Manage: puzzle (wing + number) or open (number) — FR-ONB-3b. */
+export const createSocietyParkingSchema = z
+  .object({
+    kind: z.enum(PARKING_KINDS),
+    wing: z.string().trim().max(32).optional().nullable(),
+    floor: z.coerce.number().int().min(0).max(200).optional().nullable(),
+    slotNumber: z.string().trim().min(1).max(32),
+  })
+  .superRefine((val, ctx) => {
+    if (val.kind !== "puzzle") return;
+    if (!val.wing) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["wing"],
+        message: "Wing is required for puzzle parking",
+      });
+    }
+  });
+
+export const importSocietyParkingsSchema = z.object({
+  rows: z.array(createSocietyParkingSchema).min(1).max(2000),
+});
+
+export const residentImportRowSchema = z
+  .object({
+    name: z.string().min(1).max(120),
+    phone: z.string().min(10).max(15),
+    email: z.string().email().max(200).optional().nullable(),
+    flatNumber: z.string().min(1).max(32),
+    wingName: z.string().min(1).max(120).optional().nullable(),
+    floor: z.coerce.number().int().min(0).max(200).optional().nullable(),
+    parkingSlot: z.string().max(32).optional().nullable(),
+    isOwner: z.boolean().optional().default(true),
+    residentType: residentTypeEnum.optional(),
+    emergencyContact: z.string().max(40).optional().nullable(),
+    vehicleNumber: z.string().max(32).optional().nullable(),
+    vehicles: z.array(residentVehicleSchema).max(20).optional(),
+    pngGasConnection: z.boolean().optional(),
+    adultCount: optionalFamilyCountSchema,
+    childCount: optionalFamilyCountSchema,
+    seniorCitizenCount: optionalFamilyCountSchema,
+    sendInvite: z.boolean().optional().default(false),
+  })
+  .superRefine((val, ctx) => refineVehicleQuota(val.vehicles, ctx));
 
 export const residentImportSchema = z.object({
   rows: z.array(residentImportRowSchema).min(1).max(500),
@@ -335,15 +459,24 @@ const communicationPreferencesSchema = z.object({
  * Self-service profile edit. Deliberately excludes flat, resident type,
  * membership status and verification status — those require an Admin.
  */
-export const updateResidentProfileSchema = z.object({
-  name: z.string().min(1).max(120).optional(),
-  emergencyContact: z.string().max(40).optional().nullable(),
-  emergencyContactName: z.string().max(120).optional().nullable(),
-  emergencyContactRelation: z.string().max(40).optional().nullable(),
-  emergencyContactPhone: z.string().max(20).optional().nullable(),
-  vehicleNumber: z.string().max(32).optional().nullable(),
-  communicationPreferences: communicationPreferencesSchema.optional(),
-});
+export const updateResidentProfileSchema = z
+  .object({
+    name: z.string().min(1).max(120).optional(),
+    emergencyContact: z.string().max(40).optional().nullable(),
+    emergencyContactName: z.string().max(120).optional().nullable(),
+    emergencyContactRelation: z.string().max(40).optional().nullable(),
+    emergencyContactPhone: z.string().max(20).optional().nullable(),
+    vehicleNumber: z.string().max(32).optional().nullable(),
+    communicationPreferences: communicationPreferencesSchema.optional(),
+    vehicles: z.array(residentVehicleSchema).max(20).optional(),
+    pngGasConnection: z.boolean().optional(),
+    adultCount: optionalFamilyCountSchema,
+    childCount: optionalFamilyCountSchema,
+    seniorCitizenCount: optionalFamilyCountSchema,
+    parkingSlot: z.string().max(32).optional().nullable(),
+    parkingSlotId: z.string().uuid().optional().nullable(),
+  })
+  .superRefine((val, ctx) => refineVehicleQuota(val.vehicles, ctx));
 
 /** Society-admin team management (distinct from the platform-only Manage flow). */
 export const addTeamMemberSchema = z
@@ -386,8 +519,19 @@ export const recordPaymentSchema = z.object({
   billId: z.string().uuid().optional().nullable(),
   flatId: z.string().uuid(),
   amountPaise: z.number().int().min(1),
-  method: z.enum(["razorpay", "cash", "cheque", "neft"]),
+  method: z.enum(["razorpay", "cash", "cheque", "neft", "upi"]),
   receiptNumber: z.string().max(64).optional().nullable(),
+});
+
+export const updatePaymentAccountSchema = z.object({
+  upiId: z.string().max(80).optional().nullable(),
+  accountName: z.string().max(120).optional().nullable(),
+  accountNumber: z.string().max(40).optional().nullable(),
+  ifsc: z.string().max(20).optional().nullable(),
+});
+
+export const reviewPaymentSchema = z.object({
+  note: z.string().max(500).optional().nullable(),
 });
 
 export const razorpayWebhookSchema = z.object({

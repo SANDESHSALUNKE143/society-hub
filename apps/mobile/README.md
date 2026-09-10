@@ -1,175 +1,236 @@
 # SocietyHub Mobile (Flutter)
 
-Native Android + iOS client for the **Client App** experience — same Bun `/v1` API as `apps/client-app`, similar saffron / kumkum UI.
+Native **Android first** (Play internal/closed) + **iOS Simulator locally**. Same Bun `/v1` API as `apps/client-app`. App Store / TestFlight listing is not open yet.
 
-Follow agent skill: [`.cursor/skills/societyhub-flutter-future/`](../../.cursor/skills/societyhub-flutter-future/SKILL.md)
+Index: root [README.md](../../README.md) · [docs/08-Local-Development.md](../../docs/08-Local-Development.md) §12. Store / CI: [docs/10-Go-Live.md](../../docs/10-Go-Live.md) §6–7 · [docs/12-CICD.md](../../docs/12-CICD.md). Agent skill: [`.cursor/skills/societyhub-flutter-future/`](../../.cursor/skills/societyhub-flutter-future/SKILL.md)
+
+| | Android | iOS |
+|--|---------|-----|
+| Id | `com.societyhub.societyhub_mobile` | `com.societyhub.societyhubMobile` |
+| Version | `1.0.7+8` | same `pubspec.yaml` |
+| Store | [Play listing](https://play.google.com/store/apps/details?id=com.societyhub.societyhub_mobile) (internal/closed today) | Not listed |
+| Local API | `http://10.0.2.2:3000` (emulator) | `http://127.0.0.1:3000` (Simulator) |
 
 ## Scope
 
 | In mobile | On web only |
 |-----------|-------------|
-| Auth (OTP, email/password, PIN, Google dev) | — |
-| Dashboard, complaints (list / raise / detail + queue & office actions) | Speech-to-text on raise (web) |
-| Manual **single** resident onboard | **CSV bulk** import |
-| Account: flat details, profile, PIN | Structure / heavy admin bulk ops |
-| Coming soon stubs for other nav items | Full module UIs as Spec expands |
+| Auth (OTP, email/password, PIN, Google) | Speech-to-text on raise |
+| Dashboard, complaints (list / raise / detail) | **CSV bulk** import |
+| Manual **single** resident onboard | Structure / heavy admin bulk |
+| **Team** — add / edit email+mobile / remove | Manage portal (create society) |
+| Account: flat, profile, PIN, privacy link | CSV / bulk import |
+| Coming soon stubs | Full Phase 2 modules |
 
-## Prerequisites
+## Prerequisites (Android debug)
 
-1. Flutter stable (`flutter doctor` — Android toolchain OK)
-2. API running locally — see [docs/08-Local-Development.md](../../docs/08-Local-Development.md) (`http://localhost:3000`)
-3. `DEV_AUTH=true` in `apps/api/.env` for local OTP shortcuts
-
-## Run (debug)
-
-```bash
-cd apps/mobile
-
-# Android emulator → host machine API
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000 --dart-define=ENV=dev
-
-# iOS simulator
-flutter run --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=ENV=dev
-
-# Physical device (replace with your Mac/PC LAN IP)
-flutter run --dart-define=API_BASE_URL=http://192.168.1.10:3000 --dart-define=ENV=dev
-```
-
-Find your LAN IP: `ipconfig getifaddr en0` (macOS).
-
-Local OTP when `DEV_AUTH=true`: phone `8888888888` / `9999999999`, code `123456`.
-
-## Build APK locally (test install)
-
-Use this to install on an emulator or a real phone **without** Play Store.
-
-### 1. Checks
+1. Flutter **stable** (`flutter doctor -v` — Android toolchain green)
+2. Android Studio or SDK + emulator image (API 34+) + `adb`; accept licenses
+3. USB debugging on a physical phone (optional)
+4. API on `http://localhost:3000` — [docs/08-Local-Development.md](../../docs/08-Local-Development.md)
+5. `DEV_AUTH=true` in `apps/api/.env` for local OTP shortcuts
 
 ```bash
 cd apps/mobile
 flutter pub get
-flutter analyze
-flutter test
+flutter doctor -v
+flutter devices
 ```
 
-### 2. Debug APK (fastest for local QA)
+## Run matrix
 
-Points at your machine’s API. Pick the base URL for **where the APK will run**:
-
-| Install target | `API_BASE_URL` |
-|----------------|----------------|
-| Android emulator | `http://10.0.2.2:3000` |
-| Physical phone (same Wi‑Fi as Mac) | `http://<your-lan-ip>:3000` |
+| Target | `API_BASE_URL` | Notes |
+|--------|----------------|-------|
+| Android emulator | `http://10.0.2.2:3000` | Host loopback |
+| Physical Android (same Wi‑Fi) | `http://<LAN-IP>:3000` | `ipconfig getifaddr en0` |
+| iOS Simulator (optional) | `http://127.0.0.1:3000` | Mac only; no store signing here |
+| Hosted API | `https://<public-api>` | `--dart-define=ENV=staging` or `prod` |
 
 ```bash
 cd apps/mobile
 
-# Emulator APK
+# Android emulator → local API
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000 --dart-define=ENV=dev
+
+# Physical phone (example)
+flutter run --dart-define=API_BASE_URL=http://192.168.1.10:3000 --dart-define=ENV=dev
+
+# iOS Simulator (optional)
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=ENV=dev
+```
+
+Local OTP when `DEV_AUTH=true`: Chairperson `9999999999`, Resident `8888888888`, code `123456`.
+
+Hot reload: `r` in the terminal. Restart: `R`.
+
+## Verify setup (do this after first `flutter run`)
+
+Longer checklist: root [README.md](../../README.md) — **Check / test local Android and iOS**.
+
+```bash
+# Machine (no device)
+cd apps/mobile && flutter analyze && flutter test
+
+# API must already be running
+curl -sS http://127.0.0.1:3000/health
+grep DEV_AUTH ../api/.env            # from apps/mobile; expect true
+```
+
+**Android device check**
+
+```bash
+flutter emulators --launch <emulator_id>
+adb devices                                          # … device
+adb shell curl -sS http://10.0.2.2:3000/health || adb reverse tcp:3000 tcp:3000
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000 --dart-define=ENV=dev
+```
+
+Physical Android: same Wi‑Fi + `http://<LAN>:3000`, or USB `adb reverse tcp:3000 tcp:3000` + `http://127.0.0.1:3000`.
+
+**iOS Simulator check**
+
+```bash
+cd ios && pod install && cd ..
+open -a Simulator
+curl -sS http://127.0.0.1:3000/health
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=ENV=dev
+```
+
+**In-app smoke (same on both)** — login is Email first; switch to **OTP**:
+
+1. Chairperson `9999999999` / `123456` → dashboard (Admin). Toggle Resident.
+2. Complaints → New → plumbing → submit → ticket is **In queue**.
+3. Account → Family → people list (owner + family), not only counts.
+4. Log out. Resident `8888888888` / `123456` → raise a complaint.
+5. Optional: Email `superadmin@societyhub.local` / `Test@1234`.
+
+### Common failures
+
+| Symptom | Fix |
+|---------|-----|
+| Login network error on phone | Same Wi‑Fi; firewall allows 3000; `curl http://<lan-ip>:3000/health` |
+| Cleartext / HTTP blocked | Debug builds allow HTTP. **Release must use HTTPS** (`usesCleartextTraffic` is debug-only). |
+| `flutter doctor` Android licenses | `flutter doctor --android-licenses` |
+| Google Sign-In on a device | Add debug SHA-1 to the Android OAuth client (Go-Live §4) |
+| Release build unsigned | Create `android/key.properties` from `android/key.properties.example` |
+
+## Debug APK (sideload, no Play)
+
+```bash
+cd apps/mobile
 flutter build apk --debug \
   --dart-define=API_BASE_URL=http://10.0.2.2:3000 \
   --dart-define=ENV=dev
-
-# Physical device APK (example)
-flutter build apk --debug \
-  --dart-define=API_BASE_URL=http://192.168.1.10:3000 \
-  --dart-define=ENV=dev
-```
-
-Output:
-
-`build/app/outputs/flutter-apk/app-debug.apk`
-
-### 3. Release APK (local smoke — still debug-signed for now)
-
-Release signing uses the **debug keystore** until a real keystore is configured (`android/app/build.gradle.kts`). Fine for local testing; not for Play Store.
-
-```bash
-flutter build apk --release \
-  --dart-define=API_BASE_URL=http://192.168.1.10:3000 \
-  --dart-define=ENV=dev
-```
-
-Output:
-
-`build/app/outputs/flutter-apk/app-release.apk`
-
-Split per ABI (smaller files):
-
-```bash
-flutter build apk --release --split-per-abi \
-  --dart-define=API_BASE_URL=http://192.168.1.10:3000 \
-  --dart-define=ENV=dev
-```
-
-### 4. Install
-
-```bash
-# Emulator or USB device (USB debugging on)
-adb devices
 adb install -r build/app/outputs/flutter-apk/app-debug.apk
-
-# Or drag the APK onto the emulator / share to phone and open it
 ```
 
-On a physical phone: allow **Install unknown apps** for Files/Chrome if prompted.
+## Release signing (Play)
 
-### 5. API must be reachable from the phone
+Release builds **do not** use the debug keystore. Copy `android/key.properties.example` → `android/key.properties` (gitignored) and generate an upload key:
 
-- Keep Bun API on port **3000** on your Mac/PC.
-- Phone and computer on the **same Wi‑Fi**.
-- If login fails with network error: confirm `curl http://<lan-ip>:3000/health` works, and that the firewall allows port **3000**.
-- Cleartext HTTP is enabled for local/dev in `AndroidManifest` (`usesCleartextTraffic`). Do **not** ship that for production HTTPS-only builds later.
+```bash
+keytool -genkey -v -keystore android/upload-keystore.jks -keyalg RSA \
+  -keysize 2048 -validity 10000 -alias upload
+```
 
-### 6. Quick smoke checklist
+Then:
 
-- [ ] App opens → Login (Email / OTP / PIN)
-- [ ] OTP: `9999999999` → `123456` (chairperson) or `8888888888` (resident)
-- [ ] Admin ↔ Resident toggle appears for chairperson / staff
-- [ ] Dashboard loads KPIs
-- [ ] Complaints list + raise complaint
-- [ ] Admin: Onboard resident (single form; no CSV)
+```bash
+cd apps/mobile
+flutter build appbundle --release \
+  --dart-define=ENV=prod \
+  --dart-define=API_BASE_URL=https://<public-api-host> \
+  --dart-define=GOOGLE_SERVER_CLIENT_ID=<web-oauth-client-id> \
+  --dart-define=PRIVACY_POLICY_URL=https://app.societyhub.in/privacy \
+  --obfuscate --split-debug-info=build/debug-info
+```
 
-## Automated tests (fully automated)
+Output: `build/app/outputs/bundle/release/app-release.aab`
 
-Run the full suite locally (analyze + unit + widget):
+SHA-1 for GCP Android OAuth:
+
+```bash
+keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
+  -storepass android -keypass android
+# After Play App Signing: Protected with Play → Play Store protection
+# → Manage Play app signing → App signing key certificate
+```
+
+## Google Sign-In
+
+- **Dev (`ENV=dev`):** `dev:<phone>` against API `DEV_AUTH` (or unset `GOOGLE_CLIENT_ID`).
+- **Staging/prod:** real Google ID token. `serverClientId` = Web client (`GOOGLE_CLIENT_ID` on the API). The app falls back to that public Web client ID if `--dart-define` is omitted.
+- Android OAuth: one SHA-1 per client. `societyhub-android` = upload key. Extra clients for debug + Play classical + Play PQC (Go-Live §4.2). Play-installed Google Sign-In needs the Play signing SHA-1s registered. Print local fingerprints: `bash scripts/print-android-sha1.sh`. Never put an Android client ID in Flutter — `serverClientId` stays the **Web** client.
+
+## CI/CD
+
+[`.github/workflows/mobile.yml`](../../.github/workflows/mobile.yml)
+
+| Job | When | Notes |
+|-----|------|-------|
+| Analyze + test | PR / push to `apps/mobile/**` | Always |
+| Android AAB | `workflow_dispatch` or tag `mobile-v*` | Needs keystore secrets + `MOBILE_API_BASE_URL` |
+| Play internal | Same + `ENABLE_PLAY_UPLOAD=true` + `upload_play` | Rolls out **internal** (`status: completed`). Never production. |
+| iOS IPA | Same triggers **and** `ENABLE_IOS_IPA=true` | Skipped until Apple secrets; see Go-Live |
+
+GitHub **variables** (environment `prod` for store jobs): `MOBILE_API_BASE_URL` (**must** be `https://societyhub-api-ece6.onrender.com` — confirm with `GET /health`), `GOOGLE_SERVER_CLIENT_ID`, `PRIVACY_POLICY_URL`. Optional: `ENABLE_PLAY_UPLOAD`, `ENABLE_IOS_IPA`.
+
+GitHub **secrets** (Android): `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS`. Later: `PLAY_SERVICE_ACCOUNT_JSON`.
+
+iOS later: set variable `ENABLE_IOS_IPA=true` and ASC secrets. Do not buy Apple Developer to merge this workflow.
+
+## Play Console (operator)
+
+1. Pay $25, create app `SocietyHub`, id `com.societyhub.societyhub_mobile`, enable Play App Signing.
+2. Upload the CI (or local) AAB to the **internal** track first.
+3. Privacy policy URL: `https://societyhub-client.onrender.com/privacy`.
+4. Data safety: account, phone, photos/videos for complaints.
+5. Store listing files: [`store/`](store/) (icon, feature graphic, 4 phone screenshots). Copy in [Go-Live §7.2a](../../docs/10-Go-Live.md).
+6. Production after smoke; staged rollout 20% → 100%.
+
+## Local iOS (Simulator)
+
+Mac + Xcode + CocoaPods. Same Flutter project — no second app.
+
+```bash
+# Once: Xcode from the Mac App Store, then
+xcode-select --install
+sudo gem install cocoapods   # or: brew install cocoapods
+
+cd apps/mobile
+flutter pub get
+cd ios && pod install && cd ..
+flutter doctor -v            # Xcode + iOS toolchain must be green
+open -a Simulator
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=ENV=dev
+```
+
+Physical iPhone: same Wi‑Fi, `API_BASE_URL=http://<LAN-IP>:3000`, sign **Runner** in Xcode with a free Apple ID (Debug only).
+
+## App Store / TestFlight (not this phase)
+
+After Android stays on an internal Play track: Apple Developer $99, bundle `com.societyhub.societyhubMobile`, Info.plist camera/photo strings, Google iOS URL scheme, paste ASC secrets, re-run Mobile CI with `build_ios` and `ENABLE_IOS_IPA=true`.
+
+## Tests
 
 ```bash
 cd apps/mobile
 ./scripts/run_tests.sh
-# or
-flutter analyze && flutter test
 ```
 
-| Suite | Path | Covers |
-|-------|------|--------|
-| Unit — roles | `test/unit/roles_test.dart` | Admin/Resident gate for President (`chairperson`) vs pure resident |
-| Unit — models | `test/unit/models_test.dart` | DTO parsing, rupees helper |
-| Unit — API | `test/unit/api_client_test.dart` | Auth, errors, refresh failure → session clear, complaints, onboard (mocked Dio) |
-| Unit — session | `test/unit/session_test.dart` | Secure session, mode switch, role rejection |
-| Widget — login | `test/widget/login_page_test.dart` | Mode chips, success nav, error banner |
-| Widget — shell | `test/widget/app_shell_mode_test.dart` | Admin↔Resident toggle visibility & nav |
-| Widget — complaints | `test/widget/complaints_page_test.dart` | List, search filter, empty state |
-| Widget — onboard | `test/widget/onboard_page_test.dart` | Manual single onboard (no CSV upload) |
-
-Helpers: `test/helpers/test_harness.dart` (fixtures + Dio mock + Riverpod overrides).
-
-Stable selectors: `lib/core/app_keys.dart` (mirror web `data-testid` names).
-
-## Checks
-
-```bash
-flutter analyze
-flutter test
-```
+| Suite | Path |
+|-------|------|
+| Unit — Google tokens | `test/unit/google_id_token_test.dart` |
+| Unit — roles / models / API / session | `test/unit/` |
+| Widget — login (incl. prod Google) | `test/widget/login_page_test.dart` |
+| Widget — account privacy link | `test/widget/account_page_test.dart` |
 
 ## Layout
 
 ```
 lib/
   api/          # Dio client mirroring packages/sdk
-  auth/         # Secure session (Keychain / Keystore)
-  config/       # API_BASE_URL / ENV dart-defines
-  core/         # Theme matching client-app CSS
+  auth/         # Secure session + Google token mapping
+  config/       # dart-defines
   features/     # auth, shell, dashboard, complaints, onboard, account
-  shared/       # Reusable widgets
 ```

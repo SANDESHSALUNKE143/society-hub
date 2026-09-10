@@ -18,7 +18,7 @@ import {
   ShPage,
   ShPageHeader,
   ShSection,
-  ShTabs,
+  ShCountTabs,
   VERIFICATION_STATUS_LABELS,
   flatLabel,
   occupancyPeriod,
@@ -275,7 +275,7 @@ export function ResidentDetailPage() {
         </p>
       )}
 
-      <ShTabs
+      <ShCountTabs
         testId="resident-tabs"
         active={tab}
         onChange={setTab}
@@ -394,18 +394,22 @@ export function ResidentDetailPage() {
       {tab === "vehicles" && (
         <ShSection
           title="Vehicles"
-          description="Sourced from the society parking records for this flat."
+          description="Two-wheelers and four-wheelers recorded for this household."
           testId="resident-vehicles"
         >
           {resident.vehicles.length === 0 ? (
             <p className="empty-state">No vehicles recorded for this flat.</p>
           ) : (
             <ul className="space-y-1.5 text-sm">
-              {resident.vehicles.map((v) => (
-                <li key={v.id} className="flex items-center gap-2">
-                  <span className="badge">{v.type}</span>
-                  <span className="font-medium">{v.vehicleNumber ?? "No number"}</span>
-                  <span className="text-black/45">Slot {v.slotNumber}</span>
+              {resident.vehicles.map((v, i) => (
+                <li key={`${v.kind}-${v.registrationNumber ?? i}`} className="flex items-center gap-2">
+                  <span className="badge">
+                    {v.kind === "two_wheeler" ? "Two-wheeler" : "Four-wheeler"}
+                  </span>
+                  <span className="font-medium">{v.registrationNumber ?? "No number"}</span>
+                  {v.parkingSlot ? (
+                    <span className="text-black/45">Slot {v.parkingSlot}</span>
+                  ) : null}
                 </li>
               ))}
             </ul>

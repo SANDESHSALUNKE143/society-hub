@@ -349,8 +349,8 @@ export function ShConfirmDialog({
   );
 }
 
-/** Simple in-page tab strip for detail screens. */
-export function ShTabs({
+/** Simple in-page tab strip for detail screens (supports optional counts). */
+export function ShCountTabs({
   tabs,
   active,
   onChange,

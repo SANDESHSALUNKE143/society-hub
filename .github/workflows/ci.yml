@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+
+permissions:
+  contents: read
+
+env:
+  DATABASE_URL: mysql://root:cisocietyhub@127.0.0.1:3306/societyhub
+  JWT_SECRET: ci-society-hub-jwt-secret-32chars-min
+  DEV_AUTH: "true"
+  DEV_OTP_CODE: "123456"
+  SUPERADMIN_PASSWORD: Test@1234
+
+jobs:
+  quality:
+    name: Lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: cisocietyhub
+          MYSQL_DATABASE: societyhub
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pcisocietyhub"
+          --health-interval=8s
+          --health-timeout=5s
+          --health-retries=15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Migrate + seed
+        run: |
+          bun run db:migrate
+          bun run db:seed
+
+      - name: Quality gates
+        run: bun run quality
+
+  terraform:
+    name: Terraform fmt and validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: devops/terraform/render
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.3"
+
+      - name: Format
+        run: terraform fmt -check
+
+      - name: Init and validate
+        run: |
+          terraform init -backend=false
+          terraform validate

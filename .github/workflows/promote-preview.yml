@@ -1,0 +1,42 @@
+name: Promote preview
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    name: Merge staging into main
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Open or merge staging → main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git fetch origin staging main
+          if git merge-base --is-ancestor origin/staging origin/main; then
+            echo "main already contains staging. Nothing to promote."
+            exit 0
+          fi
+
+          EXISTING="$(gh pr list --base main --head staging --state open --json number --jq '.[0].number // empty')"
+          if [ -z "${EXISTING}" ]; then
+            gh pr create \
+              --base main \
+              --head staging \
+              --title "Promote staging to Render preview" \
+              --body "Merge staging into main so Render auto-deploys the preview. Azure staging/prod is later."
+            EXISTING="$(gh pr list --base main --head staging --state open --json number --jq '.[0].number')"
+          fi
+
+          gh pr checks "${EXISTING}" --watch
+          gh pr merge "${EXISTING}" --merge --delete-branch=false

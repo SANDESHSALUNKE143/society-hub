@@ -1,0 +1,80 @@
+name: Deploy staging
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login
+        run: az acr login --name "${{ secrets.ACR_NAME }}"
+
+      - name: Build and push API image
+        run: |
+          IMAGE="${{ secrets.ACR_LOGIN_SERVER }}/societyhub-api:${IMAGE_TAG:0:7}"
+          docker build -f devops/docker/api.Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "API_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Update Container App
+        run: |
+          az containerapp update \
+            --name "${{ secrets.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --image "${{ env.API_IMAGE }}"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Build client-app
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        run: bunx turbo run build --filter=@society-hub/client-app
+
+      - name: Deploy client-app Static Web App
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.SWA_TOKEN_CLIENT }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: apps/client-app/dist
+          skip_app_build: true
+          skip_api_build: true
+
+      - name: Build manage
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        run: bunx turbo run build --filter=@society-hub/manage
+
+      - name: Deploy manage Static Web App
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.SWA_TOKEN_MANAGE }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: apps/manage/dist
+          skip_app_build: true
+          skip_api_build: true

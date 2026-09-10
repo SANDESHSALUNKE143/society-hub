@@ -40,7 +40,7 @@ Docker templates and Azure staging/production guides are maintained under `devop
 | E9 Notifications | notifications | In-app, email, web push (FR-NTF-*) |
 | E10 Dashboards & reports | dashboards | Ops + finance + resident home (FR-DSH-*) |
 | E11 Audit trail | audit | audit_logs UI (FR-AUD-*) |
-| E12 Future scope | future | Flutter, WhatsApp, visitor, parking, etc. |
+| E12 Future scope | future | iOS store listing, WhatsApp, visitor, parking, etc. |
 
 ## 4. MVP implementation order
 

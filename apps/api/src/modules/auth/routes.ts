@@ -28,7 +28,6 @@ import {
   passwordResetChallenges,
   refreshTokens,
   societies,
-  userRoles,
   users,
 } from "../../db/schema";
 import { AppError } from "../../lib/errors";
@@ -41,8 +40,13 @@ import {
   listMemberships,
   requireAuth,
   resolveMembership,
+  resolveRoleForTenant,
 } from "../../lib/auth-context";
-import { getProfileDto, upsertProfile } from "../profile/routes";
+import { applyResidentProfilePatch, getProfileDto } from "../profile/routes";
+import {
+  claimsFromGoogleIdToken,
+  findOnboardedGoogleUser,
+} from "./google-login";
 
 function trackLogin(
   userId: string,
@@ -151,35 +155,38 @@ export const authRoutes = new Elysia({ prefix: "/v1/auth" })
   })
   .post("/google", async ({ body }) => {
     const parsed = googleAuthSchema.parse(body);
-    // Production: verify Google ID token via tokeninfo / jose JWKS.
-    // Dev bypass: accept idToken shaped as `dev:<phone>` for local web/mobile
-    // when DEV_AUTH=true, OR when GOOGLE_CLIENT_ID is not configured for this
-    // environment yet (so the Google button still works before OAuth is set
-    // up). Once GOOGLE_CLIENT_ID is set, only DEV_AUTH unlocks the bypass.
     const allowDevGoogle = env.devAuth || !env.googleClientId;
-    if (!allowDevGoogle) {
-      throw new AppError(
-        501,
-        "google_not_configured",
-        "Google SSO not configured yet; enable DEV_AUTH for local testing",
-      );
-    }
-    if (!parsed.idToken.startsWith("dev:")) {
+    let user: typeof users.$inferSelect;
+
+    if (parsed.idToken.startsWith("dev:")) {
+      if (!allowDevGoogle) {
+        throw new AppError(
+          400,
+          "invalid_google_token",
+          "DEV Google token must be 'dev:<phone>'",
+        );
+      }
+      const phone = parsed.idToken.slice("dev:".length);
+      const [devUser] = await db
+        .select()
+        .from(users)
+        .where(and(eq(users.phone, phone), eq(users.isDeleted, false)))
+        .limit(1);
+      if (!devUser) {
+        throw new AppError(403, "not_onboarded", "Phone is not onboarded");
+      }
+      user = devUser;
+    } else if (!env.googleClientId) {
       throw new AppError(
         400,
         "invalid_google_token",
         "DEV Google token must be 'dev:<phone>'",
       );
+    } else {
+      const claims = await claimsFromGoogleIdToken(parsed.idToken);
+      user = await findOnboardedGoogleUser(claims);
     }
-    const phone = parsed.idToken.slice("dev:".length);
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(and(eq(users.phone, phone), eq(users.isDeleted, false)))
-      .limit(1);
-    if (!user) {
-      throw new AppError(403, "not_onboarded", "Phone is not onboarded");
-    }
+
     const membership = await resolveMembership(user.id);
     const dto = await buildUserDto(user.id, membership.tenantId, membership.role);
     const tokens = await issueTokens(
@@ -193,7 +200,9 @@ export const authRoutes = new Elysia({ prefix: "/v1/auth" })
       user.id,
       membership.tenantId,
       ActivityType.USER_GOOGLE_LOGIN,
-      "Signed in with Google (dev)",
+      parsed.idToken.startsWith("dev:")
+        ? "Signed in with Google (dev)"
+        : "Signed in with Google",
     );
     return { user: dto, tokens, memberships };
   })
@@ -456,25 +465,18 @@ export const authRoutes = new Elysia({ prefix: "/v1/auth" })
 
     let role = claims.role;
     if (claims.role !== "superadmin") {
-      const [membership] = await db
-        .select()
-        .from(userRoles)
-        .where(
-          and(
-            eq(userRoles.userId, claims.sub),
-            eq(userRoles.tenantId, parsed.tenantId),
-            eq(userRoles.isDeleted, false),
-          ),
-        )
-        .limit(1);
-      if (!membership) {
+      const membershipRole = await resolveRoleForTenant(
+        claims.sub,
+        parsed.tenantId,
+      );
+      if (!membershipRole) {
         throw new AppError(
           403,
           "not_a_member",
           "You do not have a role in that society",
         );
       }
-      role = membership.role;
+      role = membershipRole;
     }
 
     const dto = await buildUserDto(claims.sub, parsed.tenantId, role);
@@ -489,6 +491,6 @@ export const authRoutes = new Elysia({ prefix: "/v1/auth" })
   .patch("/profile", async ({ auth, body }) => {
     const claims = requireAuth(auth);
     const parsed = updateResidentProfileSchema.parse(body);
-    await upsertProfile(claims.tenantId, claims.sub, parsed);
+    await applyResidentProfilePatch(claims.tenantId, claims.sub, parsed);
     return getProfileDto(claims.tenantId, claims.sub);
   });

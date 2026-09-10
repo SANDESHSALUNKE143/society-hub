@@ -2,8 +2,10 @@ import { Elysia } from "elysia";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Role, TeamMemberDto } from "@society-hub/types";
 import {
+  addSocietyTeamMemberSchema,
   addTeamMemberSchema,
   changeTeamRoleSchema,
+  updateSocietyTeamMemberSchema,
 } from "@society-hub/validation";
 import { db } from "../../db/client";
 import { userRoles, users } from "../../db/schema";
@@ -16,6 +18,11 @@ import {
   requireAuth,
   requireSocietyStaff,
 } from "../../lib/auth-context";
+import {
+  addTeamMemberToTenant,
+  removeTeamMemberFromTenant,
+  updateTeamMemberInTenant,
+} from "../admin/team-service";
 
 const STAFF_ROLES = SOCIETY_STAFF_ROLES as Role[];
 
@@ -98,6 +105,12 @@ export const teamRoutes = new Elysia({ prefix: "/v1/team" })
     const claims = requireAuth(auth);
     requireSocietyStaff(claims);
     return listTeamForTenant(claims.tenantId);
+  })
+  .post("/", async ({ auth, body }) => {
+    const claims = requireAuth(auth);
+    requireSocietyStaff(claims);
+    const parsed = addSocietyTeamMemberSchema.parse(body);
+    return addTeamMemberToTenant(claims.tenantId, claims.sub, parsed);
   })
   .post("/members", async ({ auth, body }) => {
     const claims = requireAuth(auth);
@@ -277,6 +290,26 @@ export const teamRoutes = new Elysia({ prefix: "/v1/team" })
     });
 
     return listTeamForTenant(claims.tenantId);
+  })
+  .patch("/:userId", async ({ auth, params, body }) => {
+    const claims = requireAuth(auth);
+    requireSocietyStaff(claims);
+    const parsed = updateSocietyTeamMemberSchema.parse(body);
+    return updateTeamMemberInTenant(
+      claims.tenantId,
+      claims.sub,
+      params.userId,
+      parsed,
+    );
+  })
+  .delete("/:userId", async ({ auth, params }) => {
+    const claims = requireAuth(auth);
+    requireSocietyStaff(claims);
+    return removeTeamMemberFromTenant(
+      claims.tenantId,
+      claims.sub,
+      params.userId,
+    );
   });
 
 /** A society must keep at least one chairperson, or nobody can administer it. */

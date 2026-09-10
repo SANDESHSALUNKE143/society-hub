@@ -1,0 +1,34 @@
+# Copy to terraform.tfvars (gitignored). Do not commit secrets.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# Render API key stays in the environment:
+#   export RENDER_API_KEY="rnd_…"
+#   export RENDER_OWNER_ID="tea-da9bsdlg1s2s739u3g7g"
+
+render_owner_id = "tea-da9bsdlg1s2s739u3g7g"
+repo_url        = "https://github.com/engineersbay/society-hub"
+branch          = "main"
+region          = "singapore"
+api_plan        = "free"
+
+# TiDB Serverless — URL-encode special characters in the password.
+database_url = "mysql://USER:PASSWORD@HOST:4000/societyhub"
+
+# 32+ random chars. Example generate: openssl rand -base64 32
+jwt_secret = "replace-with-32-plus-random-chars"
+
+# Preview only
+superadmin_password = "Test@1234"
+# superadmin_email    = "sandesh@engineersbay.in"
+# superadmin_name     = "Sandesh"
+dev_auth            = "true"
+dev_otp_code        = "123456"
+
+# Leave empty unless Render assigned different slugs than societyhub-*.
+# api_public_url = "https://societyhub-api-xxxx.onrender.com"
+# cors_origin_override = "https://actual-client.onrender.com,https://actual-manage.onrender.com"
+
+# Google OAuth Web client (societyhub-web). Secret stays on the API only.
+# google_client_id     = "1234567890-xxxxx.apps.googleusercontent.com"
+# google_client_secret = "GOCSPX-xxxxx"

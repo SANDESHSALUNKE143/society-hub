@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SocietyHub</string>
+    <!-- Web OAuth client (societyhub-web). Play Services reads this as
+         default_web_client_id. Do not put an Android client ID here. -->
+    <string name="default_web_client_id" translatable="false">583640086898-uhmdenf6kpv8iskvdaju4pk4gpbmae20.apps.googleusercontent.com</string>
+</resources>

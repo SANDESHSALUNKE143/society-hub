@@ -10,7 +10,7 @@
 - **Strict TypeScript** across API and web
 - **Docs as source of truth** — do not invent business requirements; update Spec/PRD first
 - **Conventional commits** (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`)
-- Feature work lands via GitHub user stories
+- Feature work lands via GitHub user stories; PRs target **`staging`**. Promote to Render (`main`) with Actions → **Promote preview** ([PIPELINE](../devops/PIPELINE.md)).
 
 ## 2. Architecture patterns
 

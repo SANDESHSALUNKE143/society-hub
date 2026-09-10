@@ -87,9 +87,7 @@ society-hub/
     api/                 # Bun + Elysia modular monolith (Phase 1)
     client-app/          # Resident React + Vite UI (Phase 1)
     manage/              # Admin / Super Admin React + Vite UI (Phase 1)
-    mobile/              # Future native — placeholders only
-      android/           # Android target placeholder
-      ios/               # iOS target placeholder
+    mobile/              # Flutter Client App (Android first; iOS same project)
   packages/
     auth/
     sdk/
@@ -101,7 +99,7 @@ society-hub/
   .cursor/skills/
 ```
 
-Phase 1 implements **client-app + manage + api**. `apps/mobile/**` stays empty of app code until Flutter Future scope starts; see [apps/mobile/README.md](../../apps/mobile/README.md).
+Phase 1 web remains **client-app + manage + api**. Flutter Android lives in `apps/mobile/` and calls the same `/v1` API; see [apps/mobile/README.md](../../apps/mobile/README.md).
 
 Backend feature modules (illustrative):
 
@@ -192,7 +190,7 @@ sequenceDiagram
   API->>DB: Update bill status
 ```
 
-Manual cash/cheque/NEFT recorded by Treasurer in the same `payments` model with `mode` discriminant.
+Residents pay offline via society UPI/QR and upload a screenshot (`payments.status = pending`) until Admin/Treasurer acknowledges. Manual cash/cheque/NEFT is recorded by staff in the same `payments` model. Razorpay checkout is future.
 
 ## 12. Data architecture summary
 

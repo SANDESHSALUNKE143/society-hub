@@ -13,6 +13,10 @@ abstract final class AppKeys {
   static const loginPin = Key('login-pin');
   static const loginSubmit = Key('login-submit');
   static const loginError = Key('login-error');
+  static const loginBusy = Key('login-busy');
+  static const loginVersion = Key('login-version');
+  static const loginUpdate = Key('login-update');
+  static const accountPrivacy = Key('account-privacy');
 
   static const modeAdmin = Key('app-mode-admin');
   static const modeResident = Key('app-mode-resident');
@@ -23,6 +27,9 @@ abstract final class AppKeys {
   static const complaintsEmpty = Key('complaints-empty');
   static const newComplaintLink = Key('new-complaint-link');
   static const newComplaintForm = Key('new-complaint-form');
+  static const newComplaintFlatPicker = Key('new-complaint-flat-picker');
+  static const newComplaintLinkedFlat = Key('complaint-linked-flat');
+  static const newComplaintNoFlat = Key('complaint-no-flat');
   static const complaintCreatedBanner = Key('complaint-created-banner');
   static const complaintQueueHint = Key('complaint-queue-hint');
   static const complaintClosingNote = Key('complaint-closing-note');
@@ -39,9 +46,55 @@ abstract final class AppKeys {
   static const accountFlatNumber = Key('account-flat-number');
   static const accountEmergencyContact = Key('account-emergency-contact');
   static const accountVehicleNumber = Key('account-vehicle-number');
+  static const accountAdults = Key('account-adults');
+  static const accountChildren = Key('account-children');
+  static const accountSeniors = Key('account-seniors');
+  static const accountPngYes = Key('account-png-yes');
+  static const accountPngNo = Key('account-png-no');
 
   static const onboardForm = Key('onboard-form');
   static const onboardName = Key('onboard-name');
   static const onboardPhone = Key('onboard-phone');
+  static const onboardWing = Key('onboard-wing');
+  static const onboardFlat = Key('onboard-flat');
+  static const onboardFlatContinue = Key('onboard-flat-continue');
+  static const onboardTabs = Key('onboard-tabs');
+  static const onboardTabOwner = Key('onboard-tab-owner');
+  static const onboardTabFamily = Key('onboard-tab-family');
+  static const onboardTabParking = Key('onboard-tab-parking');
+  static const onboardTabTwoWheeler = Key('onboard-tab-two_wheeler');
+  static const onboardTabFourWheeler = Key('onboard-tab-four_wheeler');
+  static const onboardTabGas = Key('onboard-tab-gas');
   static const onboardSubmit = Key('onboard-submit');
+  static const accountFamilyMembers = Key('account-family-members');
+  static const accountFamilyName = Key('account-family-name');
+  static const accountFamilyPhone = Key('account-family-phone');
+  static const accountAddFamily = Key('account-add-family');
+  static const accountSectionTabs = Key('account-section-tabs');
+  static const accountSectionFlat = Key('account-section-flat');
+  static const accountSectionHousehold = Key('account-section-household');
+  static const accountSectionSecurity = Key('account-section-security');
+  static const accountTabs = Key('account-tabs');
+  static const accountTabProfile = Key('account-tab-owner');
+  static const accountTabOwner = Key('account-tab-owner');
+  static const accountTabFamily = Key('account-tab-family');
+  static const accountTabParking = Key('account-tab-parking');
+  static const accountTabTwoWheeler = Key('account-tab-two_wheeler');
+  static const accountTabFourWheeler = Key('account-tab-four_wheeler');
+  static const accountTabGas = Key('account-tab-gas');
+
+  static const teamPage = Key('team-page');
+  static const addTeamForm = Key('add-team-form');
+  static const addTeamEmail = Key('add-team-email');
+  static const addTeamPhone = Key('add-team-phone');
+  static const addTeamName = Key('add-team-name');
+  static const addTeamSubmit = Key('add-team-submit');
+  static const teamList = Key('team-list');
+  static const editTeamForm = Key('edit-team-form');
+  static const editTeamPhone = Key('edit-team-phone');
+  static const editTeamEmail = Key('edit-team-email');
+  static const editTeamSave = Key('edit-team-save');
+
+  static Key teamEdit(String userId) => Key('team-edit-$userId');
+  static Key teamRemove(String userId) => Key('team-remove-$userId');
 }

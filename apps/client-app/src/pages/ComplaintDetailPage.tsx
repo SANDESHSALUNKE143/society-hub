@@ -5,7 +5,14 @@ import { ApiClientError } from "@society-hub/sdk";
 import { useAuth } from "../auth";
 import { canUseAdminMode, useAppMode } from "../app-mode";
 import { Icon } from "../components/icons";
-import { STATUS_LABELS, TYPE_LABELS, statusBadgeClass } from "@society-hub/ui";
+import {
+  CommitteeNoteCard,
+  ComplaintMetaRow,
+  ComplaintQueueBanner,
+  ComplaintStatusPill,
+  ComplaintTimeline,
+  TYPE_LABELS,
+} from "@society-hub/ui";
 
 type SpeechRecognitionLike = {
   continuous: boolean;
@@ -128,17 +135,17 @@ export function ComplaintDetailPage() {
       : TYPE_LABELS[complaint.type];
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <Link to="/complaints" className="text-sm text-[var(--leaf)]">
+    <div className="sh-complaint-page">
+      <Link to="/complaints" className="sh-complaint-back">
         ← Back to complaints
       </Link>
 
       {justCreated && (
         <div
-          className="rounded-xl border border-[var(--leaf)]/30 bg-[var(--mist)]/40 p-4"
+          className="sh-committee"
           data-testid="complaint-created-banner"
         >
-          <p className="font-display text-lg text-[var(--leaf-dark)]">Complaint submitted</p>
+          <p className="sh-complaint-block-title">Complaint submitted</p>
           <p className="mt-1 text-sm text-black/70">
             Your ticket number is{" "}
             <strong data-testid="complaint-ticket-number">{complaint.ticketNumber}</strong>.
@@ -155,47 +162,47 @@ export function ComplaintDetailPage() {
         </div>
       )}
 
-      <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="font-display text-2xl">{complaint.title}</h1>
-          <span className={statusBadgeClass(complaint.status)}>
-            {STATUS_LABELS[complaint.status]}
-          </span>
+      <header>
+        <p className="sh-complaint-ticket-display">{complaint.ticketNumber}</p>
+        <h1 className="sh-complaint-heading">{complaint.title}</h1>
+        <div className="mt-3">
+          <ComplaintStatusPill status={complaint.status} outline />
         </div>
-        <p className="mt-1 text-sm text-black/55">
-          {complaint.ticketNumber} · Flat {complaint.flatNumber} · {typeLabel}
-          {complaint.residentName ? ` · ${complaint.residentName}` : ""}
-        </p>
-      </div>
+        {complaint.residentName ? (
+          <p className="mt-2 text-sm text-black/50">Raised by {complaint.residentName}</p>
+        ) : null}
+      </header>
 
-      {!showStaffControls && complaint.queueHint && complaint.status === "open" && (
-        <p className="rounded-lg bg-[var(--mist)]/50 px-3 py-2 text-sm text-black/65">
-          {complaint.queueHint} Admins may acknowledge when ready — your ticket stays safe in the
-          queue until then.
-        </p>
-      )}
+      <ComplaintMetaRow
+        flatNumber={complaint.flatNumber}
+        createdAt={complaint.createdAt}
+        typeLabel={typeLabel}
+      />
 
-      <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{complaint.description}</p>
+      {!justCreated && !showStaffControls && complaint.queueHint && complaint.status === "open" ? (
+        <ComplaintQueueBanner hint={complaint.queueHint} />
+      ) : null}
 
-      {complaint.closingNote && (
-        <div className="rounded-lg border border-[var(--sand)] bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-black/40">
-            Closing note from office
-          </p>
-          <p className="mt-1 text-sm" data-testid="complaint-closing-note">
-            {complaint.closingNote}
-          </p>
-        </div>
-      )}
+      <p className="sh-complaint-copy whitespace-pre-wrap">{complaint.description}</p>
+
+      <ComplaintTimeline events={complaint.statusEvents} />
+
+      {complaint.closingNote ? (
+        <CommitteeNoteCard note={complaint.closingNote} testId="complaint-closing-note" />
+      ) : null}
 
       {complaint.attachments.length > 0 && (
         <section>
-          <h2 className="font-semibold">Photos & evidence</h2>
-          <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {complaint.attachments.map((a) => (
+          <h2 className="sh-complaint-block-title">
+            {complaint.attachments.length === 1
+              ? "Photo (1)"
+              : `Photos (${complaint.attachments.length})`}
+          </h2>
+          <ul className="sh-complaint-photos">
+            {complaint.attachments.map((a, index) => (
               <li key={a.id}>
                 <a
-                  className="block overflow-hidden rounded-lg border border-[var(--sand)]"
+                  className="sh-complaint-photo block"
                   href={`${a.url}?access_token=${accessToken()}`}
                   target="_blank"
                   rel="noreferrer"
@@ -204,13 +211,15 @@ export function ComplaintDetailPage() {
                     <img
                       src={`${a.url}?access_token=${accessToken()}`}
                       alt=""
-                      className="h-28 w-full object-cover"
                     />
                   ) : (
                     <p className="p-3 text-xs text-[var(--leaf)]">
                       Video · {Math.round(a.byteSize / 1024)} KB
                     </p>
                   )}
+                  <span className="sh-complaint-photo-count">
+                    {index + 1}/{complaint.attachments.length}
+                  </span>
                 </a>
               </li>
             ))}
@@ -218,30 +227,13 @@ export function ComplaintDetailPage() {
         </section>
       )}
 
-      {complaint.statusEvents.length > 0 && (
-        <section>
-          <h2 className="font-semibold">Activity</h2>
-          <ol className="mt-2 space-y-2 border-l border-[var(--sand)] pl-4">
-            {complaint.statusEvents.map((ev) => (
-              <li key={ev.id} className="text-sm">
-                <p className="font-medium text-[var(--leaf-dark)]">
-                  {STATUS_LABELS[ev.toStatus]}
-                  {ev.actorName ? ` · ${ev.actorName}` : ""}
-                </p>
-                {ev.note && <p className="text-black/60">{ev.note}</p>}
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
-
       {showStaffControls && (
         <section
-          className="card sh-section"
+          className="sh-committee"
           data-testid="complaint-staff-actions"
         >
-          <h2 className="text-sm font-semibold">Office actions</h2>
-          <p className="mt-0.5 text-xs text-black/55">
+          <h2 className="sh-complaint-block-title">Office actions</h2>
+          <p className="text-sm text-black/55">
             Leave in queue if busy. Acknowledge when seen. Start when work begins. Resolve/close
             with a short note.
           </p>

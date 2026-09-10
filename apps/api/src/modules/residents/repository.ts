@@ -19,9 +19,9 @@ import {
   buildings,
   flats,
   invitations,
-  parkingSlots,
   residentFamilyMembers,
   residentProfiles,
+  residentVehicles,
   residents,
   userRoles,
   users,
@@ -324,26 +324,41 @@ export async function listDocuments(
   return rows.map((r) => toDocumentDto(r.doc, r.verifierName));
 }
 
-/** Vehicles come from the existing parking module — no new vehicle store. */
+/** Household vehicles recorded for everyone currently occupying this flat. */
 export async function listVehiclesForFlat(
   tenantId: string,
   flatId: string,
 ): Promise<ResidentVehicleDto[]> {
   const rows = await db
-    .select()
-    .from(parkingSlots)
+    .select({
+      kind: residentVehicles.kind,
+      registrationNumber: residentVehicles.registrationNumber,
+      parkingPurchased: residentVehicles.parkingPurchased,
+      parkingSlot: residentVehicles.parkingSlot,
+    })
+    .from(residentVehicles)
+    .innerJoin(
+      residents,
+      and(
+        eq(residents.userId, residentVehicles.userId),
+        eq(residents.tenantId, residentVehicles.tenantId),
+      ),
+    )
     .where(
       and(
-        eq(parkingSlots.tenantId, tenantId),
-        eq(parkingSlots.flatId, flatId),
-        eq(parkingSlots.isDeleted, false),
+        eq(residentVehicles.tenantId, tenantId),
+        eq(residents.flatId, flatId),
+        eq(residentVehicles.isDeleted, false),
+        eq(residents.isDeleted, false),
+        isNotNull(residents.activeKey),
       ),
-    );
+    )
+    .orderBy(asc(residentVehicles.sortOrder), asc(residentVehicles.createdAt));
   return rows.map((r) => ({
-    id: r.id,
-    slotNumber: r.slotNumber,
-    vehicleNumber: r.vehicleNumber,
-    type: r.type,
+    kind: r.kind as ResidentVehicleDto["kind"],
+    registrationNumber: r.registrationNumber,
+    parkingPurchased: Boolean(r.parkingPurchased),
+    parkingSlot: r.parkingSlot ?? null,
   }));
 }
 

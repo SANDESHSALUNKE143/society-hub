@@ -30,11 +30,17 @@ export default defineConfig({
     host: true,
     port: 5174,
     strictPort: true,
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+    },
   },
   preview: {
     host: true,
     port: 5174,
     strictPort: true,
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+    },
   },
   test: {
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],

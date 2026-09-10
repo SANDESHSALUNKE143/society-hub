@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { AuthTokens, UserDto } from "@society-hub/types";
 import { createSocietyHubClient, type SocietyHubClient } from "@society-hub/sdk";
+import { canUseManageApp } from "@society-hub/ui";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
@@ -24,11 +25,8 @@ const ACCESS_KEY = "sh_manage_access";
 const REFRESH_KEY = "sh_manage_refresh";
 const USER_KEY = "sh_manage_user";
 
-// Manage is for SocietyHub platform employees only. Society staff
-// (chairperson/secretary/treasurer/cashier/committee) and residents must
-// use the Client App instead.
-function isPlatform(user: UserDto) {
-  return user.role === "superadmin";
+function canEnterManage(user: UserDto) {
+  return canUseManageApp(user.role);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -51,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (raw && access) {
       try {
         const parsed = JSON.parse(raw) as UserDto;
-        if (!isPlatform(parsed)) {
+        if (!canEnterManage(parsed)) {
           clearStorage();
           setLoading(false);
           return;
@@ -60,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         client
           .me()
           .then((me) => {
-            if (!isPlatform(me)) {
+            if (!canEnterManage(me)) {
               clearStorage();
               setUser(null);
               return;
@@ -88,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function setSession(next: UserDto, tokens: AuthTokens) {
-    if (!isPlatform(next)) {
+    if (!canEnterManage(next)) {
       clearStorage();
       setUser(null);
       throw new Error("USE_CLIENT_APP");

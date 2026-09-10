@@ -1,0 +1,72 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Git SHA (7 chars) already running on staging"
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Promote API image (no rebuild)
+        run: |
+          IMAGE="${{ secrets.ACR_LOGIN_SERVER }}/societyhub-api:${{ inputs.image_tag }}"
+          az containerapp update \
+            --name "${{ secrets.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --image "$IMAGE"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Build client-app
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        run: bunx turbo run build --filter=@society-hub/client-app
+
+      - name: Deploy client-app Static Web App
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.SWA_TOKEN_CLIENT }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: apps/client-app/dist
+          skip_app_build: true
+          skip_api_build: true
+
+      - name: Build manage
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        run: bunx turbo run build --filter=@society-hub/manage
+
+      - name: Deploy manage Static Web App
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.SWA_TOKEN_MANAGE }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: apps/manage/dist
+          skip_app_build: true
+          skip_api_build: true

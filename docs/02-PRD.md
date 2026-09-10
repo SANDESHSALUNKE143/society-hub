@@ -26,7 +26,7 @@ SocietyHub is a multi-tenant SaaS for housing societies. The **product roadmap i
 | App | Audience | Modes |
 |-----|----------|--------|
 | `apps/client-app` (`app.localhost:5173`) | Society members | **Admin \| Resident** toggle (like Fassport Raise \| Invest). Staff: Chairperson, Secretary, Treasurer, Cashier, Committee. Residents/tenants: Resident mode only. |
-| `apps/manage` (`manage.localhost:5174`) | SocietyHub **platform employees** only | Create societies, add people to a society team. Day-to-day society admin is **not** here — add yourself to the society team and use Client App Admin. |
+| `apps/manage` (`manage.localhost:5174`) | SocietyHub **platform employees** only | Create societies, list/add/remove a society team, **add / edit / remove flats** and **parking slots** (puzzle or open; form or CSV). Day-to-day society admin (residents, complaints) stays in Client App Admin. |
 
 Both share one API (`apps/api`) and `packages/sdk`.
 
@@ -62,6 +62,7 @@ Secretary / Treasurer / Committee / Tenant refinements and full RBAC matrix appl
 | Onboard flats / residents | ✓ | |
 | Login / logout | ✓ | ✓ |
 | Raise complaint | ✓ (optional) | ✓ |
+| Update Account household details (linked flat) | ✓ | ✓ |
 | View own complaints + status | ✓ | ✓ |
 | View all society complaints + status | ✓ | |
 | Update complaint status | ✓ | |
@@ -142,7 +143,7 @@ Phase 2 builds on the complaint portal. It is **in product roadmap**, not droppe
 | **Residents** | Owners vs tenants; move-in/move-out; profile self-update; tenant verification document store/retrieve |
 | **Complaints (advanced)** | Status `Assigned`; assignment to staff; comments thread; SLA timers/reminders/escalation (BullMQ) |
 | **Billing** | Generate maintenance bills per flat/period; line items; dues; defaulters; bill correct/void with audit |
-| **Payments** | Razorpay online (UPI/card/netbanking); webhook reconciliation; cash/cheque/NEFT manual entry; receipts; payment history |
+| **Payments** | **Now:** offline UPI/QR — society posts UPI ID + optional QR/account details; resident uploads a payment screenshot; Admin/Treasurer reviews, credits the bill, and acknowledges (or rejects). **Future:** Razorpay online checkout + webhooks. Cash/cheque/NEFT staff entry still available. |
 | **Notices** | Publish to all/wing/flat; read acknowledgment; edit/unpublish |
 | **Notifications** | In-app inbox; email (Resend); web push (FCM); deep links |
 | **Dashboards** | Secretary ops; Treasurer finance (collection %, outstanding); Committee read-only; richer resident home |
@@ -150,7 +151,9 @@ Phase 2 builds on the complaint portal. It is **in product roadmap**, not droppe
 
 ### 6.3 Future (after Phase 2)
 
-Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendor module, events, marketplace, AI assistant, builder edition, municipal extensions, **Flutter native apps** (repo placeholders: [`apps/mobile/android`](../../apps/mobile/android/), [`apps/mobile/ios`](../../apps/mobile/ios/)), WhatsApp notification channel.
+Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendor module, events, marketplace, AI assistant, builder edition, municipal extensions, **iOS App Store listing** (same Flutter app as Android), WhatsApp notification channel.
+
+**Native Android (now):** Flutter Client App in [`apps/mobile/`](../../apps/mobile/) — Play Store; mirrors `apps/client-app` (no bulk CSV, no manage portal).
 
 ## 7. Functional requirements
 
@@ -161,12 +164,23 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 - FR-AUTH-3: User can **set a PIN** after successful OTP or SSO; later sessions may unlock with PIN per Architecture (hashed at rest; never stored plaintext).
 - FR-AUTH-4: **Logout** clears session.
 - FR-AUTH-5: Admin can **onboard** residents (and admin users) with mobile and flat binding before first login.
+- FR-AUTH-6: Android login shows the **installed version**. If Play has a newer build, show an **Update** button that opens the in-app update or Play listing.
+- FR-AUTH-7: **Choose society** lists **one option per society**. Extra staff roles in the same society (Chairperson + Committee) are not separate choices — switch **Admin | Resident** in Client App after entering.
 
 ### 7.2 Society & resident onboarding (MVP)
 
 - FR-ONB-1: Admin onboarding for the pilot society (or Super Admin creates society + first Admin).
-- FR-ONB-2: Admin registers residents against **flats** (flat number required for auto-fill).
-- FR-ONB-3: Buildings/wings only as needed to uniquely identify flats for the pilot.
+- FR-ONB-2: Admin registers residents against **flats**. The form is **flat first**: pick wing/flat on the same screen as the tabs — **Owner**, **Family**, **Parking Details**, **Two-wheelers**, **Four-wheelers**, and **Gas**. The owner tab captures name, contact number, email, and emergency contact, and can **edit the existing owner**. **Parking Details** assigns a Manage parking lot (puzzle or open). The number list shows free lots of the selected type plus lots already on this flat; lots on other flats stay visible but cannot be stolen. Family tab lists family members in a table (add / edit dialog, delete). Household age counts stay on that tab. Staff can remove a family member; the owner cannot be removed there. **A flat has exactly one owner.** Everyone else on that flat is a family member. Each person is a separate resident with their own mobile (OTP). Email is optional and must be unique if provided. Parking included slots (FR-ONB-7) apply to the **flat**, not per person. Adding another person as owner (without `editOwner`) is stored as family.
+- FR-ONB-2b: After the owner is onboarded, that **owner resident** can add family members to their own flat (name, contact number, optional email). Each family member can log in with their own mobile OTP and raise complaints for that flat. Only the owner can add household members; society staff can still add people from Onboard resident.
+- FR-ONB-3: **SocietyHub platform employees** add, edit, and remove flats from **Manage** society detail: wing, floor, and flat number (one form or CSV). The flats list is paginated. Remove is blocked while residents are linked to the flat. Client App Admin **lists** those flats for onboard and does not create them. Buildings/wings are created as needed to store the wing name.
+- FR-ONB-3b: **SocietyHub platform employees** add, edit, and remove **parking slots** from Manage society detail. Two kinds: **puzzle** (wing + parking number; typical wings A–D) and **open** (parking number only). Puzzle parking number is the slot only (101, not A-101); the same number may exist in another wing. Floor is not collected for parking. Open parking numbers are unique in the society. Remove is blocked while a flat still uses that slot. Client App Admin **picks** a slot when onboarding; they do not invent parking numbers.
+- FR-ONB-4: Society Admin can add, update (name / email / mobile / role), and remove society team members in Client App Admin. A team member cannot remove themselves.
+- FR-ONB-5: Society Admin can list all onboarded residents in Client App Admin (name, mobile, email, flat). Adding stays on Onboard resident. Searchable directory / move-out is Phase 2 (FR-RES-*).
+- FR-ONB-6: Platform employees on Manage society detail can list that society's team, add members (email, mobile, role), and remove members. They cannot remove themselves. Contact/role edits stay in Client App Admin.
+- FR-ONB-7: Each flat includes **2 two-wheeler** and **1 four-wheeler** parking by default. Admins can record more than one bike and more than one car; any vehicle beyond those included slots must be marked as **purchased parking** (optional slot label). **CSV import may skip registration numbers** and record only counts in `twoWheelers` / `fourWheelers` (for example `2` and `1`). Count-only extras beyond the included slots are stored as purchased parking.
+- FR-ONB-8: Onboard records whether the flat has taken a **PNG gas connection** (yes / no).
+- FR-ONB-9: Onboard records how many people live in the flat by age group: **Adult**, **Child**, and **Senior citizen**. These counts are per **flat** (shared by everyone onboarded to that flat). CSV columns: `adults`, `children`, `seniorCitizens`.
+- FR-ONB-10: **Account** has three sections: **My flat**, **Household**, and **Security**. Household uses the same tabs as Onboard resident: **Owner**, **Family**, **Parking Details**, **Two-wheelers**, **Four-wheelers**, and **Gas**. Owner shows the flat owner’s name / mobile / email (read-only) plus emergency contact. Family holds the family table (add / edit / delete only for the owner) plus Adult / Child / Senior citizen counts. Parking Details assigns a Manage lot the same way staff onboard does. Vehicles and PNG stay on their tabs. Household fields apply to the **flat**. Vehicle parking quota (FR-ONB-7) is enforced across the household. Security holds password and PIN.
 
 ### 7.3 Complaint management (MVP)
 
@@ -212,7 +226,7 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 - FR-SOC-4: Assign/revoke Secretary, Treasurer, Committee, Society Admin roles.
 - FR-RES-1: Register owners against flats; searchable directory.
 - FR-RES-2: Onboard tenants to flats; move-in/move-out updates occupancy; owner remains on record.
-- FR-RES-3: Resident updates profile (phone, emergency contact, vehicle); visible to Secretary; audited.
+- FR-RES-3: Resident updates profile (phone, emergency contact, vehicle); visible to Secretary; audited. **MVP Account** also covers FR-ONB-10 household fields (PNG, family counts, vehicles) for a linked flat.
 - FR-RES-4: Upload/retrieve tenant verification documents via Azure Blob for authorized roles.
 
 ### 7.6 Phase 2 — complaints (advanced)
@@ -230,13 +244,14 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 - FR-BIL-4: Treasurer views outstanding dues and defaulters (filter by wing/flat).
 - FR-BIL-5: Bill corrections/voids write audit logs.
 
-### 7.8 Phase 2 — payments
+### 7.8 Payments (offline first; Razorpay later)
 
-- FR-PAY-1: Resident pays bill via Razorpay (UPI/card/netbanking); success updates bill; failure leaves unpaid.
-- FR-PAY-2: Razorpay webhooks verified and idempotent; payment linked to bill.
-- FR-PAY-3: Treasurer records cash/cheque/NEFT with reference; updates bill; receipt available.
-- FR-PAY-4: Resident downloads receipt (society, flat, amount, mode, date, transaction id).
-- FR-PAY-5: Resident views payment history.
+- FR-PAY-1: Society Admin/Treasurer publishes **offline pay details**: UPI ID, optional account name / number / IFSC, optional QR image. Residents see these when paying a bill.
+- FR-PAY-2: Resident pays **outside the app** (UPI/QR/bank), then uploads a **screenshot** against an unpaid bill. Payment stays `pending` until staff review. Bill is not marked paid yet.
+- FR-PAY-3: Admin/Treasurer reviews the screenshot, then **acknowledges** (credit: payment `success`, bill `paid`, receipt issued) or **rejects** (payment `failed`, bill stays unpaid; resident may submit again).
+- FR-PAY-4: Treasurer may still record cash/cheque/NEFT in person (immediate credit).
+- FR-PAY-5: Resident views payment history (pending / success / rejected) and receipt after acknowledgement.
+- FR-PAY-6 **(future):** Resident pays bill via Razorpay (UPI/card/netbanking); verified webhooks; do not treat client-reported success as paid.
 
 ### 7.9 Phase 2 — notices
 
@@ -302,7 +317,7 @@ Notifications on assignment and status changes; SLA jobs monitor breach.
 
 ### 8.4 Phase 2 — monthly bill and pay
 
-Treasurer generates period bills → residents notified → online Razorpay pay or Treasurer records offline → receipt → dashboards update collection %.
+Treasurer generates period bills → resident pays via society UPI/QR and uploads screenshot → Admin/Treasurer reviews and credits → receipt. Razorpay checkout is future.
 
 ### 8.5 Phase 2 — notice publish and read
 

@@ -22,15 +22,15 @@ This document is the **single explanation of what we use and why**. Detailed sys
 | Auth | Mobile OTP (MSG91) + Google SSO + PIN | 1 |
 | Files | Azure Blob (photos/videos) | 1 |
 | Speech | Browser Web Speech API (voice-to-text) | 1 |
-| Hosting | Azure (Container Apps, Static Web Apps, MySQL Flexible) | After Phase 1 code |
+| Hosting | **Render Hobby preview now**; Azure (Container Apps, Static Web Apps, MySQL Flexible) after UAT | Preview now / paid later |
 | Jobs / cache | Redis 7 + BullMQ | 2 |
 | Email | Resend | 2 |
 | Push | Firebase Cloud Messaging (web) | 2 |
 | Payments | Razorpay + manual cash/cheque/NEFT | 2 |
-| Native mobile | Flutter (`apps/mobile/android`, `apps/mobile/ios`) | Future |
+| Native mobile | Flutter (`apps/mobile/`) — **Android / Play now**; iOS listing next | Android now |
 | Tests | Vitest + Playwright | When implementing |
 
-**Client for Phase 1:** two **simple responsive web apps** — `apps/client-app` (residents) and `apps/manage` (Admin / Super Admin). Not Flutter.
+**Client for Phase 1 web:** two **simple responsive web apps** — `apps/client-app` (residents) and `apps/manage` (Admin / Super Admin). Flutter Android in `apps/mobile/` is the native Client App (Play); it does not replace web.
 
 ---
 
@@ -44,7 +44,7 @@ This document is the **single explanation of what we use and why**. Detailed sys
 | **MySQL 8** | Lightweight to run locally (Docker); familiar; Azure Database for MySQL for cloud; Drizzle supports MySQL well |
 | **Drizzle** | Type-safe SQL migrations/schemas without heavy ORM magic |
 | **React + Vite + Tailwind** | Simple, responsive UI for non-technical users; mobile browser first |
-| **Azure** | Aligns with Blob storage; Container Apps scale-to-zero saves cost on staging |
+| **Render now / Azure later** | $0 preview (Docker API + static sites + TiDB). Azure after Phase 1 UAT for Blob + paid SKUs |
 | **MSG91 + Google** | India OTP + SSO for easy login; PIN for quick re-entry |
 | **Defer Redis/Razorpay/FCM** | Not needed until Phase 2 billing/notices/SLA |
 
@@ -89,7 +89,7 @@ flowchart TB
 | `apps/api` | Backend modular monolith |
 | `apps/client-app` | Resident responsive web UI |
 | `apps/manage` | Admin / Super Admin responsive web UI |
-| `apps/mobile/*` | Placeholders for future Flutter Android/iOS |
+| `apps/mobile/` | Flutter Client App (Android first; iOS same project) |
 | `packages/*` | Shared auth helpers, SDK, Zod schemas, types |
 | `devops/` | Docker + Azure staging/production (cost-aware) |
 | `docs/` | Product and technical specification |
@@ -116,7 +116,8 @@ flowchart TB
   docker compose -f devops/docker/docker-compose.yml up mysql
   ```  
   Default: host `localhost:3306`, database/user/password `societyhub`  
-- **Cloud:** Azure Database for MySQL Flexible Server (Burstable SKUs for cost)  
+- **Cloud (preview):** TiDB Serverless (MySQL protocol) on the Render free path  
+- **Cloud (later):** Azure Database for MySQL Flexible Server (Burstable SKUs for cost)  
 - **IDs:** `CHAR(36)` UUID strings; timestamps `DATETIME(3)` UTC  
 - Full table list: [04-Database.md](04-Database.md)
 
@@ -153,21 +154,21 @@ UI rules: [PRD §5](02-PRD.md).
 
 ---
 
-## 8. Hosting and DevOps (Azure)
+## 8. Hosting and DevOps
 
-Cost-aware defaults — details in [`devops/COST.md`](../devops/COST.md):
+**Preview (now, $0):** Render Hobby — runbook [`devops/terraform/render/README.md`](../devops/terraform/render/README.md), limits [`devops/render/LIMITATIONS.md`](../devops/render/LIMITATIONS.md).
 
-| Piece | Choice |
-|-------|--------|
-| Web | Azure Static Web Apps (preferred) |
-| API | Azure Container Apps (staging min replicas **0**) |
-| DB | Azure Database for MySQL Flexible Burstable |
-| Registry | ACR Basic (shared) |
-| Secrets | Key Vault per env |
-| Packaging | Docker (`devops/docker/`) — same image tag staging → production |
+| Piece | Preview now | Later (paid) |
+|-------|-------------|--------------|
+| Web | Render Static Sites | Azure Static Web Apps |
+| API | Render free Docker web service | Azure Container Apps (min replicas **0** on staging) |
+| DB | TiDB Serverless (MySQL) | Azure Database for MySQL Flexible Burstable |
+| Files | Ephemeral `UPLOAD_DIR` | Azure Blob |
+| CD | Render auto-deploy from GitHub | Manual GitHub Actions → Azure |
+| Secrets | Render env vars (local tfvars) | Key Vault per env |
 
 **No AKS** for Phase 1 / early Phase 2.  
-**Deploy after** Phase 1 application development is ready for staging UAT.
+**Do not** provision Azure until Phase 1 UAT. Cost SKUs: [`devops/COST.md`](../devops/COST.md).
 
 ---
 
@@ -182,7 +183,7 @@ Cost-aware defaults — details in [`devops/COST.md`](../devops/COST.md):
 
 ## 10. Explicitly out of Phase 1 stack
 
-- Flutter / native Android & iOS app code (folders are placeholders only)  
+- iOS App Store listing (Flutter project exists; enable after Android internal track)  
 - WhatsApp Business API  
 - Kubernetes / microservices  
 - Redis required in Phase 1 (optional later)  

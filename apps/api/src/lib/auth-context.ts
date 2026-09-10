@@ -19,7 +19,14 @@ import {
   users,
 } from "../db/schema";
 import { AppError } from "./errors";
-import { hashToken, canUseAdminMode, isSocietyStaffRole, isResidentLikeRole, isPlatformRole, normalizeRole } from "./auth-helpers";
+import {
+  hashToken,
+  canUseAdminMode,
+  collapseMembershipsByTenant,
+  isPlatformRole,
+  normalizeRole,
+  pickDefaultRole,
+} from "./auth-helpers";
 
 export {
   hashToken,
@@ -154,15 +161,35 @@ export async function listMemberships(userId: string) {
     }));
   }
 
-  return rows.map((r) => {
-    const role = normalizeRole(r.role as Role);
-    return {
-      tenantId: r.tenantId,
-      societyName: r.societyName,
-      role,
-      canUseAdminMode: canUseAdminMode(role),
-    };
-  });
+  return collapseMembershipsByTenant(
+    rows.map((r) => {
+      const role = normalizeRole(r.role as Role);
+      return {
+        tenantId: r.tenantId,
+        societyName: r.societyName,
+        role,
+        canUseAdminMode: canUseAdminMode(role),
+      };
+    }),
+  );
+}
+
+export async function resolveRoleForTenant(userId: string, tenantId: string) {
+  const rows = await db
+    .select()
+    .from(userRoles)
+    .where(
+      and(
+        eq(userRoles.userId, userId),
+        eq(userRoles.tenantId, tenantId),
+        eq(userRoles.isDeleted, false),
+      ),
+    );
+  if (!rows.length) return null;
+  const preferred = pickDefaultRole(rows.map((r) => r.role as Role));
+  const match =
+    rows.find((r) => normalizeRole(r.role as Role) === preferred) ?? rows[0]!;
+  return normalizeRole(match.role as Role);
 }
 
 export async function resolveMembership(userId: string) {
@@ -179,10 +206,10 @@ export async function resolveMembership(userId: string) {
       "Phone is not onboarded to any society",
     );
   }
-  const staff = rows.find((r) => isSocietyStaffRole(r.role as Role));
-  const resident = rows.find((r) => isResidentLikeRole(r.role as Role));
-  const platform = rows.find((r) => isPlatformRole(r.role as Role));
-  return staff ?? resident ?? platform ?? rows[0]!;
+  const preferred = pickDefaultRole(rows.map((r) => r.role as Role));
+  return (
+    rows.find((r) => normalizeRole(r.role as Role) === preferred) ?? rows[0]!
+  );
 }
 
 export const authPlugin = new Elysia({ name: "auth" }).derive(

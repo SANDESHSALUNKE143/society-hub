@@ -23,8 +23,11 @@ export const env = {
   publicApiUrl: process.env.PUBLIC_API_URL ?? "http://localhost:3000",
   devAuth: process.env.DEV_AUTH === "true",
   devOtpCode: process.env.DEV_OTP_CODE ?? "123456",
-  // When unset, Google SSO has not been provisioned for this environment yet,
-  // so we fall back to accepting `dev:<phone>` id tokens (same as DEV_AUTH)
-  // to keep the Google login story usable in local/demo setups.
-  googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
+  // Live getters so integration tests can set GOOGLE_* for one case.
+  get googleClientId() {
+    return process.env.GOOGLE_CLIENT_ID ?? "";
+  },
+  get googleTokeninfoUrl() {
+    return process.env.GOOGLE_TOKENINFO_URL ?? "https://oauth2.googleapis.com/tokeninfo";
+  },
 };

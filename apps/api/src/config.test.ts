@@ -8,5 +8,7 @@ describe("config", () => {
     expect(env.jwtSecret.length).toBeGreaterThan(10);
     expect(Array.isArray(env.corsOrigin)).toBe(true);
     expect(env.corsOrigin.length).toBeGreaterThan(0);
+    expect(typeof env.googleClientId).toBe("string");
+    expect(env.googleTokeninfoUrl).toContain("tokeninfo");
   });
 });

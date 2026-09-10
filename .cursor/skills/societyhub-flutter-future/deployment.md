@@ -60,10 +60,11 @@ flutter build ipa --flavor prod --release \
 Jobs:
 
 1. `flutter analyze` + `flutter test`  
-2. Build staging AAB + IPA on tag/`staging` branch  
-3. Build prod on version tag `mobile-v*`  
+2. Signed AAB on `workflow_dispatch` or tag `mobile-v*`  
+3. Optional Play **internal draft** when `ENABLE_PLAY_UPLOAD=true` (never production)  
+4. IPA only when `ENABLE_IOS_IPA=true`  
 
-Secrets (examples): `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEY_PASSWORD`, `ASC_API_KEY`, `GOOGLE_SERVICES_JSON` (if used).
+Secrets (examples): `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON`, `ASC_API_KEY`.
 
 Do **not** commit keystores, `google-services.json` with sensitive keys, or provisioning profiles.
 

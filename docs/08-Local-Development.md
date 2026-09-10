@@ -16,6 +16,8 @@ This guide is the **source of truth for local run**. Prefer a **native MySQL** (
 | Client App | http://app.localhost:5173 | Society Admin \| Resident (Fassport Raise/Invest style) |
 | Manage | http://manage.localhost:5174 | SocietyHub **platform employees only** |
 | API | http://localhost:3000 | Elysia `/v1` |
+| Flutter Android | emulator / USB | [`apps/mobile/`](../apps/mobile/README.md) — §12 |
+| Flutter iOS | Simulator (Mac + Xcode) | Same project; no App Store listing yet — §12 |
 | OpenAPI | http://localhost:3000/docs | Swagger UI |
 | API guide | [09-API.md](09-API.md) | Narrative REST reference (Fassport-style) |
 | MySQL | `127.0.0.1:3306` | Local server (Workbench) |
@@ -248,7 +250,7 @@ curl http://127.0.0.1:3000/health
 | Email / password | Manage (platform): `superadmin@societyhub.local` / `Test@1234` |
 | OTP (mobile) | Client App Chairperson `9999999999` · Resident `8888888888` · code `123456` |
 
-Use **Manage** (`manage.localhost:5174`) for SocietyHub platform employees (create societies, add staff to a society team). Use **Client App** (`app.localhost:5173`) for society **Admin \| Resident** modes.
+Use **Manage** (`manage.localhost:5174`) for SocietyHub platform employees (create societies, list/add/remove staff, add/edit/remove flats). Use **Client App** (`app.localhost:5173`) for society **Admin \| Resident** modes.
 
 ---
 
@@ -376,8 +378,9 @@ bun run db:seed
 ```text
 society-hub/
   apps/api/          # Bun + Elysia API
-  apps/client-app/          # Resident React web
+  apps/client-app/   # Resident React web
   apps/manage/       # Admin React web
+  apps/mobile/       # Flutter Client App (Android first)
   packages/          # shared types, validation, sdk, auth
   docs/08-Local-Development.md   # this file
   devops/docker/     # optional Docker MySQL / images
@@ -385,7 +388,55 @@ society-hub/
 
 ---
 
-## 12. Checklist before first login
+## 12. Mobile (Flutter) — Android first, iOS local
+
+The native Client App lives in [`apps/mobile/`](../apps/mobile/). Deep dive: [`apps/mobile/README.md`](../apps/mobile/README.md). Web + API above must already be running. Root [README.md](../README.md) has the short run matrix and deployed URLs.
+
+### Prerequisites
+
+- Flutter **stable** (`flutter doctor -v`)
+- **Android:** SDK, emulator API 34+, licenses (`flutter doctor --android-licenses`)
+- **iOS (Mac only):** Xcode + Command Line Tools, CocoaPods (`pod install` under `apps/mobile/ios`)
+- Same Bun API as §6 (`http://localhost:3000`, `DEV_AUTH=true`)
+
+### Run
+
+| Target | `API_BASE_URL` | Command |
+|--------|----------------|---------|
+| Android emulator | `http://10.0.2.2:3000` | `cd apps/mobile && flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000 --dart-define=ENV=dev` |
+| Physical Android | `http://<LAN-IP>:3000` | Same; LAN IP from `ipconfig getifaddr en0` |
+| iOS Simulator | `http://127.0.0.1:3000` | `open -a Simulator` then `flutter run --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=ENV=dev` |
+| Preview API | `https://societyhub-api-ece6.onrender.com` | `--dart-define=ENV=staging` |
+
+OTP (local): Chairperson `9999999999` · Resident `8888888888` · `123456`.
+
+Play package `com.societyhub.societyhub_mobile` (internal/closed). iOS bundle `com.societyhub.societyhubMobile` — **no App Store listing yet**. Store signing, Play AAB, and CI: [10-Go-Live.md](10-Go-Live.md) §6–7, [12-CICD.md](12-CICD.md), and the mobile README.
+
+### Check / test setup (Android + iOS)
+
+Step-by-step with expected results: root [README.md](../README.md) — **Check / test local Android and iOS**. Short version:
+
+1. `bun run dev` then `curl -sS http://127.0.0.1:3000/health` and `grep DEV_AUTH apps/api/.env` (`true`).
+2. `cd apps/mobile && flutter pub get && flutter analyze && flutter test` — clean.
+3. `flutter doctor -v` — Android toolchain green; on a Mac, Xcode + CocoaPods green.
+4. **Android:** `flutter emulators --launch <id>` → `adb devices` shows `device`. Emulator API is `http://10.0.2.2:3000`. Physical phone: same Wi‑Fi + LAN IP, or `adb reverse tcp:3000 tcp:3000` and `http://127.0.0.1:3000`.
+5. **iOS:** `cd apps/mobile/ios && pod install` → `open -a Simulator` → API is `http://127.0.0.1:3000` (never `10.0.2.2`).
+6. `flutter run` with the matching `--dart-define=API_BASE_URL=… --dart-define=ENV=dev`.
+7. Smoke on both: OTP `9999999999` / `123456` (chairperson), `8888888888` / `123456` (resident). Raise a complaint. Account → Family shows people, not only Adult/Child counts.
+
+```bash
+# Android emulator
+cd apps/mobile
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000 --dart-define=ENV=dev
+
+# iOS Simulator
+cd apps/mobile
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=ENV=dev
+```
+
+---
+
+## 13. Checklist before first login
 
 - [ ] `bun --version` works  
 - [ ] Workbench connects to MySQL on `3306`  
@@ -395,3 +446,5 @@ society-hub/
 - [ ] `CORS_ORIGIN` includes ports `5173` and `5174`  
 - [ ] `bun run dev` → client-app + manage + API up  
 - [ ] Sign in with `superadmin@societyhub.local` / `Test@1234`  
+- [ ] (Optional Android) `cd apps/mobile && flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000 --dart-define=ENV=dev`  
+- [ ] (Optional iOS Simulator) `cd apps/mobile && flutter run --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=ENV=dev`  
