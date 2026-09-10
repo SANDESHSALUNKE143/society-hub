@@ -7,7 +7,7 @@ Functional and technical specification for SocietyHub.
 **Pilot:** Keshav Heights Society  
 **Phase 1:** two responsive web apps — **`apps/client-app`** (residents) + **`apps/manage`** (admin) — working **Complaints** + auth/onboard; other planned modules shown as **Coming soon**.  
 **Phase 2:** implement Coming soon for real (billing, payments, notices, …) — see [PRD](02-PRD.md).  
-**Native mobile:** Flutter in `apps/mobile/` — **Android / Play first**; iOS listing next. Web MVP unchanged.
+**Native mobile:** Flutter in `apps/mobile/` — **Android on Play** (internal/closed, package `com.societyhub.societyhub_mobile`); **iOS Simulator locally** (bundle `com.societyhub.societyhubMobile`, App Store listing next). Web MVP unchanged. Preview URLs and run commands: root [README.md](../README.md).
 
 ## Document index
 
@@ -26,6 +26,7 @@ Functional and technical specification for SocietyHub.
 | [10-Go-Live](10-Go-Live.md) | **Cheapest Workspace + Azure host + Google SSO + Play/App Store + CI/CD** |
 | [11-Engineers-Bay-Workspace](11-Engineers-Bay-Workspace.md) | **Company domain live:** `engineersbay.in`, Base plan, mail setup status |
 | [12-CICD](12-CICD.md) | **Current pipelines:** git flow, CI, Promote preview, Mobile AAB, Render, secrets |
+| [Play CI/CD Drive note](SocietyHub-Play-CICD-GDrive-Note.txt) | **Operator cheat-sheet** for Play internal + GitHub secrets (copy to Drive; no keys) |
 | [prompts/agents.md](prompts/agents.md) | Agent operating rules (docs mirror) |
 | [prompts/skills.md](prompts/skills.md) | Index of Cursor skills per stack item |
 | [prompts/cursor-system.md](prompts/cursor-system.md) | Short system prompt for codegen agents |

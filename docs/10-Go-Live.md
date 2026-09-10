@@ -46,11 +46,11 @@ Do **not** buy seats for Keshav Heights residents.
 ```text
 1. Domain
 2. Workspace Business Base (2 users) + 2SV
-3. Google Cloud — project + Web client DONE; add Android client (iOS later)
-4. Azure staging only (not production)
-5. GitHub secrets + Environments
-6. Push → CI green → manual Deploy staging
-7. Play Console (account created; identity in review) + Apple later
+3. Google Cloud — project + Web + Android clients DONE (iOS later)
+4. Azure staging only (not production) — preview is Render Hobby today
+5. GitHub secrets + environment `prod`
+6. Push → CI green → Promote preview (`staging` → `main`)
+7. Play internal live; confirm Google Sign-In on a Play install + Apple later
 8. Wire GOOGLE_CLIENT_ID on Render + Flutter (Web client ID is known)
 ```
 
@@ -131,17 +131,38 @@ Add `https://app.societyhub.in` and `https://manage.societyhub.in` after the pro
 
 **Android client (done)** — package `com.societyhub.societyhub_mobile`.
 
-SHA-1s already on `societyhub-android` (same client, two fingerprints):
+Google Auth Platform allows **one SHA-1 per Android client**. Sign-In matches **package + SHA-1** across every Android client in the project. Do **not** overwrite the SHA-1 on `societyhub-android` (that is the upload key). Add extra Android clients with the same package.
 
-```text
-Debug:  E8:49:BF:F4:F0:C5:9B:A2:96:CC:61:E0:1F:9C:29:A5:D2:C2:D7:57
-Upload: A7:05:A3:91:D4:DC:D7:7F:6F:84:6A:32:36:2D:10:B4:8E:CE:76:E2
-```
+| Client name | SHA-1 | Used for |
+|-------------|--------|----------|
+| `societyhub-android` | `A7:05:A3:91:D4:DC:D7:7F:6F:84:6A:32:36:2D:10:B4:8E:CE:76:E2` | Upload / CI AAB |
+| `societyhub-android-debug` | `E8:49:BF:F4:F0:C5:9B:A2:96:CC:61:E0:1F:9C:29:A5:D2:C2:D7:57` | Local `flutter run` |
+| `societyhub-android-play` | `79:4C:A5:3F:6D:98:95:0A:C3:8A:10:50:04:CD:81:09:9B:3E:C0:5F` | Play classical signing |
+| `societyhub-android-play-pqc` | `21:0E:39:37:AF:CD:CB:1D:3E:4E:12:ED:D1:3F:AF:AF:66:6B:99:E6` | Play post-quantum signing |
 
-After Play App Signing exists, add the **App signing key certificate** SHA-1 on the same Android client (Play Console → App integrity). Do not create a second Android client.
+**Play SHA-1s (checked 10 Sep 2026, 08:45):**
+
+- Classical `79:4C:A5:3F:…` — `societyhub-android-play` in this project (created 07:56 IST). Package `com.societyhub.societyhub_mobile`. Client id `583640086898-m53784dglvpt6bre3c5o13cpos1maeh`.
+- PQC `21:0E:39:37:…` — `societyhub-android-play-pqc` (client id `583640086898-9stsb90vslhphs56gqv65445pjj57qk6`).
+- Upload — `societyhub-android` (30 Aug 2026). Do not overwrite.
+- Debug — not in the client list yet. Add `societyhub-android-debug` only if local `flutter run` Google Sign-In fails.
+- If local Google Sign-In fails, add `societyhub-android-debug` with the debug SHA-1 above.
+- Flutter `serverClientId` stays the **Web** client (`societyhub-web`). Never put an Android client ID or downloaded `client_secret*.json` in the app or git.
+- Play Console path for fingerprints: **Protected with Play → Play Store protection → Manage Play app signing** (not the old App integrity page).
+- After any new Android client, wait 5–10 minutes (sometimes longer) and test Google Sign-In on a **Play internal** install. If consent is Testing, add tester Gmails on the OAuth audience / test-users list.
+
+If Create says **package name and fingerprint are already in use**, that SHA-1 is already registered — in **this** project, another GCP project on the same Google account, or a deleted client still held for ~30 days. Sign-In only works when package + SHA-1 live in **`societyhub-507013`** (same project as the Web client). If the fingerprint is owned by a different project, delete it there, wait, then create it here.
+
+**Play login error `10:` / `10:, null, null)`** is Google Play Services **DEVELOPER_ERROR**. It happens on the phone *before* our API runs. Causes: Play signing SHA-1 missing from this project, or Flutter `serverClientId` set to an **Android** client ID. Use OTP until the SHA-1s above show under [Clients](https://console.cloud.google.com/auth/clients?project=societyhub-507013) and a new Play build (`1.0.4+` — Web client fallback) is installed.
+
+Print local fingerprints (does not print passwords):
 
 ```bash
-# Debug SHA-1 (local)
+cd apps/mobile && bash scripts/print-android-sha1.sh
+```
+
+```bash
+# Debug SHA-1 only
 keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
   -storepass android -keypass android
 ```
@@ -450,7 +471,7 @@ Do **not** create production RG until staging UAT is green.
 
 | Done | Still to do |
 |------|-------------|
-| Workspace `engineersbay.in`, GCP project `societyhub-507013`, Web + Android OAuth clients | Play signing SHA-1 after first AAB |
+| Workspace `engineersbay.in`, GCP project `societyhub-507013`, Web + Android OAuth clients (upload + Play SHA-1s) | Confirm Play Google Sign-In on an internal install |
 | `ci.yml` / `mobile.yml` / deploy workflows | Paste `GOOGLE_CLIENT_ID` on Render + GitHub `GOOGLE_SERVER_CLIENT_ID` |
 | Flutter Android (OTP / password / PIN / Google / complaints) | Play identity approval, then create app + AAB |
 | Privacy / terms on Client App | `DEV_AUTH=false` on hosted API for store builds |
@@ -464,15 +485,15 @@ Do **not** create production RG until staging UAT is green.
 - [x] GCP project **SocietyHub** / `societyhub-507013` + Web client `societyhub-web`
 - [ ] Domain `societyhub.in` (or chosen TLD)
 - [ ] 2SV, SPF/DKIM/DMARC
-- [ ] Paste Web client ID as `GOOGLE_CLIENT_ID` on Render (and GitHub `GOOGLE_SERVER_CLIENT_ID`)
-- [x] Android OAuth client `societyhub-android` + debug SHA-1 (Play SHA-1 after App Signing)
+- [x] Paste Web client ID as GitHub `GOOGLE_SERVER_CLIENT_ID` (repo + `prod` env). Confirm `GOOGLE_CLIENT_ID` on Render if hosted web Google SSO fails.
+- [x] Android OAuth clients: upload SHA-1 on `societyhub-android`; Play classical already registered; Play PQC client created 10 Sep 2026 (§4.2)
 - [ ] iOS URL scheme (later)
 - [ ] Azure `rg-societyhub-staging` in Central India
-- [ ] GitHub environments + OIDC / mobile keystore secrets
-- [ ] `ci.yml` green on `main`
-- [ ] Manual **Deploy staging** succeeds; `/health` returns ok
-- [ ] OTP login on hosted Client App
-- [x] Play Console account (personal, Engineers Bay) — identity in review
-- [ ] Play **Create app** + AAB on **internal** track
-- [ ] Real Google SSO on device (Web + Android clients)
+- [x] GitHub environment `prod` + mobile keystore / Play upload secrets
+- [x] Preview CI green on `main` (Render Hobby)
+- [x] Hosted API `/health` ok (`https://societyhub-api-ece6.onrender.com`)
+- [ ] OTP login on hosted Client App (confirm after `DEV_AUTH=false`)
+- [x] Play Console account (personal, Engineers Bay)
+- [x] Play app + AAB on **internal** track (`1.0.3+4`; next upload `1.0.4+5` for Google error 10)
+- [ ] Confirm Google Sign-In on a **Play internal** install (wait after PQC client; add consent testers if needed)
 - [ ] Apple Developer + App Store Connect (next; not required for Android)

@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:societyhub_mobile/api/models.dart';
 import 'package:societyhub_mobile/auth/login_errors.dart';
@@ -12,12 +13,32 @@ void main() {
     );
   });
 
-  test('maps invalid_google_token to a SHA-1 hint', () {
+  test('maps invalid_google_token to OTP fallback copy', () {
     expect(
       loginErrorText(
         ApiException(code: 'invalid_google_token', message: 'Google sign-in failed'),
       ),
-      contains('SHA-1'),
+      contains('Use OTP'),
+    );
+  });
+
+  test('maps Play Services error 10 instead of leaking 10:, null, null)', () {
+    expect(
+      loginErrorText(
+        PlatformException(
+          code: 'sign_in_failed',
+          message: 'com.google.android.gms.common.api.ApiException: 10: ',
+        ),
+      ),
+      contains('error 10'),
+    );
+    expect(
+      loginErrorText(StateError('Exception: 10:, null, null)')),
+      contains('error 10'),
+    );
+    expect(
+      loginErrorText(StateError('Exception: 10:, null, null)')),
+      isNot(contains('null, null')),
     );
   });
 

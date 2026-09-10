@@ -33,7 +33,7 @@ Company identity for SocietyHub and future products. Product domain is **not** b
 | Google Sites company page | **Optional / not started** |
 | Point [10-Go-Live](10-Go-Live.md) at `@engineersbay.in` | **Done** (company mail); product host still TBD |
 | GCP **SocietyHub** / `societyhub-507013` + Web OAuth `societyhub-web` | **Done** (29 Aug 2026). Do not create another project. |
-| Android OAuth client `societyhub-android` | **Done** (30 Aug 2026). Package `com.societyhub.societyhub_mobile` + debug SHA-1 + upload SHA-1. Add Play App Signing SHA-1 after first AAB. |
+| Android OAuth clients | **Done.** `societyhub-android` = upload SHA-1 (30 Aug 2026). Play classical SHA-1 already registered. Play PQC client created 10 Sep 2026 (Go-Live §4.2). App still uses Web client as `serverClientId`. |
 
 ## Next for you (Admin) — DKIM / SPF / DMARC
 
