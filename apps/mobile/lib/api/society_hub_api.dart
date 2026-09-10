@@ -350,6 +350,15 @@ class SocietyHubApi {
     );
   }
 
+  Future<List<ParkingSlotDto>> listResidentParkings() {
+    return _request(
+      '/v1/parking',
+      parse: (json) => (json as List<dynamic>)
+          .map((e) => ParkingSlotDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
   Future<ResidentProfileDto> updateProfile({
     String? emergencyContact,
     String? vehicleNumber,
@@ -357,6 +366,8 @@ class SocietyHubApi {
     int? adultCount,
     int? childCount,
     int? seniorCitizenCount,
+    String? parkingSlot,
+    String? parkingSlotId,
     List<Map<String, Object?>>? vehicles,
   }) {
     return _request(
@@ -369,6 +380,8 @@ class SocietyHubApi {
         if (adultCount != null) 'adultCount': adultCount,
         if (childCount != null) 'childCount': childCount,
         if (seniorCitizenCount != null) 'seniorCitizenCount': seniorCitizenCount,
+        if (parkingSlot != null) 'parkingSlot': parkingSlot,
+        if (parkingSlotId != null) 'parkingSlotId': parkingSlotId,
         if (vehicles != null) 'vehicles': vehicles,
       },
       parse: (json) =>
@@ -390,6 +403,15 @@ class SocietyHubApi {
       '/v1/admin/flats',
       parse: (json) => (json as List<dynamic>)
           .map((e) => FlatDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Future<List<ParkingSlotDto>> listParkings() {
+    return _request(
+      '/v1/admin/parkings',
+      parse: (json) => (json as List<dynamic>)
+          .map((e) => ParkingSlotDto.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
   }
@@ -457,6 +479,75 @@ class SocietyHubApi {
     );
   }
 
+  Future<List<SocietyResidentDto>> listResidents() {
+    return _request(
+      '/v1/admin/residents',
+      parse: (json) => (json as List<dynamic>)
+          .map((e) => SocietyResidentDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Future<List<SocietyResidentDto>> listHouseholdMembers() {
+    return _request(
+      '/v1/household/members',
+      parse: (json) => (json as List<dynamic>)
+          .map((e) => SocietyResidentDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Future<UserDto> addHouseholdMember({
+    required String name,
+    required String phone,
+    String? email,
+  }) {
+    return _request(
+      '/v1/household/members',
+      method: 'POST',
+      data: {
+        'name': name,
+        'phone': phone,
+        if (email != null && email.isNotEmpty) 'email': email,
+      },
+      parse: (json) {
+        final map = json as Map<String, dynamic>;
+        final user = map['user'] as Map<String, dynamic>? ?? map;
+        return UserDto.fromJson(user);
+      },
+    );
+  }
+
+  Future<UserDto> updateHouseholdMember({
+    required String userId,
+    required String name,
+    required String phone,
+    String? email,
+  }) {
+    return _request(
+      '/v1/household/members/$userId',
+      method: 'PATCH',
+      data: {
+        'name': name,
+        'phone': phone,
+        if (email != null && email.isNotEmpty) 'email': email,
+      },
+      parse: (json) {
+        final map = json as Map<String, dynamic>;
+        final user = map['user'] as Map<String, dynamic>? ?? map;
+        return UserDto.fromJson(user);
+      },
+    );
+  }
+
+  Future<void> removeHouseholdMember(String userId) {
+    return _request(
+      '/v1/household/members/$userId',
+      method: 'DELETE',
+      parse: (_) {},
+    );
+  }
+
   Future<UserDto> onboardResident({
     required String name,
     required String phone,
@@ -464,7 +555,9 @@ class SocietyHubApi {
     String? email,
     int? floor,
     String? parkingSlot,
+    String? parkingSlotId,
     bool isOwner = true,
+    bool editOwner = false,
     String? emergencyContact,
     bool? pngGasConnection,
     int? adultCount,
@@ -482,7 +575,10 @@ class SocietyHubApi {
         if (email != null && email.isNotEmpty) 'email': email,
         if (floor != null) 'floor': floor,
         if (parkingSlot != null && parkingSlot.isNotEmpty) 'parkingSlot': parkingSlot,
+        if (parkingSlotId != null && parkingSlotId.isNotEmpty)
+          'parkingSlotId': parkingSlotId,
         'isOwner': isOwner,
+        if (editOwner) 'editOwner': true,
         if (emergencyContact != null && emergencyContact.isNotEmpty)
           'emergencyContact': emergencyContact,
         if (pngGasConnection != null) 'pngGasConnection': pngGasConnection,

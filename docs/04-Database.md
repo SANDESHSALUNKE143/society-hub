@@ -37,6 +37,7 @@
 | `buildings` | Buildings within society |
 | `wings` | Wings within building |
 | `flats` | Flats within wing |
+| `parking_slots` | Society parking inventory: puzzle (wing + number) or open (number). Optional link to a flat. |
 | `resident_vehicles` | Registered two-wheelers / four-wheelers per resident (parking included vs purchased) |
 | `society_settings` | SLA days, billing defaults, notification prefs |
 
@@ -47,7 +48,7 @@
 | `users` | Login identity (phone, email, google subject) |
 | `otp_challenges` | OTP request/verify records |
 | `user_roles` | Role per user per tenant |
-| `residents` | Person linked to a flat (owner/occupant). **Many residents per flat** (family). Unique `(tenant_id, user_id)` — one membership per person per society, not one person per flat. |
+| `residents` | Person linked to a flat. **Many residents per flat** (one owner + family). `is_owner` is true for exactly one active row per flat. Unique `(tenant_id, user_id)` — one membership per person per society. |
 | `resident_documents` | Metadata + blob path for verification docs |
 
 ### Complaints
@@ -109,7 +110,16 @@ erDiagram
 ### flats (onboard extras)
 
 - `floor` nullable int
-- `parking_slot` varchar — primary slot label for the flat
+- `parking_slot` varchar — primary slot label for the flat (matches `parking_slots.slot_number` when assigned)
+
+### parking_slots
+
+- `kind`: `puzzle` | `open` (default `open` for older rows)
+- `wing` nullable varchar — required for puzzle (A / B / C / D typical)
+- `floor` nullable int — unused for inventory (kept for older rows)
+- `slot_number` — puzzle unique with kind + wing; open unique by number among open slots
+- `flat_id` nullable — set when a household uses this slot
+- `type` — legacy vehicle hint (`car` / `bike`); inventory kind is `kind`, not `type`
 - `png_gas_connection` boolean, default false — whether this flat has taken a PNG gas connection
 - `adult_count`, `child_count`, `senior_citizen_count` — household size by age group (non-negative ints, default 0)
 
@@ -125,7 +135,7 @@ erDiagram
 ### residents
 
 - Unique `(tenant_id, user_id)` so a person belongs to one flat in a society
-- Many rows may share the same `flat_id` (family members). Login identity is **mobile**; `users.email` is optional and unique when set.
+- Many rows may share the same `flat_id` (one owner + family members). `is_owner` is true for exactly one active resident per flat. Login identity is **mobile**; `users.email` is optional and unique when set.
 
 `resident_profiles.vehicle_number` remains a convenience copy of the first four-wheeler plate (else first two-wheeler) for older profile UI. Residents with a linked flat can update household PNG, family counts, and their `resident_vehicles` via `PATCH /v1/profile` (FR-ONB-10).
 

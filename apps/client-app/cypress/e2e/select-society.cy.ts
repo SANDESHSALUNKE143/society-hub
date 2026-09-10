@@ -64,4 +64,29 @@ describe("Select society", () => {
     );
     cy.url().should("include", "/select-society");
   });
+
+  it("skips the picker when the same society has two roles", () => {
+    cy.intercept("GET", "**/v1/auth/memberships", {
+      statusCode: 200,
+      body: [
+        {
+          tenantId: tenantA,
+          societyName: "Keshav Heights",
+          role: "committee",
+          canUseAdminMode: true,
+        },
+        {
+          tenantId: tenantA,
+          societyName: "Keshav Heights",
+          role: "chairperson",
+          canUseAdminMode: true,
+        },
+      ],
+    }).as("membershipsSameSociety");
+
+    cy.visit("/select-society");
+    cy.wait("@membershipsSameSociety");
+    cy.contains("Choose your society").should("not.exist");
+    cy.url().should("include", "/dashboard");
+  });
 });

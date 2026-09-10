@@ -1,26 +1,39 @@
-import { FormEvent, useEffect, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { Navigate } from "react-router-dom";
 import {
   INCLUDED_FOUR_WHEELER_PARKING,
   INCLUDED_TWO_WHEELER_PARKING,
   vehicleParkingQuotaMessage,
   type FlatDto,
+  type ParkingKind,
+  type ParkingSlotDto,
   type ResidentImportResultDto,
+  type SocietyResidentDto,
 } from "@society-hub/types";
 import { ApiClientError } from "@society-hub/sdk";
 import {
+  HOUSEHOLD_TABS,
   ShField,
   ShFormGrid,
   ShPage,
   ShPageHeader,
-  ShSection,
-  ShSplit,
+  ShTabs,
+  householdSubmitLabel,
+  preferredParkingKind,
+  WingFlatSelect,
+  type HouseholdTabId,
 } from "@society-hub/ui";
 import { useAuth } from "../auth";
 import { canUseAdminMode } from "../app-mode";
+import { AllottedParkingFields } from "../components/AllottedParkingFields";
+import { FamilyMembersEditor } from "../components/FamilyMembersEditor";
+import { HouseholdAgeCounts } from "../components/HouseholdAgeCounts";
+import { HouseholdOwnerFields } from "../components/HouseholdOwnerFields";
+import { PngGasFields } from "../components/PngGasFields";
 import { VehicleFields } from "../components/VehicleFields";
 import { mapResidentCsvRows, parseCsv } from "../lib/resident-csv";
 import {
+  emptyVehicleRows,
   householdVehiclesForQuota,
   remainingIncluded,
   toVehiclePayload,
@@ -35,6 +48,8 @@ With Plates,8888888889,resident@example.com,102,A,1,P-102,true,9999999998,MH12AB
 export function OnboardPage() {
   const { user, client } = useAuth();
   const [flats, setFlats] = useState<FlatDto[]>([]);
+  const [parkings, setParkings] = useState<ParkingSlotDto[]>([]);
+  const [parkingKind, setParkingKind] = useState<ParkingKind>("puzzle");
   const [societyName, setSocietyName] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -42,22 +57,32 @@ export function OnboardPage() {
   const [flatId, setFlatId] = useState("");
   const [floor, setFloor] = useState("");
   const [parkingSlot, setParkingSlot] = useState("");
+  const [parkingSlotId, setParkingSlotId] = useState("");
   const [isOwner, setIsOwner] = useState(true);
   const [emergencyContact, setEmergencyContact] = useState("");
   const [pngGasConnection, setPngGasConnection] = useState(false);
   const [adultCount, setAdultCount] = useState("0");
   const [childCount, setChildCount] = useState("0");
   const [seniorCitizenCount, setSeniorCitizenCount] = useState("0");
-  const [twoWheelers, setTwoWheelers] = useState<VehicleDraft[]>([]);
-  const [fourWheelers, setFourWheelers] = useState<VehicleDraft[]>([]);
+  const [twoWheelers, setTwoWheelers] = useState<VehicleDraft[]>(() =>
+    emptyVehicleRows(INCLUDED_TWO_WHEELER_PARKING),
+  );
+  const [fourWheelers, setFourWheelers] = useState<VehicleDraft[]>(() =>
+    emptyVehicleRows(INCLUDED_FOUR_WHEELER_PARKING),
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<ResidentImportResultDto | null>(null);
   const [importErrors, setImportErrors] = useState<Array<{ row: number; message: string }>>([]);
   const [sendInvites, setSendInvites] = useState(true);
-  const [createMissingFlats, setCreateMissingFlats] = useState(false);
   const [forceInvite, setForceInvite] = useState(false);
   const [busyImport, setBusyImport] = useState(false);
+  const [tab, setTab] = useState<HouseholdTabId>("owner");
+  const [residents, setResidents] = useState<SocietyResidentDto[]>([]);
+  const [familyBusy, setFamilyBusy] = useState(false);
+  const [familyError, setFamilyError] = useState<string | null>(null);
+  const tabTouchedRef = useRef(false);
+  const lastFlatIdRef = useRef("");
   const allowed = canUseAdminMode(user?.role);
 
   useEffect(() => {
@@ -66,6 +91,11 @@ export function OnboardPage() {
       setFlats(rows);
       if (rows[0]) setFlatId(rows[0].id);
     });
+    client.listResidents().then(setResidents).catch(() => setResidents([]));
+    client
+      .listParkings()
+      .then((rows) => setParkings(rows))
+      .catch(() => setParkings([]));
     client
       .listMemberships()
       .then((rows) => {
@@ -79,12 +109,35 @@ export function OnboardPage() {
     const selected = flats.find((f) => f.id === flatId);
     if (!selected) return;
     setFloor(selected.floor != null ? String(selected.floor) : "");
-    setParkingSlot(selected.parkingSlot ?? "");
+    const assigned =
+      parkings.find((p) => p.flatId === selected.id) ??
+      parkings.find((p) => p.slotNumber === selected.parkingSlot);
+    const nextSlotId = assigned?.id ?? "";
+    setParkingKind(
+      preferredParkingKind(parkings, assigned, selected.id, nextSlotId),
+    );
+    setParkingSlot(assigned?.slotNumber ?? selected.parkingSlot ?? "");
+    setParkingSlotId(nextSlotId);
     setPngGasConnection(Boolean(selected.pngGasConnection));
     setAdultCount(String(selected.adultCount ?? 0));
     setChildCount(String(selected.childCount ?? 0));
     setSeniorCitizenCount(String(selected.seniorCitizenCount ?? 0));
-  }, [flatId, flats]);
+  }, [flatId, flats, parkings]);
+
+  useEffect(() => {
+    if (!flatId) return;
+    if (lastFlatIdRef.current !== flatId) {
+      lastFlatIdRef.current = flatId;
+      tabTouchedRef.current = false;
+    }
+    if (tabTouchedRef.current) return;
+    const ownerExists = residents.some((r) => r.flatId === flatId && r.isOwner);
+    setIsOwner(!ownerExists);
+    setTab(ownerExists ? "family" : "owner");
+    setName("");
+    setPhone("");
+    setEmail("");
+  }, [flatId, residents]);
 
   if (!allowed) return <Navigate to="/dashboard" replace />;
 
@@ -92,6 +145,51 @@ export function OnboardPage() {
     e.preventDefault();
     setError(null);
     setMessage(null);
+    if (!flatId) {
+      setError("Select a flat first");
+      return;
+    }
+    if (tab === "family" || tab === "parking") {
+      const owner = peopleOnFlat.find((r) => r.isOwner);
+      const ownerName = owner?.name || name;
+      const ownerPhone = owner?.phone || phone;
+      if (!ownerName.trim() || !ownerPhone.trim()) {
+        setError("Add an owner first");
+        setTab("owner");
+        return;
+      }
+      try {
+        await client.onboardResident({
+          name: ownerName,
+          phone: ownerPhone,
+          flatId,
+          email: owner?.email ?? (email.trim() || null),
+          floor: floor === "" ? null : Number(floor),
+          parkingSlot: parkingSlot.trim() || null,
+          parkingSlotId: parkingSlotId || null,
+          isOwner: true,
+          editOwner: Boolean(owner),
+          adultCount: Number(adultCount) || 0,
+          childCount: Number(childCount) || 0,
+          seniorCitizenCount: Number(seniorCitizenCount) || 0,
+        });
+        setMessage(tab === "parking" ? "Saved parking" : "Saved household counts");
+        const [rows, lots] = await Promise.all([
+          client.listFlats(),
+          client.listParkings().catch(() => parkings),
+        ]);
+        setFlats(rows);
+        setParkings(lots);
+      } catch (err) {
+        setError(err instanceof ApiClientError ? err.body.message : "Failed");
+      }
+      return;
+    }
+    if (!name.trim() || !phone.trim()) {
+      setError("Enter name and contact number");
+      setTab(isOwner ? "owner" : "family");
+      return;
+    }
     const selected = flats.find((f) => f.id === flatId);
     const remainingTw = remainingIncluded(
       selected?.twoWheelerCount,
@@ -123,7 +221,9 @@ export function OnboardPage() {
         email: email.trim() || null,
         floor: floor === "" ? null : Number(floor),
         parkingSlot: parkingSlot.trim() || null,
+        parkingSlotId: parkingSlotId || null,
         isOwner,
+        editOwner: isOwner && hasOwner,
         emergencyContact: emergencyContact.trim() || null,
         vehicles,
         pngGasConnection,
@@ -136,11 +236,20 @@ export function OnboardPage() {
       setPhone("");
       setEmail("");
       setEmergencyContact("");
-      setTwoWheelers([]);
-      setFourWheelers([]);
+      setTwoWheelers(emptyVehicleRows(INCLUDED_TWO_WHEELER_PARKING));
+      setFourWheelers(emptyVehicleRows(INCLUDED_FOUR_WHEELER_PARKING));
+      setIsOwner(false);
+      setTab("family");
+      tabTouchedRef.current = true;
       try {
-        const rows = await client.listFlats();
+        const [rows, people, lots] = await Promise.all([
+          client.listFlats(),
+          client.listResidents(),
+          client.listParkings().catch(() => parkings),
+        ]);
         setFlats(rows);
+        setResidents(people);
+        setParkings(lots);
       } catch {
         /* onboard already succeeded */
       }
@@ -171,7 +280,7 @@ export function OnboardPage() {
         sendInvites,
         forceInvite,
         updateFlats: true,
-        createMissingFlats,
+        createMissingFlats: false,
       });
       setImportResult(result);
       setImportErrors([...mapped.errors, ...result.errors]);
@@ -179,8 +288,12 @@ export function OnboardPage() {
         `Import finished: ${result.created} created, ${result.updated} updated, ${result.unchanged} unchanged, ${result.invited} invited, ${result.skipped} skipped.`,
       );
       try {
-        const rows = await client.listFlats();
+        const [rows, people] = await Promise.all([
+          client.listFlats(),
+          client.listResidents(),
+        ]);
         setFlats(rows);
+        setResidents(people);
       } catch {
         /* import already succeeded */
       }
@@ -191,37 +304,75 @@ export function OnboardPage() {
     }
   }
 
+  const peopleOnFlat = residents.filter((r) => r.flatId === flatId);
+  const ownerOnFlat = peopleOnFlat.find((r) => r.isOwner);
+  const hasOwner = Boolean(ownerOnFlat);
+  const selectedFlat = flats.find((f) => f.id === flatId);
+  const selectedFlatLabel = selectedFlat
+    ? [selectedFlat.wingName ? `${selectedFlat.wingName}-` : "", selectedFlat.number].join("")
+    : "—";
+  function fillOwnerFields() {
+    const owner = peopleOnFlat.find((r) => r.isOwner);
+    setName(owner?.name ?? "");
+    setPhone(owner?.phone ?? "");
+    setEmail(owner?.email ?? "");
+  }
+
+  function clearPersonFields() {
+    setName("");
+    setPhone("");
+    setEmail("");
+  }
+
+  function selectTab(next: HouseholdTabId) {
+    tabTouchedRef.current = true;
+    setTab(next);
+    if (next === "owner") {
+      setIsOwner(true);
+      fillOwnerFields();
+    }
+    if (next === "family") {
+      setIsOwner(false);
+      clearPersonFields();
+    }
+    if (next === "parking") {
+      setIsOwner(true);
+      fillOwnerFields();
+    }
+  }
+
+  const submitLabel = householdSubmitLabel(tab, {
+    isOwnerTabEdit: true,
+    hasOwner,
+  });
+
   return (
-    <ShPage wide>
+    <ShPage full>
       <ShPageHeader
         title="Onboard residents"
-        description={
-          <>
-            Add family members one at a time, or bulk-import via CSV. Several people
-            can share the same flat — each needs their own mobile number. Flats must
-            exist under{" "}
-            <Link to="/structure" className="text-[var(--leaf)]">
-              Structure
-            </Link>{" "}
-            first. Each flat includes {INCLUDED_TWO_WHEELER_PARKING} two-wheeler and{" "}
-            {INCLUDED_FOUR_WHEELER_PARKING} four-wheeler parking across the household;
-            extra vehicles need a purchased slot.
-          </>
-        }
+        description="Pick a flat to see Owner, Family, Parking Details, vehicles, and Gas. Family members log in with their own mobile."
       />
 
-      <ShSplit>
-        <form
-          className="card sh-section space-y-3"
-          onSubmit={onSubmit}
-          data-testid="onboard-form"
-        >
-          <h2 className="text-sm font-semibold">Add a family member</h2>
+      {message && (
+        <p className="mb-3 text-sm text-[var(--leaf)]">{message}</p>
+      )}
+      {error && <p className="mb-3 text-sm text-[var(--danger)]">{error}</p>}
+
+      <form
+        className="card sh-section space-y-3"
+        onSubmit={onSubmit}
+        data-testid="onboard-form"
+      >
+          <h2 className="text-sm font-semibold">Select the flat</h2>
           <p className="text-xs text-black/50">
-            Repeat this form for each person in the flat. Same wing/flat is allowed.
+            One owner per flat. Tabs below update as you change wing or flat.
           </p>
           <ShFormGrid>
-            <ShField label="Society" htmlFor="onboard-society-name" className="sh-span-2">
+            <ShField
+              label="Society"
+              htmlFor="onboard-society-name"
+              className="sh-span-2"
+            >
               <input
                 id="onboard-society-name"
                 data-testid="onboard-society-name"
@@ -231,51 +382,15 @@ export function OnboardPage() {
                 disabled
               />
             </ShField>
-            <ShField label="Resident name" htmlFor="name">
-              <input
-                id="name"
-                className="input"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </ShField>
-            <ShField label="Phone" htmlFor="phone">
-              <input
-                id="phone"
-                className="input"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required
-              />
-            </ShField>
-            <ShField label="Email (optional)" htmlFor="onboard-email">
-              <input
-                id="onboard-email"
-                className="input"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </ShField>
-            <ShField label="Wing / flat" htmlFor="flat">
-              <select
-                id="flat"
-                className="input"
-                value={flatId}
-                onChange={(e) => setFlatId(e.target.value)}
-                required
-              >
-                {flats.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.wingName ? `${f.wingName}-` : ""}
-                    {f.number}
-                    {f.floor != null ? ` · Fl ${f.floor}` : ""}
-                    {f.parkingSlot ? ` · ${f.parkingSlot}` : ""}
-                  </option>
-                ))}
-              </select>
-            </ShField>
+            <WingFlatSelect
+              flats={flats}
+              value={flatId}
+              onChange={setFlatId}
+              wingHtmlFor="onboard-wing"
+              flatHtmlFor="flat"
+              wingTestId="onboard-wing"
+              flatTestId="onboard-flat"
+            />
             <ShField label="Floor" htmlFor="onboard-floor">
               <input
                 id="onboard-floor"
@@ -288,140 +403,189 @@ export function OnboardPage() {
                 onChange={(e) => setFloor(e.target.value)}
               />
             </ShField>
-            <ShField label="Parking slot" htmlFor="onboard-parking">
-              <input
-                id="onboard-parking"
-                data-testid="onboard-parking"
-                className="input"
-                value={parkingSlot}
-                onChange={(e) => setParkingSlot(e.target.value)}
-                placeholder="Primary slot label"
-              />
-            </ShField>
-            <ShField label="Emergency contact" htmlFor="onboard-emergency">
-              <input
-                id="onboard-emergency"
-                data-testid="onboard-emergency"
-                className="input"
-                value={emergencyContact}
-                onChange={(e) => setEmergencyContact(e.target.value)}
-              />
-            </ShField>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                data-testid="onboard-is-owner"
-                checked={isOwner}
-                onChange={(e) => setIsOwner(e.target.checked)}
-              />
-              Owner of this flat (uncheck for other family members or tenants)
-            </label>
-            <fieldset className="sh-span-2">
-              <legend className="label mb-1">PNG gas connection</legend>
-              <div className="flex gap-4 text-sm">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="png-gas"
-                    data-testid="onboard-png-yes"
-                    checked={pngGasConnection}
-                    onChange={() => setPngGasConnection(true)}
-                  />
-                  Taken
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="png-gas"
-                    data-testid="onboard-png-no"
-                    checked={!pngGasConnection}
-                    onChange={() => setPngGasConnection(false)}
-                  />
-                  Not taken
-                </label>
-              </div>
-            </fieldset>
-            <fieldset className="sh-span-2">
-              <legend className="label mb-1">Family members in this flat</legend>
-              <div className="grid gap-2 sm:grid-cols-3">
-                <ShField label="Adults" htmlFor="onboard-adults">
-                  <input
-                    id="onboard-adults"
-                    data-testid="onboard-adults"
-                    className="input"
-                    type="number"
-                    min={0}
-                    max={50}
-                    value={adultCount}
-                    onChange={(e) => setAdultCount(e.target.value)}
-                  />
-                </ShField>
-                <ShField label="Children" htmlFor="onboard-children">
-                  <input
-                    id="onboard-children"
-                    data-testid="onboard-children"
-                    className="input"
-                    type="number"
-                    min={0}
-                    max={50}
-                    value={childCount}
-                    onChange={(e) => setChildCount(e.target.value)}
-                  />
-                </ShField>
-                <ShField label="Senior citizens" htmlFor="onboard-seniors">
-                  <input
-                    id="onboard-seniors"
-                    data-testid="onboard-seniors"
-                    className="input"
-                    type="number"
-                    min={0}
-                    max={50}
-                    value={seniorCitizenCount}
-                    onChange={(e) => setSeniorCitizenCount(e.target.value)}
-                  />
-                </ShField>
-              </div>
-            </fieldset>
-            <VehicleFields
-              kind="two_wheeler"
-              label="Two-wheelers"
-              included={remainingIncluded(
-                flats.find((f) => f.id === flatId)?.twoWheelerCount,
-                INCLUDED_TWO_WHEELER_PARKING,
-              )}
-              rows={twoWheelers}
-              onChange={setTwoWheelers}
-            />
-            <VehicleFields
-              kind="four_wheeler"
-              label="Four-wheelers"
-              included={remainingIncluded(
-                flats.find((f) => f.id === flatId)?.fourWheelerCount,
-                INCLUDED_FOUR_WHEELER_PARKING,
-              )}
-              rows={fourWheelers}
-              onChange={setFourWheelers}
-            />
           </ShFormGrid>
-          <button className="btn btn-primary" data-testid="onboard-submit" type="submit">
-            Onboard
-          </button>
-        </form>
+          {flatId ? (
+            <ShTabs
+              items={HOUSEHOLD_TABS}
+              value={tab}
+              onChange={selectTab}
+              ariaLabel="Onboard details"
+              testId="onboard-tabs"
+              idPrefix="onboard"
+            />
+          ) : null}
+          <p className="sr-only" data-testid="onboard-selected-flat">
+            {selectedFlatLabel}
+          </p>
+          <ShFormGrid>
+            {flatId && tab === "owner" && (
+              <>
+                <input type="hidden" data-testid="onboard-is-owner" value="true" />
+                <HouseholdOwnerFields
+                  testIdPrefix="onboard"
+                  mode="edit"
+                  hasOwner={hasOwner}
+                  name={name}
+                  phone={phone}
+                  email={email}
+                  emergencyContact={emergencyContact}
+                  emergencyTestId="onboard-emergency"
+                  onNameChange={setName}
+                  onPhoneChange={setPhone}
+                  onEmailChange={setEmail}
+                  onEmergencyChange={setEmergencyContact}
+                />
+              </>
+            )}
+            {flatId && tab === "family" && (
+              <>
+            <p className="sh-span-2 text-xs text-black/50">
+              Each family member needs their own mobile to log in and raise
+              complaints.
+            </p>
+            <input type="hidden" data-testid="onboard-is-not-owner" value="true" />
+            <FamilyMembersEditor
+              people={peopleOnFlat}
+              ownerLabel={
+                ownerOnFlat
+                  ? `${ownerOnFlat.name ?? "—"} · ${ownerOnFlat.phone ?? ""}`
+                  : "No owner yet"
+              }
+              busy={familyBusy}
+              error={familyError}
+              testId="onboard-family"
+              onSave={async (draft) => {
+                setFamilyError(null);
+                setFamilyBusy(true);
+                try {
+                  const res = await client.onboardResident({
+                    name: draft.name,
+                    phone: draft.phone,
+                    flatId,
+                    email: draft.email || null,
+                    isOwner: false,
+                    editUserId: draft.userId,
+                    adultCount: Number(adultCount) || 0,
+                    childCount: Number(childCount) || 0,
+                    seniorCitizenCount: Number(seniorCitizenCount) || 0,
+                  });
+                  setMessage(
+                    `${draft.userId ? "Updated" : "Added"} ${res.user.name} (${res.user.phone})`,
+                  );
+                  const people = await client.listResidents();
+                  setResidents(people);
+                } catch (err) {
+                  setFamilyError(
+                    err instanceof ApiClientError ? err.body.message : "Failed",
+                  );
+                  throw err;
+                } finally {
+                  setFamilyBusy(false);
+                }
+              }}
+              onDelete={async (person) => {
+                setFamilyError(null);
+                setFamilyBusy(true);
+                try {
+                  await client.removeResident(person.userId);
+                  setMessage(`Removed ${person.name ?? person.phone}`);
+                  const people = await client.listResidents();
+                  setResidents(people);
+                } catch (err) {
+                  setFamilyError(
+                    err instanceof ApiClientError ? err.body.message : "Failed",
+                  );
+                  throw err;
+                } finally {
+                  setFamilyBusy(false);
+                }
+              }}
+            />
+            <HouseholdAgeCounts
+              testIdPrefix="onboard"
+              adultCount={adultCount}
+              childCount={childCount}
+              seniorCitizenCount={seniorCitizenCount}
+              onAdultsChange={setAdultCount}
+              onChildrenChange={setChildCount}
+              onSeniorsChange={setSeniorCitizenCount}
+            />
+              </>
+            )}
+            {flatId && tab === "parking" && (
+              <>
+            <p className="sh-span-2 text-xs text-black/50">
+              Pick a lot from Manage. Parking type must match how the lot was
+              added (Puzzle vs Open). Lots already on another flat stay listed
+              but cannot be assigned here.
+            </p>
+            <AllottedParkingFields
+              parkings={parkings}
+              parkingKind={parkingKind}
+              parkingSlot={parkingSlot}
+              parkingSlotId={parkingSlotId}
+              flatId={flatId}
+              testIdPrefix="onboard"
+              onKindChange={(kind, slotNumber, slotId) => {
+                setParkingKind(kind);
+                setParkingSlot(slotNumber);
+                setParkingSlotId(slotId);
+              }}
+              onSlotChange={(slotNumber, slotId) => {
+                setParkingSlot(slotNumber);
+                setParkingSlotId(slotId);
+              }}
+            />
+              </>
+            )}
+            {flatId && tab === "two_wheeler" && (
+              <VehicleFields
+                kind="two_wheeler"
+                label="Two-wheeler numbers"
+                included={remainingIncluded(
+                  flats.find((f) => f.id === flatId)?.twoWheelerCount,
+                  INCLUDED_TWO_WHEELER_PARKING,
+                )}
+                rows={twoWheelers}
+                onChange={setTwoWheelers}
+              />
+            )}
+            {flatId && tab === "four_wheeler" && (
+              <VehicleFields
+                kind="four_wheeler"
+                label="Four-wheeler numbers"
+                included={remainingIncluded(
+                  flats.find((f) => f.id === flatId)?.fourWheelerCount,
+                  INCLUDED_FOUR_WHEELER_PARKING,
+                )}
+                rows={fourWheelers}
+                onChange={setFourWheelers}
+              />
+            )}
+            {flatId && tab === "gas" && (
+              <PngGasFields
+                name="png-gas"
+                testIdPrefix="onboard"
+                value={pngGasConnection}
+                onChange={setPngGasConnection}
+              />
+            )}
+          </ShFormGrid>
+          {flatId ? (
+            <button className="btn btn-primary" data-testid="onboard-submit" type="submit">
+              {submitLabel}
+            </button>
+          ) : null}
+      </form>
 
-        <ShSection
-          title="Bulk import (CSV)"
-          description="Re-upload updates existing residents matched by phone."
-          testId="onboard-csv"
-        >
-          <p className="mb-2 text-[11px] leading-snug text-black/50">
-            Headers: name, phone, email, flatNumber, wingName, floor, parkingSlot, isOwner,
-            emergencyContact, vehicleNumber, twoWheelers, fourWheelers, pngGasConnection,
-            adults, children, seniorCitizens.
-            twoWheelers / fourWheelers can be a count (example <code>2</code> /{" "}
-            <code>1</code>) with no registration numbers, or plates separated by{" "}
-            <code>;</code>. Extra vehicles: append <code>|purchased</code> (example{" "}
-            <code>MH12TW3|purchased</code>). Count-only extras beyond included parking
-            are stored as purchased. Family counts are for the whole flat.
+      <details className="card sh-section mt-3" data-testid="onboard-csv">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Bulk import (CSV)
+          </summary>
+          <p className="mt-2 mb-2 text-[11px] leading-snug text-black/50">
+            Match by phone. First person on a flat is the owner; later rows are
+            family. Template headers include name, phone, flatNumber, wingName,
+            isOwner, and household fields.
           </p>
           <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <a
@@ -446,14 +610,6 @@ export function OnboardPage() {
                 onChange={(e) => setForceInvite(e.target.checked)}
               />
               Re-invite
-            </label>
-            <label className="flex items-center gap-1.5 text-xs">
-              <input
-                type="checkbox"
-                checked={createMissingFlats}
-                onChange={(e) => setCreateMissingFlats(e.target.checked)}
-              />
-              Create missing flats
             </label>
           </div>
           <input
@@ -480,11 +636,7 @@ export function OnboardPage() {
               ))}
             </ul>
           )}
-        </ShSection>
-      </ShSplit>
-
-      {message && <p className="mt-3 text-sm text-[var(--leaf)]">{message}</p>}
-      {error && <p className="mt-3 text-sm text-[var(--danger)]">{error}</p>}
+        </details>
     </ShPage>
   );
 }

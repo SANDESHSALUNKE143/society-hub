@@ -4,7 +4,10 @@ import { Shell } from "./components/Shell";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { SocietiesPage } from "./pages/SocietiesPage";
-import { SocietyDetailPage } from "./pages/SocietyDetailPage";
+import { parseSocietyTab, SocietyDetailPage } from "./pages/SocietyDetailPage";
+import { ConfirmDialog } from "./components/ConfirmDialog";
+import { SocietyFlatsPanel } from "./components/SocietyFlatsPanel";
+import { SocietyParkingsPanel } from "./components/SocietyParkingsPanel";
 import { ComingSoonPage } from "./pages/ComingSoonPage";
 import { MANAGE_NAV } from "./manage-nav";
 
@@ -21,6 +24,9 @@ describe("manage smoke unit", () => {
       DashboardPage,
       SocietiesPage,
       SocietyDetailPage,
+      SocietyFlatsPanel,
+      SocietyParkingsPanel,
+      ConfirmDialog,
       ComingSoonPage,
     ]) {
       expect(typeof component).toBe("function");
@@ -30,5 +36,13 @@ describe("manage smoke unit", () => {
   it("nav exposes live Users and Coming soon subscriptions", () => {
     expect(MANAGE_NAV.some((n) => n.to === "/users" && n.status === "live")).toBe(true);
     expect(MANAGE_NAV.some((n) => n.to === "/subscriptions" && n.status === "soon")).toBe(true);
+  });
+
+  it("defaults society detail tab to team", () => {
+    expect(parseSocietyTab(null)).toBe("team");
+    expect(parseSocietyTab("parkings")).toBe("parkings");
+    expect(parseSocietyTab("flats")).toBe("flats");
+    expect(parseSocietyTab("controls")).toBe("controls");
+    expect(parseSocietyTab("nope")).toBe("team");
   });
 });

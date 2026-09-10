@@ -1,5 +1,10 @@
 import { FormEvent, useEffect, useState } from "react";
-import type { ResidentProfileDto } from "@society-hub/types";
+import type {
+  ParkingKind,
+  ParkingSlotDto,
+  ResidentProfileDto,
+  SocietyResidentDto,
+} from "@society-hub/types";
 import {
   INCLUDED_FOUR_WHEELER_PARKING,
   INCLUDED_TWO_WHEELER_PARKING,
@@ -7,14 +12,23 @@ import {
 } from "@society-hub/types";
 import { ApiClientError } from "@society-hub/sdk";
 import {
+  HOUSEHOLD_TABS,
   ShField,
   ShFormGrid,
   ShPage,
   ShPageHeader,
   ShSection,
-  ShSplit,
+  ShTabs,
+  householdSubmitLabel,
+  preferredParkingKind,
+  type HouseholdTabId,
 } from "@society-hub/ui";
 import { useAuth } from "../auth";
+import { AllottedParkingFields } from "../components/AllottedParkingFields";
+import { FamilyMembersEditor } from "../components/FamilyMembersEditor";
+import { HouseholdAgeCounts } from "../components/HouseholdAgeCounts";
+import { HouseholdOwnerFields } from "../components/HouseholdOwnerFields";
+import { PngGasFields } from "../components/PngGasFields";
 import { VehicleFields } from "../components/VehicleFields";
 import {
   draftsFromVehicles,
@@ -23,6 +37,14 @@ import {
   toVehiclePayload,
   type VehicleDraft,
 } from "../lib/vehicle-draft";
+
+type AccountSection = "flat" | "household" | "security";
+
+const ACCOUNT_SECTIONS: Array<{ id: AccountSection; label: string }> = [
+  { id: "flat", label: "My flat" },
+  { id: "household", label: "Household" },
+  { id: "security", label: "Security" },
+];
 
 function vehiclesForAccountSave(
   flat: NonNullable<ResidentProfileDto["flat"]>,
@@ -76,6 +98,16 @@ export function AccountPage() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [household, setHousehold] = useState<SocietyResidentDto[]>([]);
+  const [familyBusy, setFamilyBusy] = useState(false);
+  const [familyMessage, setFamilyMessage] = useState<string | null>(null);
+  const [familyError, setFamilyError] = useState<string | null>(null);
+  const [section, setSection] = useState<AccountSection>("flat");
+  const [tab, setTab] = useState<HouseholdTabId>("owner");
+  const [parkings, setParkings] = useState<ParkingSlotDto[]>([]);
+  const [parkingKind, setParkingKind] = useState<ParkingKind>("puzzle");
+  const [parkingSlot, setParkingSlot] = useState("");
+  const [parkingSlotId, setParkingSlotId] = useState("");
 
   function applyProfile(next: ResidentProfileDto) {
     setProfile(next);
@@ -104,10 +136,73 @@ export function AccountPage() {
   useEffect(() => {
     client
       .getProfile()
-      .then(applyProfile)
+      .then((next) => {
+        applyProfile(next);
+        if (next.flat) {
+          client
+            .listHouseholdMembers()
+            .then((people) => {
+              setHousehold(people);
+              setFamilyError(null);
+            })
+            .catch((err) => {
+              setHousehold([]);
+              setFamilyError(err instanceof Error ? err.message : "Could not load family members");
+            });
+        }
+      })
       .catch(() => undefined);
+    client
+      .listParkingSlots()
+      .then(setParkings)
+      .catch(() => setParkings([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const selected = profile?.flat;
+    if (!selected) return;
+    const assigned =
+      parkings.find((p) => p.flatId === selected.id) ??
+      parkings.find((p) => p.slotNumber === selected.parkingSlot);
+    const nextSlotId = assigned?.id ?? "";
+    setParkingKind(preferredParkingKind(parkings, assigned, selected.id, nextSlotId));
+    setParkingSlot(assigned?.slotNumber ?? selected.parkingSlot ?? "");
+    setParkingSlotId(nextSlotId);
+  }, [profile?.flat, parkings]);
+
+  async function saveFamilyMember(draft: {
+    userId?: string;
+    name: string;
+    phone: string;
+    email: string;
+  }) {
+    setFamilyError(null);
+    setFamilyMessage(null);
+    setFamilyBusy(true);
+    try {
+      const res = draft.userId
+        ? await client.updateHouseholdMember(draft.userId, {
+            name: draft.name,
+            phone: draft.phone,
+            email: draft.email || null,
+          })
+        : await client.addHouseholdMember({
+            name: draft.name,
+            phone: draft.phone,
+            email: draft.email || null,
+          });
+      setFamilyMessage(
+        `${draft.userId ? "Updated" : "Added"} ${res.user.name ?? res.user.phone}. They can log in with this number and raise complaints.`,
+      );
+      setHousehold(await client.listHouseholdMembers());
+    } catch (err) {
+      setFamilyError(err instanceof ApiClientError ? err.body.message : "Failed");
+      throw err;
+    } finally {
+      setFamilyBusy(false);
+    }
+  }
 
   async function savePin(e: FormEvent) {
     e.preventDefault();
@@ -176,9 +271,16 @@ export function AccountPage() {
           adultCount: Number(adultCount) || 0,
           childCount: Number(childCount) || 0,
           seniorCitizenCount: Number(seniorCitizenCount) || 0,
+          parkingSlot: parkingSlot.trim() || null,
+          parkingSlotId: parkingSlotId || null,
           vehicles,
         });
         applyProfile(next);
+        try {
+          setParkings(await client.listParkingSlots());
+        } catch {
+          /* profile already saved */
+        }
       } else {
         const next = await client.updateProfile({
           emergencyContact: emergencyContact || null,
@@ -209,6 +311,7 @@ export function AccountPage() {
     myFour,
     INCLUDED_FOUR_WHEELER_PARKING,
   );
+  const ownerOnFlat = household.find((person) => person.isOwner);
 
   return (
     <ShPage wide>
@@ -224,287 +327,346 @@ export function AccountPage() {
         }
       />
 
-      <ShSplit>
-        <ShSection
-          title="My flat"
-          description="Society home linked to your account."
-          testId="account-flat-details"
-        >
-          {flat ? (
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-              <div>
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  Society
-                </dt>
-                <dd className="font-medium" data-testid="account-society-name">
-                  {profile?.societyName ?? "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  Flat
-                </dt>
-                <dd className="font-medium" data-testid="account-flat-number">
-                  {flat.wingName ? `${flat.wingName}-${flat.number}` : flat.number}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  Building
-                </dt>
-                <dd className="font-medium" data-testid="account-building-name">
-                  {flat.buildingName ?? "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  Wing
-                </dt>
-                <dd className="font-medium" data-testid="account-wing-name">
-                  {flat.wingName ?? "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  Floor
-                </dt>
-                <dd className="font-medium" data-testid="account-floor">
-                  {flat.floor != null ? flat.floor : "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  Parking
-                </dt>
-                <dd className="font-medium" data-testid="account-parking">
-                  {flat.parkingSlot ?? "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  PNG gas
-                </dt>
-                <dd className="font-medium" data-testid="account-png">
-                  {flat.pngGasConnection ? "Taken" : "Not taken"}
-                </dd>
-              </div>
-              <div className="col-span-2">
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  Family members
-                </dt>
-                <dd className="font-medium" data-testid="account-family-counts">
-                  {flat.adultCount ?? 0} adult{(flat.adultCount ?? 0) === 1 ? "" : "s"},{" "}
-                  {flat.childCount ?? 0} child{(flat.childCount ?? 0) === 1 ? "" : "ren"},{" "}
-                  {flat.seniorCitizenCount ?? 0} senior citizen
-                  {(flat.seniorCitizenCount ?? 0) === 1 ? "" : "s"}
-                </dd>
-              </div>
-              <div className="col-span-2">
-                <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-                  Occupancy
-                </dt>
-                <dd className="font-medium" data-testid="account-occupancy">
-                  {flat.isOwner ? "Owner" : "Tenant / occupant"}
-                </dd>
-              </div>
-            </dl>
-          ) : (
-            <p className="text-sm text-black/55" data-testid="account-flat-empty">
-              No flat linked yet. Ask an admin to onboard you.
-            </p>
-          )}
-        </ShSection>
+      <ShSection>
+        <ShTabs
+          items={ACCOUNT_SECTIONS}
+          value={section}
+          onChange={setSection}
+          ariaLabel="Account sections"
+          testId="account-section-tabs"
+          idPrefix="account-section"
+          className="sh-tabs-lg"
+        />
 
-        <ShSection
-          title="Profile"
-          description={
-            flat
-              ? "Household details are shared with everyone in this flat."
-              : "For security and society records."
-          }
-        >
+        {section === "flat" ? (
+          <div data-testid="account-flat-details">
+            {flat ? (
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
+                    Society
+                  </dt>
+                  <dd className="font-medium" data-testid="account-society-name">
+                    {profile?.societyName ?? "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
+                    Flat
+                  </dt>
+                  <dd className="font-medium" data-testid="account-flat-number">
+                    {flat.wingName ? `${flat.wingName}-${flat.number}` : flat.number}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
+                    Building
+                  </dt>
+                  <dd className="font-medium" data-testid="account-building-name">
+                    {flat.buildingName ?? "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
+                    Wing
+                  </dt>
+                  <dd className="font-medium" data-testid="account-wing-name">
+                    {flat.wingName ?? "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
+                    Floor
+                  </dt>
+                  <dd className="font-medium" data-testid="account-floor">
+                    {flat.floor != null ? flat.floor : "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
+                    Parking
+                  </dt>
+                  <dd className="font-medium" data-testid="account-parking">
+                    {flat.parkingSlot ?? "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
+                    PNG gas
+                  </dt>
+                  <dd className="font-medium" data-testid="account-png">
+                    {flat.pngGasConnection ? "Taken" : "Not taken"}
+                  </dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
+                    Family members
+                  </dt>
+                  <dd className="font-medium" data-testid="account-family-counts">
+                    {flat.adultCount ?? 0} adult{(flat.adultCount ?? 0) === 1 ? "" : "s"},{" "}
+                    {flat.childCount ?? 0} child{(flat.childCount ?? 0) === 1 ? "" : "ren"},{" "}
+                    {flat.seniorCitizenCount ?? 0} senior citizen
+                    {(flat.seniorCitizenCount ?? 0) === 1 ? "" : "s"}
+                  </dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
+                    Occupancy
+                  </dt>
+                  <dd className="font-medium" data-testid="account-occupancy">
+                    {flat.isOwner ? "Owner" : "Tenant / occupant"}
+                  </dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="text-sm text-black/55" data-testid="account-flat-empty">
+                No flat linked yet. Ask an admin to onboard you.
+              </p>
+            )}
+          </div>
+        ) : null}
+
+        {section === "household" ? (
           <form className="space-y-2.5" onSubmit={saveProfile} data-testid="account-profile-form">
+            {flat ? (
+              <ShTabs
+                items={HOUSEHOLD_TABS}
+                value={tab}
+                onChange={setTab}
+                ariaLabel="Household details"
+                testId="account-tabs"
+                idPrefix="account"
+              />
+            ) : null}
             <ShFormGrid>
-              <ShField label="Emergency contact" htmlFor="account-emergency-contact">
-                <input
-                  id="account-emergency-contact"
-                  data-testid="account-emergency-contact"
-                  className="input"
-                  placeholder="Name & phone"
-                  value={emergencyContact}
-                  onChange={(e) => setEmergencyContact(e.target.value)}
-                />
-              </ShField>
-              {flat ? (
-                <>
-                  <fieldset className="sh-span-2">
-                    <legend className="label mb-1">PNG gas connection</legend>
-                    <div className="flex gap-4 text-sm">
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name="account-png-gas"
-                          data-testid="account-png-yes"
-                          checked={pngGasConnection}
-                          onChange={() => setPngGasConnection(true)}
-                        />
-                        Taken
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name="account-png-gas"
-                          data-testid="account-png-no"
-                          checked={!pngGasConnection}
-                          onChange={() => setPngGasConnection(false)}
-                        />
-                        Not taken
-                      </label>
-                    </div>
-                  </fieldset>
-                  <fieldset className="sh-span-2">
-                    <legend className="label mb-1">Family members in this flat</legend>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      <ShField label="Adults" htmlFor="account-adults">
-                        <input
-                          id="account-adults"
-                          data-testid="account-adults"
-                          className="input"
-                          type="number"
-                          min={0}
-                          max={50}
-                          value={adultCount}
-                          onChange={(e) => setAdultCount(e.target.value)}
-                        />
-                      </ShField>
-                      <ShField label="Children" htmlFor="account-children">
-                        <input
-                          id="account-children"
-                          data-testid="account-children"
-                          className="input"
-                          type="number"
-                          min={0}
-                          max={50}
-                          value={childCount}
-                          onChange={(e) => setChildCount(e.target.value)}
-                        />
-                      </ShField>
-                      <ShField label="Senior citizens" htmlFor="account-seniors">
-                        <input
-                          id="account-seniors"
-                          data-testid="account-seniors"
-                          className="input"
-                          type="number"
-                          min={0}
-                          max={50}
-                          value={seniorCitizenCount}
-                          onChange={(e) => setSeniorCitizenCount(e.target.value)}
-                        />
-                      </ShField>
-                    </div>
-                  </fieldset>
-                  <VehicleFields
-                    kind="two_wheeler"
-                    label="Two-wheelers"
-                    included={remainingTw}
-                    rows={twoWheelers}
-                    onChange={setTwoWheelers}
-                    testIdPrefix="account"
-                    registrationOptional
+              {!flat && (
+                <ShField label="Emergency contact" htmlFor="account-emergency-contact">
+                  <input
+                    id="account-emergency-contact"
+                    data-testid="account-emergency-contact"
+                    className="input"
+                    placeholder="Name & phone"
+                    value={emergencyContact}
+                    onChange={(e) => setEmergencyContact(e.target.value)}
                   />
-                  <VehicleFields
-                    kind="four_wheeler"
-                    label="Four-wheelers"
-                    included={remainingFw}
-                    rows={fourWheelers}
-                    onChange={setFourWheelers}
+                </ShField>
+              )}
+              {flat && tab === "owner" && (
+                <HouseholdOwnerFields
+                  testIdPrefix="account"
+                  mode="readonly"
+                  name={ownerOnFlat?.name ?? user?.name ?? ""}
+                  phone={ownerOnFlat?.phone ?? user?.phone ?? ""}
+                  email={ownerOnFlat?.email ?? user?.email ?? ""}
+                  emergencyContact={emergencyContact}
+                  onEmergencyChange={setEmergencyContact}
+                />
+              )}
+              {flat && tab === "family" && (
+                <>
+                  <div className="sh-span-2" data-testid="account-family-members">
+                    {familyMessage && (
+                      <p
+                        className="mb-2 text-sm text-[var(--leaf)]"
+                        data-testid="account-family-message"
+                      >
+                        {familyMessage}
+                      </p>
+                    )}
+                    <FamilyMembersEditor
+                      people={household}
+                      ownerLabel={
+                        ownerOnFlat
+                          ? `${ownerOnFlat.name ?? "—"} · ${ownerOnFlat.phone ?? ""}`
+                          : "No owner yet"
+                      }
+                      busy={familyBusy}
+                      error={familyError}
+                      testId="account-family"
+                      readOnly={!flat.isOwner}
+                      onSave={flat.isOwner ? saveFamilyMember : undefined}
+                      onDelete={
+                        flat.isOwner
+                          ? async (person) => {
+                              setFamilyError(null);
+                              setFamilyMessage(null);
+                              setFamilyBusy(true);
+                              try {
+                                await client.removeHouseholdMember(person.userId);
+                                setFamilyMessage(`Removed ${person.name ?? person.phone}`);
+                                setHousehold(await client.listHouseholdMembers());
+                              } catch (err) {
+                                setFamilyError(
+                                  err instanceof ApiClientError ? err.body.message : "Failed",
+                                );
+                                throw err;
+                              } finally {
+                                setFamilyBusy(false);
+                              }
+                            }
+                          : undefined
+                      }
+                    />
+                  </div>
+                  <HouseholdAgeCounts
                     testIdPrefix="account"
-                    registrationOptional
+                    adultCount={adultCount}
+                    childCount={childCount}
+                    seniorCitizenCount={seniorCitizenCount}
+                    onAdultsChange={setAdultCount}
+                    onChildrenChange={setChildCount}
+                    onSeniorsChange={setSeniorCitizenCount}
                   />
                 </>
-              ) : (
+              )}
+              {flat && tab === "parking" && (
+                <>
+                  <p className="sh-span-2 text-xs text-black/50">
+                    Pick a lot from Manage. Parking type must match how the lot was added
+                    (Puzzle vs Open).
+                  </p>
+                  <AllottedParkingFields
+                    parkings={parkings}
+                    parkingKind={parkingKind}
+                    parkingSlot={parkingSlot}
+                    parkingSlotId={parkingSlotId}
+                    flatId={flat.id}
+                    testIdPrefix="account"
+                    onKindChange={(kind, slotNumber, slotId) => {
+                      setParkingKind(kind);
+                      setParkingSlot(slotNumber);
+                      setParkingSlotId(slotId);
+                    }}
+                    onSlotChange={(slotNumber, slotId) => {
+                      setParkingSlot(slotNumber);
+                      setParkingSlotId(slotId);
+                    }}
+                  />
+                </>
+              )}
+              {flat && tab === "two_wheeler" && (
+                <VehicleFields
+                  kind="two_wheeler"
+                  label="Two-wheelers"
+                  included={remainingTw}
+                  rows={twoWheelers}
+                  onChange={setTwoWheelers}
+                  testIdPrefix="account"
+                  registrationOptional
+                />
+              )}
+              {flat && tab === "four_wheeler" && (
+                <VehicleFields
+                  kind="four_wheeler"
+                  label="Four-wheelers"
+                  included={remainingFw}
+                  rows={fourWheelers}
+                  onChange={setFourWheelers}
+                  testIdPrefix="account"
+                  registrationOptional
+                />
+              )}
+              {flat && tab === "gas" && (
+                <PngGasFields
+                  name="account-png-gas"
+                  testIdPrefix="account"
+                  value={pngGasConnection}
+                  onChange={setPngGasConnection}
+                />
+              )}
+              {!flat && (
                 <p className="sh-span-2 text-sm text-black/55">
-                  PNG, family counts, and vehicles can be updated after an admin links a flat.
+                  PNG, family counts, parking, and vehicles can be updated after an admin
+                  links a flat.
                 </p>
               )}
             </ShFormGrid>
             <button className="btn btn-primary" type="submit">
-              Save profile
+              {householdSubmitLabel(tab)}
             </button>
           </form>
-          {profileMessage && (
-            <p className="mt-2 text-sm text-[var(--leaf)]">{profileMessage}</p>
-          )}
-          {profileError && (
-            <p className="mt-2 text-sm text-[var(--danger)]">{profileError}</p>
-          )}
-        </ShSection>
+        ) : null}
 
-        <ShSection title="Reset password" description="Change password while signed in.">
-          <form className="space-y-2.5" onSubmit={changePassword}>
-            <ShField label="Current password" htmlFor="currentPassword">
-              <input
-                id="currentPassword"
-                className="input"
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                required
-              />
-            </ShField>
-            <ShFormGrid>
-              <ShField label="New password" htmlFor="newPassword">
+        {section === "security" ? (
+          <div className="space-y-6">
+            <form className="space-y-2.5" onSubmit={changePassword}>
+              <h2 className="text-sm font-semibold">Reset password</h2>
+              <p className="text-xs text-black/50">Change password while signed in.</p>
+              <ShField label="Current password" htmlFor="currentPassword">
                 <input
-                  id="newPassword"
+                  id="currentPassword"
                   className="input"
                   type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  minLength={8}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
                   required
                 />
               </ShField>
-              <ShField label="Confirm" htmlFor="confirmPassword">
-                <input
-                  id="confirmPassword"
-                  className="input"
-                  type="password"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  minLength={8}
-                  required
-                />
-              </ShField>
-            </ShFormGrid>
-            <button className="btn btn-primary" type="submit">
-              Update password
-            </button>
-          </form>
-        </ShSection>
+              <ShFormGrid>
+                <ShField label="New password" htmlFor="newPassword">
+                  <input
+                    id="newPassword"
+                    className="input"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    minLength={8}
+                    required
+                  />
+                </ShField>
+                <ShField label="Confirm" htmlFor="confirmPassword">
+                  <input
+                    id="confirmPassword"
+                    className="input"
+                    type="password"
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    minLength={8}
+                    required
+                  />
+                </ShField>
+              </ShFormGrid>
+              <button className="btn btn-primary" type="submit">
+                Update password
+              </button>
+            </form>
+            <form className="space-y-2.5" onSubmit={savePin}>
+              <h2 className="text-sm font-semibold">PIN</h2>
+              <p className="text-xs text-black/50">4–6 digits for quick mobile login.</p>
+              <div className="flex flex-wrap items-end gap-2">
+                <ShField label="New PIN" htmlFor="pin" className="min-w-[10rem] flex-1">
+                  <input
+                    id="pin"
+                    className="input"
+                    type="password"
+                    inputMode="numeric"
+                    pattern="\d{4,6}"
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value)}
+                    required
+                  />
+                </ShField>
+                <button className="btn btn-ghost" type="submit">
+                  Save PIN
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : null}
 
-        <ShSection title="PIN" description="4–6 digits for quick mobile login.">
-          <form className="flex flex-wrap items-end gap-2" onSubmit={savePin}>
-            <ShField label="New PIN" htmlFor="pin" className="min-w-[10rem] flex-1">
-              <input
-                id="pin"
-                className="input"
-                type="password"
-                inputMode="numeric"
-                pattern="\d{4,6}"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                required
-              />
-            </ShField>
-            <button className="btn btn-ghost" type="submit">
-              Save PIN
-            </button>
-          </form>
-        </ShSection>
-      </ShSplit>
-
-      {message && <p className="mt-3 text-sm text-[var(--leaf)]">{message}</p>}
-      {error && <p className="mt-3 text-sm text-[var(--danger)]">{error}</p>}
+        {section === "household" && profileMessage ? (
+          <p className="mt-2 text-sm text-[var(--leaf)]">{profileMessage}</p>
+        ) : null}
+        {section === "household" && profileError ? (
+          <p className="mt-2 text-sm text-[var(--danger)]">{profileError}</p>
+        ) : null}
+        {section === "security" && message ? (
+          <p className="mt-3 text-sm text-[var(--leaf)]">{message}</p>
+        ) : null}
+        {section === "security" && error ? (
+          <p className="mt-3 text-sm text-[var(--danger)]">{error}</p>
+        ) : null}
+      </ShSection>
     </ShPage>
   );
 }

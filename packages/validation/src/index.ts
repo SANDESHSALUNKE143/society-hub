@@ -97,7 +97,10 @@ export const onboardResidentSchema = z
     ),
     floor: z.coerce.number().int().min(0).max(200).optional().nullable(),
     parkingSlot: z.string().max(32).optional().nullable(),
-    isOwner: z.boolean().optional().default(true),
+    parkingSlotId: z.string().uuid().optional().nullable(),
+    isOwner: z.boolean().optional(),
+    editOwner: z.boolean().optional(),
+    editUserId: z.string().uuid().optional(),
     emergencyContact: z.string().max(40).optional().nullable(),
     vehicleNumber: z.string().max(32).optional().nullable(),
     vehicles: z.array(residentVehicleSchema).max(20).optional(),
@@ -107,6 +110,15 @@ export const onboardResidentSchema = z
     seniorCitizenCount: optionalFamilyCountSchema,
   })
   .superRefine((val, ctx) => refineVehicleQuota(val.vehicles, ctx));
+
+export const addHouseholdMemberSchema = z.object({
+  name: z.string().min(1).max(120),
+  phone: z.string().min(10).max(15),
+  email: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+    z.string().email().max(200).optional().nullable(),
+  ),
+});
 
 export const createComplaintSchema = z.object({
   title: z.string().min(3).max(200),
@@ -226,6 +238,42 @@ export const createFlatSchema = z.object({
   details: z.record(z.string(), z.string()).optional().nullable(),
 });
 
+/** Platform Manage: one flat identified by wing + floor + number (FR-ONB-3). */
+export const createSocietyFlatSchema = z.object({
+  wing: z.string().trim().min(1).max(120),
+  floor: z.coerce.number().int().min(0).max(200),
+  flatNumber: z.string().trim().min(1).max(32),
+});
+
+export const importSocietyFlatsSchema = z.object({
+  rows: z.array(createSocietyFlatSchema).min(1).max(2000),
+});
+
+export const PARKING_KINDS = ["puzzle", "open"] as const;
+
+/** Platform Manage: puzzle (wing + number) or open (number) — FR-ONB-3b. */
+export const createSocietyParkingSchema = z
+  .object({
+    kind: z.enum(PARKING_KINDS),
+    wing: z.string().trim().max(32).optional().nullable(),
+    floor: z.coerce.number().int().min(0).max(200).optional().nullable(),
+    slotNumber: z.string().trim().min(1).max(32),
+  })
+  .superRefine((val, ctx) => {
+    if (val.kind !== "puzzle") return;
+    if (!val.wing) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["wing"],
+        message: "Wing is required for puzzle parking",
+      });
+    }
+  });
+
+export const importSocietyParkingsSchema = z.object({
+  rows: z.array(createSocietyParkingSchema).min(1).max(2000),
+});
+
 export const residentImportRowSchema = z
   .object({
     name: z.string().min(1).max(120),
@@ -235,7 +283,7 @@ export const residentImportRowSchema = z
     wingName: z.string().min(1).max(120).optional().nullable(),
     floor: z.coerce.number().int().min(0).max(200).optional().nullable(),
     parkingSlot: z.string().max(32).optional().nullable(),
-    isOwner: z.boolean().optional().default(true),
+    isOwner: z.boolean().optional(),
     emergencyContact: z.string().max(40).optional().nullable(),
     vehicleNumber: z.string().max(32).optional().nullable(),
     vehicles: z.array(residentVehicleSchema).max(20).optional(),
@@ -279,6 +327,8 @@ export const updateResidentProfileSchema = z
     adultCount: optionalFamilyCountSchema,
     childCount: optionalFamilyCountSchema,
     seniorCitizenCount: optionalFamilyCountSchema,
+    parkingSlot: z.string().max(32).optional().nullable(),
+    parkingSlotId: z.string().uuid().optional().nullable(),
   })
   .superRefine((val, ctx) => refineVehicleQuota(val.vehicles, ctx));
 

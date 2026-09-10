@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../api/models.dart';
+import '../../../auth/memberships.dart';
 import '../../../auth/session.dart';
 import '../../../core/theme.dart';
 import '../../../shared/widgets.dart';
@@ -28,12 +29,13 @@ class _SelectSocietyPageState extends ConsumerState<SelectSocietyPage> {
   Future<void> _load() async {
     try {
       final rows = await ref.read(apiProvider).listMemberships();
+      final unique = uniqueMembershipsBySociety(rows);
       if (!mounted) return;
-      if (rows.length <= 1) {
+      if (unique.length <= 1) {
         context.go('/home/dashboard');
         return;
       }
-      setState(() => _memberships = rows);
+      setState(() => _memberships = unique);
     } catch (_) {
       if (!mounted) return;
       context.go('/home/dashboard');
@@ -91,14 +93,6 @@ class _SelectSocietyPageState extends ConsumerState<SelectSocietyPage> {
                                   title: Text(
                                     _memberships![i].societyName,
                                     style: const TextStyle(fontWeight: FontWeight.w600),
-                                  ),
-                                  subtitle: Text(
-                                    _memberships![i].role.toUpperCase(),
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      letterSpacing: 0.8,
-                                      color: Colors.black45,
-                                    ),
                                   ),
                                   trailing: Text(
                                     _busyTenant == _memberships![i].tenantId

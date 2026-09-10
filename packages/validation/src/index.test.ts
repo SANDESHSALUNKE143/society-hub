@@ -8,6 +8,9 @@ import {
   createComplaintSchema,
   createEventSchema,
   createFlatSchema,
+  createSocietyFlatSchema,
+  importSocietyFlatsSchema,
+  createSocietyParkingSchema,
   createInvitationSchema,
   createNoticeSchema,
   createParkingSlotSchema,
@@ -22,6 +25,7 @@ import {
   loginPasswordSchema,
   loginPinSchema,
   onboardResidentSchema,
+  addHouseholdMemberSchema,
   addSocietyTeamMemberSchema,
   updateSocietyTeamMemberSchema,
   residentImportSchema,
@@ -104,6 +108,16 @@ describe("validation schemas", () => {
     );
   });
 
+  test("addHouseholdMemberSchema", () => {
+    expect(
+      addHouseholdMemberSchema.parse({
+        name: "Kid",
+        phone: "8888888881",
+        email: "",
+      }),
+    ).toMatchObject({ name: "Kid", phone: "8888888881", email: null });
+  });
+
   test("onboardResidentSchema", () => {
     const flatId = "66666666-6666-6666-6666-666666666666";
     expect(
@@ -114,11 +128,15 @@ describe("validation schemas", () => {
         adultCount: 2,
         childCount: 1,
         seniorCitizenCount: 1,
+        editOwner: true,
+        editUserId: flatId,
       }),
     ).toMatchObject({
       adultCount: 2,
       childCount: 1,
       seniorCitizenCount: 1,
+      editOwner: true,
+      editUserId: flatId,
     });
     expect(
       onboardResidentSchema.parse({
@@ -248,6 +266,31 @@ describe("validation schemas", () => {
     expect(createBuildingSchema.parse({ name: "Tower A" }).name).toBe("Tower A");
     expect(createWingSchema.parse({ name: "A" }).name).toBe("A");
     expect(createFlatSchema.parse({ number: "101" }).number).toBe("101");
+    expect(
+      createSocietyFlatSchema.parse({ wing: " A ", floor: "3", flatNumber: "101" }),
+    ).toEqual({ wing: "A", floor: 3, flatNumber: "101" });
+    expect(
+      importSocietyFlatsSchema.parse({
+        rows: [{ wing: "B", floor: 1, flatNumber: "201" }],
+      }).rows,
+    ).toHaveLength(1);
+    expect(() =>
+      createSocietyFlatSchema.parse({ wing: "", floor: 1, flatNumber: "101" }),
+    ).toThrow();
+    expect(
+      createSocietyParkingSchema.parse({
+        kind: "puzzle",
+        wing: " A ",
+        floor: "6",
+        slotNumber: "12",
+      }),
+    ).toMatchObject({ kind: "puzzle", wing: "A", slotNumber: "12" });
+    expect(
+      createSocietyParkingSchema.parse({ kind: "open", slotNumber: "OP-1" }),
+    ).toMatchObject({ kind: "open", slotNumber: "OP-1" });
+    expect(() =>
+      createSocietyParkingSchema.parse({ kind: "puzzle", slotNumber: "12" }),
+    ).toThrow();
   });
 
   test("addSocietyTeamMemberSchema requires email or phone", () => {
@@ -290,9 +333,12 @@ describe("validation schemas", () => {
       adultCount: 2,
       childCount: 1,
       seniorCitizenCount: 0,
+      parkingSlot: "104",
+      parkingSlotId: "11111111-1111-1111-1111-111111111111",
       vehicles: [{ kind: "two_wheeler" }, { kind: "two_wheeler" }],
     });
     expect(household.adultCount).toBe(2);
+    expect(household.parkingSlot).toBe("104");
     expect(household.vehicles).toHaveLength(2);
     expect(household.vehicles?.[0]?.registrationNumber).toBeNull();
   });

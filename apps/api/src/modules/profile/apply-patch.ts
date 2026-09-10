@@ -2,7 +2,7 @@ import { and, count, eq } from "drizzle-orm";
 import type { z } from "zod";
 import type { updateResidentProfileSchema } from "@society-hub/validation";
 import { db } from "../../db/client";
-import { flats, residentVehicles, residents } from "../../db/schema";
+import { flats, parkingSlots, residentVehicles, residents } from "../../db/schema";
 import { AppError } from "../../lib/errors";
 import {
   assertHouseholdVehicleQuota,
@@ -37,6 +37,8 @@ export async function applyResidentProfilePatch(
     patch.adultCount !== undefined ||
     patch.childCount !== undefined ||
     patch.seniorCitizenCount !== undefined ||
+    patch.parkingSlot !== undefined ||
+    patch.parkingSlotId !== undefined ||
     patch.vehicles !== undefined;
 
   if (touchesHousehold && !resident) {
@@ -76,7 +78,9 @@ export async function applyResidentProfilePatch(
     (patch.pngGasConnection !== undefined ||
       patch.adultCount !== undefined ||
       patch.childCount !== undefined ||
-      patch.seniorCitizenCount !== undefined)
+      patch.seniorCitizenCount !== undefined ||
+      patch.parkingSlot !== undefined ||
+      patch.parkingSlotId !== undefined)
   ) {
     const [flat] = await db
       .select()
@@ -84,6 +88,8 @@ export async function applyResidentProfilePatch(
       .where(and(eq(flats.id, resident.flatId), eq(flats.isDeleted, false)))
       .limit(1);
     if (flat) {
+      const nextParking =
+        patch.parkingSlot !== undefined ? patch.parkingSlot : undefined;
       await syncFlatOnboardFields({
         tenantId,
         flat,
@@ -91,8 +97,20 @@ export async function applyResidentProfilePatch(
         adultCount: patch.adultCount,
         childCount: patch.childCount,
         seniorCitizenCount: patch.seniorCitizenCount,
+        parkingSlot: nextParking,
+        parkingSlotId: patch.parkingSlotId,
         actorUserId: userId,
       });
+      if (
+        (patch.parkingSlot !== undefined || patch.parkingSlotId !== undefined) &&
+        !patch.parkingSlot &&
+        !patch.parkingSlotId
+      ) {
+        await db
+          .update(parkingSlots)
+          .set({ flatId: null, updatedBy: userId })
+          .where(eq(parkingSlots.flatId, flat.id));
+      }
     }
   }
 
