@@ -163,7 +163,7 @@ Save `id` as `societyId` / `tenantId`.
 
 1. Staff pick a flat, then `POST /v1/admin/residents` for the **owner** (`isOwner: true`) with `name`, `phone`, `flatId`, plus optional `email` and the same onboard fields as CSV. A flat has **one owner**; later people on that flat are family even if `isOwner: true` is sent. To change the current owner’s name, mobile, or email, send `editOwner: true` (keeps that person as the only owner; a new phone must not belong to someone else). `GET /v1/admin/residents` lists people (several rows may share a flat). Match by **phone** unless `editOwner` is set. Email must be unique if set.
 2. Owner resident: `POST /v1/household/members` with `name`, `phone`, optional `email` to add family members on that flat. `GET /v1/household/members` lists the household for anyone linked to that flat (including society staff with a resident row).
-3. Any household member: OTP verify with their phone, then `POST /v1/complaints` (resident uses linked flat; staff must pass `flatId`)
+3. Any household member: OTP verify with their phone, then `POST /v1/complaints` (resident uses linked flat only; staff must pass `flatId` when they have no linked flat, or to file for another lot)
 4. Staff: `PATCH /v1/complaints/{id}/status`, `POST /v1/complaints/{id}/comments`
 5. Optional: `POST /v1/complaints/{id}/attachments` (`multipart/form-data`, field `file`)
 
@@ -318,7 +318,7 @@ When `DEV_AUTH=true`, create responses may include `devToken`.
 |--------|------|------|-------|
 | GET | `/v1/complaints` | Yes | Staff: all; resident: own |
 | GET | `/v1/complaints/:id` | Yes | |
-| POST | `/v1/complaints` | Resident/staff | Staff needs `flatId` if no linked flat |
+| POST | `/v1/complaints` | Resident/staff | Resident: linked household flat only (body `flatId` for another lot is `403`). Staff may pass `flatId`; required if they have no linked flat |
 | PATCH | `/v1/complaints/:id/status` | Staff | |
 | GET | `/v1/complaints/:id/comments` | Yes | |
 | POST | `/v1/complaints/:id/comments` | Yes | `{ body }` |

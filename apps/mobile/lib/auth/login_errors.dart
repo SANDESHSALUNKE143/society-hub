@@ -1,7 +1,44 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../api/models.dart';
+
+const loginLogName = 'SocietyHub.Login';
+
+/// Logcat / `flutter logs` — never log ID tokens, passwords, or OTP codes.
+void logLoginFailure(Object error, [StackTrace? stack]) {
+  if (error is GoogleSignInException) {
+    developer.log(
+      googleSignInDiagnostic(error),
+      name: loginLogName,
+      stackTrace: stack,
+    );
+    return;
+  }
+  if (error is ApiException) {
+    developer.log(
+      'API ${error.code} status=${error.statusCode}',
+      name: loginLogName,
+      stackTrace: stack,
+    );
+    return;
+  }
+  if (error is PlatformException) {
+    developer.log(
+      'Platform ${error.code}',
+      name: loginLogName,
+      stackTrace: stack,
+    );
+    return;
+  }
+  developer.log(
+    error.runtimeType.toString(),
+    name: loginLogName,
+    stackTrace: stack,
+  );
+}
 
 /// User-facing login copy. Keep API codes and platform dumps out of the UI.
 String loginErrorText(Object error) {
@@ -27,11 +64,11 @@ String loginErrorText(Object error) {
   }
 
   if (error is GoogleSignInException) {
-    return switch (error.code) {
-      GoogleSignInExceptionCode.canceled =>
-        'Google sign-in was cancelled. Try again, or use OTP or email.',
+    final message = switch (error.code) {
+      GoogleSignInExceptionCode.canceled => googleCanceledMessage(error),
       _ => _playGoogleSetupHint,
     };
+    return '$message\n${googleSignInDiagnostic(error)}';
   }
 
   if (error is PlatformException && _isGoogleDeveloperError(error)) {
@@ -44,7 +81,7 @@ String loginErrorText(Object error) {
     return _playGoogleSetupHint;
   }
   if (lower.contains('cancelled') || lower.contains('canceled')) {
-    return 'Google sign-in was cancelled. Try again, or use OTP or email.';
+    return googleSignInDidNotComplete;
   }
   if (lower.contains('id token') || lower.contains('sha-1')) {
     return _playGoogleSetupHint;
@@ -68,8 +105,39 @@ String loginErrorText(Object error) {
   return stripped;
 }
 
+const googleSignInDidNotComplete =
+    'Google Sign-In did not complete. Try again, or use OTP or email.';
+
 const _playGoogleSetupHint =
     'Google Sign-In is not ready on this install (error 10). Use OTP or email.';
+
+/// Credential Manager reports [GoogleSignInExceptionCode.canceled] for real
+/// dismissals *and* SHA / OAuth misconfig. Inspect the description.
+String googleCanceledMessage(GoogleSignInException error) {
+  final blob = '${error.description ?? ''} ${error.details ?? ''}'.toLowerCase();
+  if (blob.contains('reauth') ||
+      blob.contains('[16]') ||
+      blob.contains('developer') ||
+      blob.contains('activity is cancelled by the user') ||
+      blob.contains('activity is canceled by the user')) {
+    return 'Google Sign-In is not ready on this Play install. Use OTP or email.';
+  }
+  return googleSignInDidNotComplete;
+}
+
+/// Safe one-line Google SDK detail for screenshots and logcat. No tokens.
+String googleSignInDiagnostic(GoogleSignInException error) {
+  final code = error.code.name;
+  var desc = (error.description ?? '').trim();
+  if (desc.startsWith('eyJ') || desc.contains('id_token')) {
+    desc = '';
+  }
+  if (desc.length > 180) {
+    desc = '${desc.substring(0, 180)}…';
+  }
+  if (desc.isEmpty) return 'Google [$code]';
+  return 'Google [$code] $desc';
+}
 
 bool _isGoogleDeveloperError(PlatformException error) {
   final blob = '${error.code} ${error.message} ${error.details}'.toLowerCase();

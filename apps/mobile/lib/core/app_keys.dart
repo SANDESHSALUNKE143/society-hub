@@ -27,6 +27,9 @@ abstract final class AppKeys {
   static const complaintsEmpty = Key('complaints-empty');
   static const newComplaintLink = Key('new-complaint-link');
   static const newComplaintForm = Key('new-complaint-form');
+  static const newComplaintFlatPicker = Key('new-complaint-flat-picker');
+  static const newComplaintLinkedFlat = Key('complaint-linked-flat');
+  static const newComplaintNoFlat = Key('complaint-no-flat');
   static const complaintCreatedBanner = Key('complaint-created-banner');
   static const complaintQueueHint = Key('complaint-queue-hint');
   static const complaintClosingNote = Key('complaint-closing-note');

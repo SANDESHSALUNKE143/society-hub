@@ -10,7 +10,7 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "test:unit": "bun test --coverage packages/auth packages/validation packages/sdk packages/ui packages/types apps/api/src/lib/errors.test.ts apps/api/src/lib/auth-helpers.test.ts apps/api/src/lib/soft-delete.test.ts apps/api/src/lib/audit.test.ts apps/api/src/lib/notify.test.ts apps/api/src/lib/tenant-scope.test.ts apps/api/src/lib/mysql-connect.test.ts apps/api/src/lib/google-id-token.test.ts apps/api/src/config.test.ts apps/api/src/modules/manage/structure-helpers.test.ts apps/api/src/modules/manage/parking-helpers.test.ts apps/api/src/modules/admin/flat-owner.test.ts apps/api/src/modules/profile/household-helpers.test.ts",
+    "test:unit": "bun test --coverage packages/auth packages/validation packages/sdk packages/ui packages/types apps/api/src/lib/errors.test.ts apps/api/src/lib/auth-helpers.test.ts apps/api/src/lib/soft-delete.test.ts apps/api/src/lib/audit.test.ts apps/api/src/lib/notify.test.ts apps/api/src/lib/tenant-scope.test.ts apps/api/src/lib/mysql-connect.test.ts apps/api/src/lib/google-id-token.test.ts apps/api/src/config.test.ts apps/api/src/modules/manage/structure-helpers.test.ts apps/api/src/modules/manage/parking-helpers.test.ts apps/api/src/modules/admin/flat-owner.test.ts apps/api/src/modules/profile/household-helpers.test.ts apps/api/src/modules/complaints/resolve-complaint-flat.test.ts",
     "test:integration": "DEV_AUTH=true bun test --coverage apps/api/src/api.integration.test.ts",
     "test:ci": "bun run test:unit && bun run test:integration",
     "quality": "bash scripts/quality-gates.sh",

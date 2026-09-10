@@ -25,6 +25,8 @@ const allowedRoles = {
   'tenant',
 };
 
+enum AppMode { admin, resident }
+
 bool canUseAdminMode(String? role) {
   if (role == null) return false;
   return {
@@ -38,9 +40,12 @@ bool canUseAdminMode(String? role) {
   }.contains(role);
 }
 
-bool isPlatformRole(String? role) => role == 'superadmin';
+/// Society-wide flat picker is Admin mode only (FR-CMP-1).
+bool canPickComplaintFlat(String? role, AppMode mode) {
+  return canUseAdminMode(role) && mode == AppMode.admin;
+}
 
-enum AppMode { admin, resident }
+bool isPlatformRole(String? role) => role == 'superadmin';
 
 class SessionState {
   const SessionState({
@@ -208,7 +213,7 @@ class SessionController extends Notifier<SessionState> {
   bool get isStaffView {
     final user = state.user;
     if (user == null) return false;
-    return canUseAdminMode(user.role) && state.mode == AppMode.admin;
+    return canPickComplaintFlat(user.role, state.mode);
   }
 
   String? get debugAccessToken => _access;

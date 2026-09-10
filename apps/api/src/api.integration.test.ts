@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 import { createApp } from "./app";
+import { db } from "./db/client";
+import { residents } from "./db/schema";
 
 /** In-process base URL — set in beforeAll so Bun coverage instruments route modules. */
 let base = "";
@@ -1930,12 +1933,34 @@ describe("api integration", () => {
   test("chairperson can raise complaint by selecting a flat", async () => {
     const session = await otpLogin("9999999999");
     expect(session.user.role).toBe("chairperson");
-    const flatsRes = await fetch(`${base}/v1/admin/flats`, {
+    const me = await fetch(`${base}/v1/auth/me`, {
       headers: { Authorization: `Bearer ${session.tokens.accessToken}` },
     });
-    expect(flatsRes.ok).toBe(true);
-    const flats = (await flatsRes.json()) as { id: string; number: string }[];
-    expect(flats.length).toBeGreaterThan(0);
+    const staffUser = (await me.json()) as {
+      tenantId: string;
+      flatId: string | null;
+    };
+    const buildings = await fetch(
+      `${base}/v1/societies/${staffUser.tenantId}/buildings`,
+      { headers: { Authorization: `Bearer ${session.tokens.accessToken}` } },
+    );
+    const buildingList = (await buildings.json()) as { id: string }[];
+    const wings = await fetch(
+      `${base}/v1/buildings/${buildingList[0]!.id}/wings`,
+      { headers: { Authorization: `Bearer ${session.tokens.accessToken}` } },
+    );
+    const wingList = (await wings.json()) as { id: string }[];
+    const createFlat = await fetch(`${base}/v1/wings/${wingList[0]!.id}/flats`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.tokens.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ number: `C-${Date.now().toString().slice(-6)}` }),
+    });
+    expect(createFlat.ok).toBe(true);
+    const picked = (await createFlat.json()) as { id: string; number: string };
+    expect(picked.id).not.toBe(staffUser.flatId);
 
     const create = await fetch(`${base}/v1/complaints`, {
       method: "POST",
@@ -1948,7 +1973,7 @@ describe("api integration", () => {
         type: "other",
         typeOtherText: "inspection",
         description: "Raised from Client App Admin mode",
-        flatId: flats[0]!.id,
+        flatId: picked.id,
       }),
     });
     expect(create.ok).toBe(true);
@@ -1957,8 +1982,137 @@ describe("api integration", () => {
       flatId: string;
       flatNumber: string;
     };
-    expect(complaint.flatId).toBe(flats[0]!.id);
-    expect(complaint.flatNumber).toBe(flats[0]!.number);
+    expect(complaint.flatId).toBe(picked.id);
+    expect(complaint.flatNumber).toBe(picked.number);
+  });
+
+  test("resident cannot raise a complaint for another flat", async () => {
+    const resident = await otpLogin("8888888888");
+    const staff = await otpLogin("9999999999");
+    const linkedFlatId = resident.user.flatId;
+    if (!linkedFlatId) throw new Error("resident fixture has no linked flat");
+
+    const me = await fetch(`${base}/v1/auth/me`, {
+      headers: { Authorization: `Bearer ${staff.tokens.accessToken}` },
+    });
+    const staffUser = (await me.json()) as { tenantId: string };
+    const buildings = await fetch(
+      `${base}/v1/societies/${staffUser.tenantId}/buildings`,
+      { headers: { Authorization: `Bearer ${staff.tokens.accessToken}` } },
+    );
+    const buildingList = (await buildings.json()) as { id: string }[];
+    const wings = await fetch(
+      `${base}/v1/buildings/${buildingList[0]!.id}/wings`,
+      { headers: { Authorization: `Bearer ${staff.tokens.accessToken}` } },
+    );
+    const wingList = (await wings.json()) as { id: string }[];
+    const createFlat = await fetch(`${base}/v1/wings/${wingList[0]!.id}/flats`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${staff.tokens.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ number: `R-${Date.now().toString().slice(-6)}` }),
+    });
+    expect(createFlat.ok).toBe(true);
+    const other = (await createFlat.json()) as { id: string };
+
+    const spoof = await fetch(`${base}/v1/complaints`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${resident.tokens.accessToken}`,
+      },
+      body: JSON.stringify({
+        title: "Not my flat",
+        type: "plumbing",
+        description: "Trying another lot",
+        flatId: other.id,
+      }),
+    });
+    expect(spoof.status).toBe(403);
+    const spoofBody = (await spoof.json()) as { code: string };
+    expect(spoofBody.code).toBe("forbidden");
+
+    const own = await fetch(`${base}/v1/complaints`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${resident.tokens.accessToken}`,
+      },
+      body: JSON.stringify({
+        title: "My linked flat",
+        type: "plumbing",
+        description: "Kitchen tap drip",
+      }),
+    });
+    expect(own.ok).toBe(true);
+    const complaint = (await own.json()) as { flatId: string };
+    expect(complaint.flatId).toBe(linkedFlatId);
+  });
+
+  test("unlinked resident cannot raise a complaint", async () => {
+    const staff = await otpLogin("9999999999");
+    const staffAuth = { Authorization: `Bearer ${staff.tokens.accessToken}` };
+    const me = await fetch(`${base}/v1/auth/me`, { headers: staffAuth });
+    const staffUser = (await me.json()) as { tenantId: string };
+    const buildings = await fetch(
+      `${base}/v1/societies/${staffUser.tenantId}/buildings`,
+      { headers: staffAuth },
+    );
+    const buildingList = (await buildings.json()) as { id: string }[];
+    const wings = await fetch(
+      `${base}/v1/buildings/${buildingList[0]!.id}/wings`,
+      { headers: staffAuth },
+    );
+    const wingList = (await wings.json()) as { id: string }[];
+    const createFlat = await fetch(`${base}/v1/wings/${wingList[0]!.id}/flats`, {
+      method: "POST",
+      headers: { ...staffAuth, "Content-Type": "application/json" },
+      body: JSON.stringify({ number: `U-${Date.now().toString().slice(-6)}` }),
+    });
+    expect(createFlat.ok).toBe(true);
+    const flat = (await createFlat.json()) as { id: string };
+    const phone = `87${String(Date.now()).slice(-8)}`;
+    const onboard = await fetch(`${base}/v1/admin/residents`, {
+      method: "POST",
+      headers: { ...staffAuth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Unlinked Resident",
+        phone,
+        flatId: flat.id,
+        isOwner: true,
+      }),
+    });
+    expect(onboard.ok).toBe(true);
+
+    const linked = await otpLogin(phone);
+    expect(linked.user.flatId).toBe(flat.id);
+    await db
+      .update(residents)
+      .set({ isDeleted: true, updatedBy: staff.user.id })
+      .where(eq(residents.userId, linked.user.id));
+
+    const unlinked = await otpLogin(phone);
+    expect(unlinked.user.role).toBe("resident");
+    expect(unlinked.user.flatId).toBeNull();
+
+    const create = await fetch(`${base}/v1/complaints`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${unlinked.tokens.accessToken}`,
+      },
+      body: JSON.stringify({
+        title: "No household",
+        type: "plumbing",
+        description: "Should not attach to a random lot",
+        flatId: flat.id,
+      }),
+    });
+    expect(create.status).toBe(400);
+    const body = (await create.json()) as { code: string };
+    expect(body.code).toBe("no_flat");
   });
 
   test("platform can add SocietyHub user to society team", async () => {
