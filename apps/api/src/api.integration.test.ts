@@ -1986,7 +1986,8 @@ describe("api integration", () => {
   test("resident cannot raise a complaint for another flat", async () => {
     const resident = await otpLogin("8888888888");
     const staff = await otpLogin("9999999999");
-    expect(resident.user.flatId).toBeTruthy();
+    const linkedFlatId = resident.user.flatId;
+    if (!linkedFlatId) throw new Error("resident fixture has no linked flat");
 
     const me = await fetch(`${base}/v1/auth/me`, {
       headers: { Authorization: `Bearer ${staff.tokens.accessToken}` },
@@ -2044,7 +2045,7 @@ describe("api integration", () => {
     });
     expect(own.ok).toBe(true);
     const complaint = (await own.json()) as { flatId: string };
-    expect(complaint.flatId).toBe(resident.user.flatId);
+    expect(complaint.flatId).toBe(linkedFlatId);
   });
 
   test("platform can add SocietyHub user to society team", async () => {
