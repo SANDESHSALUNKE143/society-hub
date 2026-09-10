@@ -16,9 +16,13 @@ abstract final class AppColors {
 }
 
 ThemeData buildAppTheme() {
-  // Platform fonts only. Runtime Google Fonts (Outfit) dropped space glyphs
-  // on some Play installs, so login copy ran together.
-  final base = ThemeData(useMaterial3: true, brightness: Brightness.light);
+  // Roboto / sans-serif only. Outfit and some OEM serif faces drop U+0020
+  // on Samsung Play installs, so login copy ran together.
+  final base = ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.light,
+    fontFamily: 'sans-serif',
+  );
 
   return base.copyWith(
     scaffoldBackgroundColor: AppColors.paper,
@@ -57,6 +61,7 @@ ThemeData buildAppTheme() {
         borderSide: const BorderSide(color: AppColors.leaf, width: 1.5),
       ),
       labelStyle: const TextStyle(
+        fontFamily: 'sans-serif',
         fontWeight: FontWeight.w600,
         fontSize: 14,
         color: AppColors.ink,
@@ -68,7 +73,11 @@ ThemeData buildAppTheme() {
         foregroundColor: const Color(0xFFFFFDF8),
         minimumSize: const Size.fromHeight(48),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+        textStyle: const TextStyle(
+          fontFamily: 'sans-serif',
+          fontWeight: FontWeight.w600,
+          fontSize: 16,
+        ),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -96,6 +105,7 @@ TextStyle displayStyle({double size = 24, Color color = AppColors.leafDark}) {
     fontWeight: FontWeight.w700,
     color: color,
     height: 1.15,
-    fontFamily: 'serif',
+    letterSpacing: 0,
+    fontFamily: 'sans-serif',
   );
 }

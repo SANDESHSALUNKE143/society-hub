@@ -121,6 +121,18 @@ void main() {
         ApiConfig.resolveGoogleServerClientId('not-a-client-id'),
         ApiConfig.defaultGoogleServerClientId,
       );
+      expect(
+        ApiConfig.resolveGoogleServerClientId(
+          '583640086898-unknownandroid.apps.googleusercontent.com',
+        ),
+        ApiConfig.defaultGoogleServerClientId,
+      );
+      expect(
+        ApiConfig.resolveGoogleServerClientId(
+          ApiConfig.defaultGoogleServerClientId,
+        ),
+        ApiConfig.defaultGoogleServerClientId,
+      );
     });
 
     test('privacyPolicyUrl falls back to the public /privacy path', () {

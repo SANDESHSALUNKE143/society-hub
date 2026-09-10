@@ -4,7 +4,21 @@ import 'google_id_token.dart';
 
 /// Production Google Sign-In. Obtain an ID token for `POST /v1/auth/google`.
 class GoogleSignInIdTokenSource implements GoogleIdTokenSource {
-  const GoogleSignInIdTokenSource();
+  GoogleSignInIdTokenSource();
+
+  GoogleSignIn? _client;
+  String? _serverClientId;
+
+  GoogleSignIn _clientFor(String serverClientId) {
+    if (_client != null && _serverClientId == serverClientId) {
+      return _client!;
+    }
+    _serverClientId = serverClientId;
+    // Do not pass an Android OAuth client as [GoogleSignIn.clientId] — that
+    // is Play Services error 10. Only the Web client belongs here.
+    _client = GoogleSignIn(serverClientId: serverClientId);
+    return _client!;
+  }
 
   @override
   Future<String?> fetchIdToken({required String serverClientId}) async {
@@ -12,15 +26,9 @@ class GoogleSignInIdTokenSource implements GoogleIdTokenSource {
     if (configError != null) {
       throw StateError(configError);
     }
-    final signIn = GoogleSignIn(
-      serverClientId: serverClientId,
-      scopes: const ['email', 'openid', 'profile'],
-    );
-    try {
-      await signIn.signOut();
-    } catch (_) {
-      // Ignore a missing prior session.
-    }
+    final signIn = _clientFor(serverClientId);
+    // Do not signOut() before signIn() — that yields DEVELOPER_ERROR 10 on
+    // some Play-signed installs even when SHA-1 clients are registered.
     final account = await signIn.signIn();
     if (account == null) return null;
     final auth = await account.authentication;
