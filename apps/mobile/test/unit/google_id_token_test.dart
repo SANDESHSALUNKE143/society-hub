@@ -92,6 +92,21 @@ void main() {
       );
     });
 
+    test('resolveGoogleServerClientId uses the public Web client when unset', () {
+      expect(
+        ApiConfig.resolveGoogleServerClientId(''),
+        ApiConfig.defaultGoogleServerClientId,
+      );
+      expect(
+        ApiConfig.resolveGoogleServerClientId('  '),
+        ApiConfig.defaultGoogleServerClientId,
+      );
+      expect(
+        ApiConfig.resolveGoogleServerClientId('custom.apps.googleusercontent.com'),
+        'custom.apps.googleusercontent.com',
+      );
+    });
+
     test('privacyPolicyUrl falls back to the public /privacy path', () {
       expect(
         const ApiConfig(

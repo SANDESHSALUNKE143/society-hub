@@ -7,7 +7,7 @@ String loginErrorText(Object error) {
       'not_onboarded' =>
         'This Google or phone is not onboarded. Ask your society admin to add you, then try again.',
       'invalid_google_token' =>
-        'Google could not verify this sign-in. Add the Play App Signing SHA-1 to societyhub-android, wait a few minutes, then try again. Or use OTP.',
+        'Google could not verify this sign-in. Register the Play App Signing SHA-1 as its own Android OAuth client (do not overwrite societyhub-android), wait a few minutes, then try again. Or use OTP.',
       'invalid_credentials' =>
         'Email or password is incorrect.',
       'pin_invalid' => 'That PIN is incorrect.',
@@ -30,7 +30,7 @@ String loginErrorText(Object error) {
     return 'Google sign-in was cancelled. Try again, or use OTP or email.';
   }
   if (lower.contains('id token') || lower.contains('sha-1')) {
-    return 'Google did not return an ID token. In Play Console → App integrity, copy the App signing SHA-1 and add it to the Android OAuth client societyhub-android.';
+    return 'Google did not return an ID token. In Play Console → Protected with Play → Manage Play app signing, copy the App signing SHA-1 and create a separate Android OAuth client for it. Do not overwrite societyhub-android.';
   }
   if (lower.contains('not configured')) {
     return 'Google Sign-In is not configured in this build. Use OTP or email.';

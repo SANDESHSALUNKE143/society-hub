@@ -209,8 +209,20 @@ Play upload 401: JSON secret missing or wrong GitHub environment (must be prod).
 AAB signing fail: ANDROID_KEYSTORE_* secrets on environment prod.
 Analyze / test red: fix on the feature branch (flutter analyze, bun run quality).
   Common: Bun per-file coverage <90%; Flutter analyze treats info as fail.
-Google Sign-In fail on Play build: add Play App Signing SHA-1 to
-  societyhub-android (Play → App integrity → App signing key certificate).
+Google Sign-In fail on Play build (no idToken / "could not verify"):
+  Debug SHA-1         E8:49:BF:F4:F0:C5:9B:A2:96:CC:61:E0:1F:9C:29:A5:D2:C2:D7:57
+  Upload SHA-1        A7:05:A3:91:D4:DC:D7:7F:6F:84:6A:32:36:2D:10:B4:8E:CE:76:E2
+  Play classic SHA-1  79:4C:A5:3F:6D:98:95:0A:C3:8A:10:50:04:CD:81:09:9B:3E:C0:5F
+  Play PQC SHA-1      21:0E:39:37:AF:CD:CB:1D:3E:4E:12:ED:D1:3F:AF:AF:66:6B:99:E6
+  Debug + upload are on societyhub-android. Play RE-SIGNS the AAB.
+  Classical Play SHA-1 was already registered (Create said in use).
+  PQC Play client created 10 Sep 2026 (societyhub-android-play-pqc).
+  App still uses the Web client as serverClientId. Never paste an Android
+  client ID into Flutter. Wait 5–10 min after a new client, then test a
+  Play internal install (not flutter run).
+  Play Console fingerprints: Protected with Play → Play Store protection
+  → Manage Play app signing → App signing key certificate (not Upload).
+  Local fingerprints: cd apps/mobile && bash scripts/print-android-sha1.sh
 White screen / network on local Android: wrong API_BASE_URL (emulator needs
   10.0.2.2, not localhost). On iOS Simulator use 127.0.0.1.
 OTP 123456 rejected: DEV_AUTH is not true, or you are hitting the hosted API.

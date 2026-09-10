@@ -27,8 +27,8 @@ class GoogleSignInIdTokenSource implements GoogleIdTokenSource {
     final token = auth.idToken;
     if (token == null || token.isEmpty) {
       throw StateError(
-        'Google did not return an ID token. Add the Play App Signing SHA-1 '
-        'to the Android OAuth client societyhub-android.',
+        'Google did not return an ID token. Register the Play App Signing SHA-1 '
+        'as its own Android OAuth client (do not overwrite societyhub-android).',
       );
     }
     return token;

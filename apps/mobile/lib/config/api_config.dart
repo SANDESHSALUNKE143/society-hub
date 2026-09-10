@@ -24,6 +24,18 @@ class ApiConfig {
 
   static const defaultPrivacyPolicyUrl = 'https://app.societyhub.in/privacy';
 
+  /// Public Web OAuth client (`societyhub-web`). Safe in the app; not a secret.
+  /// Play/staging builds still need this as `serverClientId` so Google returns
+  /// an ID token. Android SHA-1s live on extra Android clients in GCP
+  /// (one SHA-1 per client; do not overwrite `societyhub-android`).
+  static const defaultGoogleServerClientId =
+      '583640086898-uhmdenf6kpv8iskvdaju4pk4gpbmae20.apps.googleusercontent.com';
+
+  static String resolveGoogleServerClientId(String fromDefine) {
+    final trimmed = fromDefine.trim();
+    return trimmed.isEmpty ? defaultGoogleServerClientId : trimmed;
+  }
+
   String get resolvedPrivacyPolicyUrl {
     final trimmed = privacyPolicyUrl.trim();
     return trimmed.isEmpty ? defaultPrivacyPolicyUrl : trimmed;
@@ -39,10 +51,10 @@ class ApiConfig {
       'GOOGLE_SERVER_CLIENT_ID',
     );
     const privacyPolicyUrl = String.fromEnvironment('PRIVACY_POLICY_URL');
-    return const ApiConfig(
+    return ApiConfig(
       baseUrl: baseUrl,
       env: env,
-      googleServerClientId: googleServerClientId,
+      googleServerClientId: resolveGoogleServerClientId(googleServerClientId),
       privacyPolicyUrl: privacyPolicyUrl,
     );
   }

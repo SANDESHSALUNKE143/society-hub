@@ -139,7 +139,7 @@ adb install -r build/app/outputs/flutter-apk/app-debug.apk
 |---------|-----|
 | Login network error on phone | Same Wi‑Fi; firewall allows port 3000; `curl http://<lan-ip>:3000/health` |
 | HTTP blocked | Debug allows cleartext. Release **must** use HTTPS. |
-| Google Sign-In on a device | Add debug SHA-1 to the Android OAuth client ([Go-Live §4](docs/10-Go-Live.md)) |
+| Google Sign-In on a device | Register that install’s SHA-1 as its **own** Android OAuth client (debug vs Play). One SHA-1 per client — do not overwrite `societyhub-android` ([Go-Live §4.2](docs/10-Go-Live.md)) |
 
 Point the app at preview instead of localhost:
 
@@ -297,7 +297,7 @@ Wait until the login screen is up. Login defaults to **Email**. Switch to **OTP*
 | Resident login | Log out. OTP `8888888888` / `123456` | Dashboard in Resident mode; can raise a complaint |
 | Password login | Log out. Email `superadmin@societyhub.local` / `Test@1234` | Lands in platform / admin flow |
 
-Dev Google (`ENV=dev`) only works with API `DEV_AUTH`. Real Google on a device needs the debug SHA-1 on the Android OAuth client ([Go-Live §4](docs/10-Go-Live.md)).
+Dev Google (`ENV=dev`) only works with API `DEV_AUTH`. Real Google on a device needs that install’s SHA-1 on its own Android OAuth client ([Go-Live §4.2](docs/10-Go-Live.md)).
 
 ### 3. iOS — boot Simulator and prove the API
 
@@ -346,7 +346,7 @@ Physical iPhone:
 | Android `unauthorized` | Unlock phone and tap Allow USB debugging |
 | iOS `pod install` fails | `cd apps/mobile/ios && pod repo update && pod install` |
 | iOS codesign / “untrusted developer” | Xcode Team + trust the cert on the phone |
-| Google Sign-In (Android device) | Missing debug SHA-1 on the Android OAuth client |
+| Google Sign-In (Android device) | That install’s SHA-1 is not registered as its own Android OAuth client ([Go-Live §4.2](docs/10-Go-Live.md)) |
 
 ---
 

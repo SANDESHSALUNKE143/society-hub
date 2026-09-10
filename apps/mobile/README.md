@@ -152,13 +152,15 @@ SHA-1 for GCP Android OAuth:
 ```bash
 keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
   -storepass android -keypass android
-# After Play App Signing: Console → App integrity → App signing key certificate
+# After Play App Signing: Protected with Play → Play Store protection
+# → Manage Play app signing → App signing key certificate
 ```
 
 ## Google Sign-In
 
 - **Dev (`ENV=dev`):** `dev:<phone>` against API `DEV_AUTH` (or unset `GOOGLE_CLIENT_ID`).
-- **Staging/prod:** real Google ID token. `serverClientId` = Web client (`GOOGLE_CLIENT_ID` on the API). Android OAuth client must list this package + SHA-1.
+- **Staging/prod:** real Google ID token. `serverClientId` = Web client (`GOOGLE_CLIENT_ID` on the API). The app falls back to that public Web client ID if `--dart-define` is omitted.
+- Android OAuth: one SHA-1 per client. `societyhub-android` = upload key. Extra clients for debug + Play classical + Play PQC (Go-Live §4.2). Play-installed Google Sign-In needs the Play signing SHA-1s registered. Print local fingerprints: `bash scripts/print-android-sha1.sh`. Never put an Android client ID in Flutter — `serverClientId` stays the **Web** client.
 
 ## CI/CD
 
