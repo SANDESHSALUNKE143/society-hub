@@ -64,7 +64,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       await ref.read(sessionProvider.notifier).setSession(res.user, res.tokens);
       if (!mounted) return;
       context.go('/select-society');
-    } catch (e) {
+    } catch (e, st) {
+      logLoginFailure(e, st);
       setState(() => _error = loginErrorText(e));
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -88,7 +89,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         _otpSent = true;
         if (res.devCode != null) _devHint = 'Dev OTP: ${res.devCode}';
       });
-    } catch (e) {
+    } catch (e, st) {
+      logLoginFailure(e, st);
       setState(() => _error = loginErrorText(e));
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -124,9 +126,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         googleIdToken: raw,
       );
       if (token == null) {
-        throw StateError(
-          'Google sign-in was cancelled. Try again, or use OTP or email.',
-        );
+        throw StateError(googleSignInDidNotComplete);
       }
       return ref.read(apiProvider).loginGoogle(token);
     });

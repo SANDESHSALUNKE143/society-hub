@@ -84,7 +84,7 @@ void main() {
   test('maps a cancelled Google picker', () {
     expect(
       loginErrorText(StateError('Google sign-in was cancelled. Try again.')),
-      contains('cancelled'),
+      googleSignInDidNotComplete,
     );
   });
 
@@ -102,7 +102,61 @@ void main() {
       loginErrorText(
         const GoogleSignInException(code: GoogleSignInExceptionCode.canceled),
       ),
-      contains('cancelled'),
+      contains(googleSignInDidNotComplete),
+    );
+    expect(
+      loginErrorText(
+        const GoogleSignInException(code: GoogleSignInExceptionCode.canceled),
+      ),
+      contains('Google [canceled]'),
+    );
+    expect(
+      loginErrorText(
+        const GoogleSignInException(
+          code: GoogleSignInExceptionCode.canceled,
+          description: 'Activity is cancelled by the user.',
+        ),
+      ),
+      contains('Play install'),
+    );
+    expect(
+      loginErrorText(
+        const GoogleSignInException(
+          code: GoogleSignInExceptionCode.canceled,
+          description: '[16] Account reauth failed.',
+        ),
+      ),
+      contains('Play install'),
+    );
+  });
+
+  test('appends a Google diagnostic line without leaking tokens', () {
+    expect(
+      googleSignInDiagnostic(
+        const GoogleSignInException(
+          code: GoogleSignInExceptionCode.canceled,
+          description: 'Activity is cancelled by the user.',
+        ),
+      ),
+      'Google [canceled] Activity is cancelled by the user.',
+    );
+    expect(
+      loginErrorText(
+        const GoogleSignInException(
+          code: GoogleSignInExceptionCode.canceled,
+          description: 'Activity is cancelled by the user.',
+        ),
+      ),
+      contains('Google [canceled]'),
+    );
+    expect(
+      googleSignInDiagnostic(
+        const GoogleSignInException(
+          code: GoogleSignInExceptionCode.canceled,
+          description: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.payload',
+        ),
+      ),
+      'Google [canceled]',
     );
   });
 }

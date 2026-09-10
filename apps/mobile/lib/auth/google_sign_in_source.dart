@@ -1,6 +1,7 @@
 import 'package:google_sign_in/google_sign_in.dart';
 
 import 'google_id_token.dart';
+import 'login_errors.dart';
 
 /// Production Google Sign-In. Obtain an ID token for `POST /v1/auth/google`.
 ///
@@ -30,7 +31,9 @@ class GoogleSignInIdTokenSource implements GoogleIdTokenSource {
       );
     }
     try {
-      final account = await GoogleSignIn.instance.authenticate();
+      final account = await GoogleSignIn.instance.authenticate(
+        scopeHint: const ['email', 'openid', 'profile'],
+      );
       final token = account.authentication.idToken;
       if (token == null || token.isEmpty) {
         throw StateError(
@@ -39,10 +42,8 @@ class GoogleSignInIdTokenSource implements GoogleIdTokenSource {
         );
       }
       return token;
-    } on GoogleSignInException catch (error) {
-      if (error.code == GoogleSignInExceptionCode.canceled) {
-        return null;
-      }
+    } catch (error, stack) {
+      logLoginFailure(error, stack);
       rethrow;
     }
   }
