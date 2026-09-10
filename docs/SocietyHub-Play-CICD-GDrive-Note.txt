@@ -20,7 +20,7 @@ Flutter Client App in apps/mobile/ — one codebase, two stores later.
 
   Android (now)
     Package:   com.societyhub.societyhub_mobile
-    Version:   1.0.4+5   (apps/mobile/pubspec.yaml)
+    Version:   1.0.5+6   (apps/mobile/pubspec.yaml)
     Listing:   https://play.google.com/store/apps/details?id=com.societyhub.societyhub_mobile
     Console:   https://play.google.com/console
     Track:     Internal (CI can roll this out). Closed testers + Production
@@ -213,7 +213,9 @@ Google Sign-In fail on Play build (error 10 / "10:, null, null)"):
   That is Play Services DEVELOPER_ERROR — before our API.
   Confirm Play SHA-1 clients are in GCP societyhub-507013 (same as Web).
   If Create said "already in use", the fingerprint may live in another project.
-  Use OTP until 1.0.4+ is installed. Never set an Android client as serverClientId.
+  Use OTP until 1.0.5+ is installed. Never set an Android client as serverClientId.
+  Do not signOut() before signIn(). Android strings.xml must ship default_web_client_id
+  = the Web client. If OAuth consent is Testing, add the tester Gmail.
 Google Sign-In fail on Play build (no idToken / "could not verify"):
   Debug SHA-1         E8:49:BF:F4:F0:C5:9B:A2:96:CC:61:E0:1F:9C:29:A5:D2:C2:D7:57
   Upload SHA-1        A7:05:A3:91:D4:DC:D7:7F:6F:84:6A:32:36:2D:10:B4:8E:CE:76:E2

@@ -11,7 +11,7 @@ void main() {
     ProviderScope(
       overrides: [
         googleIdTokenSourceProvider.overrideWithValue(
-          const GoogleSignInIdTokenSource(),
+          GoogleSignInIdTokenSource(),
         ),
       ],
       child: const SocietyHubApp(),
