@@ -140,16 +140,20 @@ Google Auth Platform allows **one SHA-1 per Android client**. Sign-In matches **
 | `societyhub-android-play` | `79:4C:A5:3F:6D:98:95:0A:C3:8A:10:50:04:CD:81:09:9B:3E:C0:5F` | Play classical signing |
 | `societyhub-android-play-pqc` | `21:0E:39:37:AF:CD:CB:1D:3E:4E:12:ED:D1:3F:AF:AF:66:6B:99:E6` | Play post-quantum signing |
 
-**Play SHA-1s (10 Sep 2026):**
+**Play SHA-1s (checked 10 Sep 2026, 08:45):**
 
-- Classical `79:4C:A5:3F:…` — already registered (Create said package + fingerprint in use). Do not create again.
-- PQC `21:0E:39:37:…` — Android client created (`societyhub-android-play-pqc`, client id `583640086898-9stsb90vslhphs56gqv65445pjj57qk6`).
+- Classical `79:4C:A5:3F:…` — `societyhub-android-play` in this project (created 07:56 IST). Package `com.societyhub.societyhub_mobile`. Client id `583640086898-m53784dglvpt6bre3c5o13cpos1maeh`.
+- PQC `21:0E:39:37:…` — `societyhub-android-play-pqc` (client id `583640086898-9stsb90vslhphs56gqv65445pjj57qk6`).
+- Upload — `societyhub-android` (30 Aug 2026). Do not overwrite.
+- Debug — not in the client list yet. Add `societyhub-android-debug` only if local `flutter run` Google Sign-In fails.
 - If local Google Sign-In fails, add `societyhub-android-debug` with the debug SHA-1 above.
 - Flutter `serverClientId` stays the **Web** client (`societyhub-web`). Never put an Android client ID or downloaded `client_secret*.json` in the app or git.
 - Play Console path for fingerprints: **Protected with Play → Play Store protection → Manage Play app signing** (not the old App integrity page).
 - After any new Android client, wait 5–10 minutes (sometimes longer) and test Google Sign-In on a **Play internal** install. If consent is Testing, add tester Gmails on the OAuth audience / test-users list.
 
-If Create says **package name and fingerprint are already in use**, that SHA-1 is already registered. Open [Clients](https://console.cloud.google.com/auth/clients?project=societyhub-507013) and test Play Google Sign-In instead of creating another client.
+If Create says **package name and fingerprint are already in use**, that SHA-1 is already registered — in **this** project, another GCP project on the same Google account, or a deleted client still held for ~30 days. Sign-In only works when package + SHA-1 live in **`societyhub-507013`** (same project as the Web client). If the fingerprint is owned by a different project, delete it there, wait, then create it here.
+
+**Play login error `10:` / `10:, null, null)`** is Google Play Services **DEVELOPER_ERROR**. It happens on the phone *before* our API runs. Causes: Play signing SHA-1 missing from this project, or Flutter `serverClientId` set to an **Android** client ID. Use OTP until the SHA-1s above show under [Clients](https://console.cloud.google.com/auth/clients?project=societyhub-507013) and a new Play build (`1.0.4+` — Web client fallback) is installed.
 
 Print local fingerprints (does not print passwords):
 
@@ -490,6 +494,6 @@ Do **not** create production RG until staging UAT is green.
 - [x] Hosted API `/health` ok (`https://societyhub-api-ece6.onrender.com`)
 - [ ] OTP login on hosted Client App (confirm after `DEV_AUTH=false`)
 - [x] Play Console account (personal, Engineers Bay)
-- [x] Play app + AAB on **internal** track (`1.0.3+4`)
+- [x] Play app + AAB on **internal** track (`1.0.3+4`; next upload `1.0.4+5` for Google error 10)
 - [ ] Confirm Google Sign-In on a **Play internal** install (wait after PQC client; add consent testers if needed)
 - [ ] Apple Developer + App Store Connect (next; not required for Android)

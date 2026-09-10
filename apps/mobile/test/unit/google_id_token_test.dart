@@ -105,6 +105,22 @@ void main() {
         ApiConfig.resolveGoogleServerClientId('custom.apps.googleusercontent.com'),
         'custom.apps.googleusercontent.com',
       );
+      expect(
+        ApiConfig.resolveGoogleServerClientId(
+          '583640086898-9stsb90vslhphs56gqv65445pjj57qk6.apps.googleusercontent.com',
+        ),
+        ApiConfig.defaultGoogleServerClientId,
+      );
+      expect(
+        ApiConfig.resolveGoogleServerClientId(
+          '583640086898-m53784dglvpt6bre3c5o13cpos1maeh.apps.googleusercontent.com',
+        ),
+        ApiConfig.defaultGoogleServerClientId,
+      );
+      expect(
+        ApiConfig.resolveGoogleServerClientId('not-a-client-id'),
+        ApiConfig.defaultGoogleServerClientId,
+      );
     });
 
     test('privacyPolicyUrl falls back to the public /privacy path', () {

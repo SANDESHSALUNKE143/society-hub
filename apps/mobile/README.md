@@ -7,7 +7,7 @@ Index: root [README.md](../../README.md) · [docs/08-Local-Development.md](../..
 | | Android | iOS |
 |--|---------|-----|
 | Id | `com.societyhub.societyhub_mobile` | `com.societyhub.societyhubMobile` |
-| Version | `1.0.3+4` | same `pubspec.yaml` |
+| Version | `1.0.4+5` | same `pubspec.yaml` |
 | Store | [Play listing](https://play.google.com/store/apps/details?id=com.societyhub.societyhub_mobile) (internal/closed today) | Not listed |
 | Local API | `http://10.0.2.2:3000` (emulator) | `http://127.0.0.1:3000` (Simulator) |
 

@@ -31,9 +31,23 @@ class ApiConfig {
   static const defaultGoogleServerClientId =
       '583640086898-uhmdenf6kpv8iskvdaju4pk4gpbmae20.apps.googleusercontent.com';
 
+  /// Known Android OAuth clients. Using one as `serverClientId` causes
+  /// Play Services error 10 (DEVELOPER_ERROR).
+  static const androidGoogleClientIdPrefixes = <String>{
+    '583640086898-9stsb90vslhphs56gqv65445pjj57qk6',
+    '583640086898-m53784dglvpt6bre3c5o13cpos1maeh',
+  };
+
   static String resolveGoogleServerClientId(String fromDefine) {
     final trimmed = fromDefine.trim();
-    return trimmed.isEmpty ? defaultGoogleServerClientId : trimmed;
+    if (trimmed.isEmpty || !trimmed.contains('apps.googleusercontent.com')) {
+      return defaultGoogleServerClientId;
+    }
+    final prefix = trimmed.split('.').first;
+    if (androidGoogleClientIdPrefixes.contains(prefix)) {
+      return defaultGoogleServerClientId;
+    }
+    return trimmed;
   }
 
   String get resolvedPrivacyPolicyUrl {

@@ -35,7 +35,7 @@ Azure staging/production workflows exist and stay idle until Phase 1 UAT.
 |--|--|
 | App name | SocietyHub |
 | Package / application id | `com.societyhub.societyhub_mobile` |
-| Current version | `1.0.3+4` (`apps/mobile/pubspec.yaml`) |
+| Current version | `1.0.4+5` (`apps/mobile/pubspec.yaml`) |
 | Store listing | https://play.google.com/store/apps/details?id=com.societyhub.societyhub_mobile |
 | Play Console | https://play.google.com/console |
 | Track today | **Internal / closed testing.** Production promote is a Console click (not CI). |

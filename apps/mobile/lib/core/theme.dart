@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Matches `apps/client-app` Hindu / temple palette (saffron + kumkum + gold).
 abstract final class AppColors {
@@ -17,12 +16,11 @@ abstract final class AppColors {
 }
 
 ThemeData buildAppTheme() {
-  final baseText = GoogleFonts.outfitTextTheme();
-  final display = GoogleFonts.cormorantGaramond();
+  // Platform fonts only. Runtime Google Fonts (Outfit) dropped space glyphs
+  // on some Play installs, so login copy ran together.
+  final base = ThemeData(useMaterial3: true, brightness: Brightness.light);
 
-  return ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.light,
+  return base.copyWith(
     scaffoldBackgroundColor: AppColors.paper,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.saffron,
@@ -32,7 +30,7 @@ ThemeData buildAppTheme() {
       onSurface: AppColors.ink,
       error: AppColors.danger,
     ),
-    textTheme: baseText.apply(
+    textTheme: base.textTheme.apply(
       bodyColor: AppColors.ink,
       displayColor: AppColors.leafDark,
     ),
@@ -40,11 +38,7 @@ ThemeData buildAppTheme() {
       backgroundColor: AppColors.card.withValues(alpha: 0.9),
       foregroundColor: AppColors.leafDark,
       elevation: 0,
-      titleTextStyle: display.copyWith(
-        fontSize: 22,
-        fontWeight: FontWeight.w700,
-        color: AppColors.leafDark,
-      ),
+      titleTextStyle: displayStyle(size: 22),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -97,10 +91,11 @@ ThemeData buildAppTheme() {
 }
 
 TextStyle displayStyle({double size = 24, Color color = AppColors.leafDark}) {
-  return GoogleFonts.cormorantGaramond(
+  return TextStyle(
     fontSize: size,
     fontWeight: FontWeight.w700,
     color: color,
-    letterSpacing: 0.01,
+    height: 1.15,
+    fontFamily: 'serif',
   );
 }

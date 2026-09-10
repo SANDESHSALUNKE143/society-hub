@@ -1,13 +1,14 @@
+import 'package:flutter/services.dart';
+
 import '../api/models.dart';
 
-/// User-facing login copy. Keep API codes out of the UI.
+/// User-facing login copy. Keep API codes and platform dumps out of the UI.
 String loginErrorText(Object error) {
   if (error is ApiException) {
     return switch (error.code) {
       'not_onboarded' =>
         'This Google or phone is not onboarded. Ask your society admin to add you, then try again.',
-      'invalid_google_token' =>
-        'Google could not verify this sign-in. Register the Play App Signing SHA-1 as its own Android OAuth client (do not overwrite societyhub-android), wait a few minutes, then try again. Or use OTP.',
+      'invalid_google_token' => _playGoogleSetupHint,
       'invalid_credentials' =>
         'Email or password is incorrect.',
       'pin_invalid' => 'That PIN is incorrect.',
@@ -24,13 +25,20 @@ String loginErrorText(Object error) {
     };
   }
 
-  final raw = error.toString().replaceFirst(RegExp(r'^[^:]+:\s*'), '');
+  if (error is PlatformException && _isGoogleDeveloperError(error)) {
+    return _playGoogleSetupHint;
+  }
+
+  final raw = error.toString();
   final lower = raw.toLowerCase();
-  if (lower.contains('cancelled')) {
+  if (_looksLikeGoogleDeveloperError(lower)) {
+    return _playGoogleSetupHint;
+  }
+  if (lower.contains('cancelled') || lower.contains('canceled')) {
     return 'Google sign-in was cancelled. Try again, or use OTP or email.';
   }
   if (lower.contains('id token') || lower.contains('sha-1')) {
-    return 'Google did not return an ID token. In Play Console → Protected with Play → Manage Play app signing, copy the App signing SHA-1 and create a separate Android OAuth client for it. Do not overwrite societyhub-android.';
+    return _playGoogleSetupHint;
   }
   if (lower.contains('not configured')) {
     return 'Google Sign-In is not configured in this build. Use OTP or email.';
@@ -41,7 +49,38 @@ String loginErrorText(Object error) {
       lower.contains('connection')) {
     return 'Cannot reach the server. Wait a minute if the API is waking up, then try again.';
   }
-  return raw.trim().isEmpty ? 'Sign-in failed. Try OTP or email.' : raw;
+  if (_looksLikePlatformDump(raw)) {
+    return 'Google sign-in failed. Try OTP or email.';
+  }
+  final stripped = raw.replaceFirst(RegExp(r'^[^:]+:\s*'), '').trim();
+  if (stripped.isEmpty || _looksLikePlatformDump(stripped)) {
+    return 'Sign-in failed. Try OTP or email.';
+  }
+  return stripped;
+}
+
+const _playGoogleSetupHint =
+    'Google Sign-In is not ready on this install (error 10). Use OTP or email.';
+
+bool _isGoogleDeveloperError(PlatformException error) {
+  final blob = '${error.code} ${error.message} ${error.details}'.toLowerCase();
+  return _looksLikeGoogleDeveloperError(blob);
+}
+
+bool _looksLikeGoogleDeveloperError(String lower) {
+  if (lower.contains('developer_error')) return true;
+  if (lower.contains('apiexception: 10')) return true;
+  if (lower.contains('api exception: 10')) return true;
+  if (RegExp(r'(^|[^0-9])10:\s*(,|null|$)').hasMatch(lower)) return true;
+  return lower.contains('sign_in_failed') &&
+      RegExp(r'(^|[^0-9])10([^0-9]|$)').hasMatch(lower);
+}
+
+bool _looksLikePlatformDump(String text) {
+  final lower = text.toLowerCase();
+  return lower.contains('null, null') ||
+      lower.contains('platformexception') ||
+      RegExp(r'^\s*\d+:\s*,').hasMatch(text);
 }
 
 const _unreachableServer =

@@ -20,7 +20,7 @@ Flutter Client App in apps/mobile/ — one codebase, two stores later.
 
   Android (now)
     Package:   com.societyhub.societyhub_mobile
-    Version:   1.0.3+4   (apps/mobile/pubspec.yaml)
+    Version:   1.0.4+5   (apps/mobile/pubspec.yaml)
     Listing:   https://play.google.com/store/apps/details?id=com.societyhub.societyhub_mobile
     Console:   https://play.google.com/console
     Track:     Internal (CI can roll this out). Closed testers + Production
@@ -209,14 +209,20 @@ Play upload 401: JSON secret missing or wrong GitHub environment (must be prod).
 AAB signing fail: ANDROID_KEYSTORE_* secrets on environment prod.
 Analyze / test red: fix on the feature branch (flutter analyze, bun run quality).
   Common: Bun per-file coverage <90%; Flutter analyze treats info as fail.
+Google Sign-In fail on Play build (error 10 / "10:, null, null)"):
+  That is Play Services DEVELOPER_ERROR — before our API.
+  Confirm Play SHA-1 clients are in GCP societyhub-507013 (same as Web).
+  If Create said "already in use", the fingerprint may live in another project.
+  Use OTP until 1.0.4+ is installed. Never set an Android client as serverClientId.
 Google Sign-In fail on Play build (no idToken / "could not verify"):
   Debug SHA-1         E8:49:BF:F4:F0:C5:9B:A2:96:CC:61:E0:1F:9C:29:A5:D2:C2:D7:57
   Upload SHA-1        A7:05:A3:91:D4:DC:D7:7F:6F:84:6A:32:36:2D:10:B4:8E:CE:76:E2
   Play classic SHA-1  79:4C:A5:3F:6D:98:95:0A:C3:8A:10:50:04:CD:81:09:9B:3E:C0:5F
   Play PQC SHA-1      21:0E:39:37:AF:CD:CB:1D:3E:4E:12:ED:D1:3F:AF:AF:66:6B:99:E6
   Debug + upload are on societyhub-android. Play RE-SIGNS the AAB.
-  Classical Play SHA-1 was already registered (Create said in use).
-  PQC Play client created 10 Sep 2026 (societyhub-android-play-pqc).
+  Classical Play client societyhub-android-play is in this project
+  (created 10 Sep 2026 07:56 IST, SHA-1 79:4C:A5:3F:…).
+  PQC client societyhub-android-play-pqc is also in this project.
   App still uses the Web client as serverClientId. Never paste an Android
   client ID into Flutter. Wait 5–10 min after a new client, then test a
   Play internal install (not flutter run).
