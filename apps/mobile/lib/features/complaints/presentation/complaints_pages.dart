@@ -150,6 +150,8 @@ class _NewComplaintPageState extends ConsumerState<NewComplaintPage> {
   List<FlatDto> _flats = [];
   final List<_PickedFile> _files = [];
   bool _busy = false;
+  bool _loadingFlats = false;
+  bool _requestedFlats = false;
   String? _error;
 
   static const _types = [
@@ -164,14 +166,14 @@ class _NewComplaintPageState extends ConsumerState<NewComplaintPage> {
   @override
   void initState() {
     super.initState();
-    final user = ref.read(sessionProvider).user;
-    _flatId = user?.flatId;
-    if (user?.flatId == null) {
-      _loadFlats();
-    }
+    final session = ref.read(sessionProvider);
+    _flatId = session.user?.flatId;
   }
 
   Future<void> _loadFlats() async {
+    if (_loadingFlats || _requestedFlats) return;
+    _requestedFlats = true;
+    _loadingFlats = true;
     try {
       final flats = await ref.read(apiProvider).listFlats();
       if (!mounted) return;
@@ -183,6 +185,8 @@ class _NewComplaintPageState extends ConsumerState<NewComplaintPage> {
       if (mounted) {
         setState(() => _error = e.message);
       }
+    } finally {
+      _loadingFlats = false;
     }
   }
 
@@ -208,8 +212,15 @@ class _NewComplaintPageState extends ConsumerState<NewComplaintPage> {
 
   Future<void> _submit() async {
     final user = ref.read(sessionProvider).user;
-    final needsFlat = user?.flatId == null;
-    if (needsFlat && (_flatId == null || _flatId!.isEmpty)) {
+    final staffPicker = ref.read(sessionProvider.notifier).isStaffView;
+    if (!staffPicker && (user?.flatId == null || user!.flatId!.isEmpty)) {
+      setState(
+        () => _error =
+            'Your account is not linked to a flat. Ask your society office to onboard you.',
+      );
+      return;
+    }
+    if (staffPicker && (_flatId == null || _flatId!.isEmpty)) {
       setState(() => _error = 'Select a flat to raise this complaint');
       return;
     }
@@ -227,7 +238,7 @@ class _NewComplaintPageState extends ConsumerState<NewComplaintPage> {
         title: _title.text.trim(),
         type: _type,
         description: _description.text.trim(),
-        flatId: needsFlat ? _flatId : null,
+        flatId: staffPicker ? _flatId : null,
         typeOtherText: _type == 'other' ? _typeOther.text.trim() : null,
       );
       for (final file in _files) {
@@ -249,7 +260,12 @@ class _NewComplaintPageState extends ConsumerState<NewComplaintPage> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(sessionProvider).user;
-    final needsFlat = user?.flatId == null;
+    final staffPicker = ref.watch(sessionProvider.notifier).isStaffView;
+    final linkedFlatMissing =
+        !staffPicker && (user?.flatId == null || user!.flatId!.isEmpty);
+    if (staffPicker) {
+      Future.microtask(_loadFlats);
+    }
 
     return Scaffold(
       backgroundColor: AppColors.paper,
@@ -272,48 +288,66 @@ class _NewComplaintPageState extends ConsumerState<NewComplaintPage> {
                   ),
                 ],
               ),
-              if (user?.flatNumber != null)
+              if (!staffPicker && user?.flatNumber != null)
                 Padding(
+                  key: AppKeys.newComplaintLinkedFlat,
                   padding: const EdgeInsets.only(left: 12, bottom: 8),
                   child: Text(
                     'Filing for flat ${user!.flatNumber}',
                     style: const TextStyle(color: Colors.black54, fontSize: 13),
                   ),
                 ),
-              if (needsFlat && _flats.isNotEmpty) ...[
-                DropdownButtonFormField<String>(
-                  // ignore: deprecated_member_use
-                  value: toWingSelectValue(wingForFlatId(_flats, _flatId)),
-                  decoration: underlineFieldDecoration('Wing'),
-                  items: uniqueWingNames(_flats)
-                      .map(
-                        (w) => DropdownMenuItem(
-                          value: toWingSelectValue(w),
-                          child: Text(wingLabel(w)),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (w) {
-                    if (w == null) return;
-                    setState(() {
-                      _flatId = firstFlatIdInWing(_flats, fromWingSelectValue(w));
-                    });
-                  },
+              if (linkedFlatMissing)
+                const Padding(
+                  key: AppKeys.newComplaintNoFlat,
+                  padding: EdgeInsets.only(left: 12, bottom: 8),
+                  child: Text(
+                    'Your account is not linked to a flat. Ask your society office to onboard you before raising a complaint.',
+                    style: TextStyle(color: AppColors.danger, fontSize: 13),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  // ignore: deprecated_member_use
-                  value: _flatId,
-                  decoration: underlineFieldDecoration('Flat'),
-                  items: flatsInWing(_flats, wingForFlatId(_flats, _flatId))
-                      .map(
-                        (f) => DropdownMenuItem(
-                          value: f.id,
-                          child: Text(f.number),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) => setState(() => _flatId = v),
+              if (staffPicker && _flats.isNotEmpty) ...[
+                Column(
+                  key: AppKeys.newComplaintFlatPicker,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      // ignore: deprecated_member_use
+                      value: toWingSelectValue(wingForFlatId(_flats, _flatId)),
+                      decoration: underlineFieldDecoration('Wing'),
+                      items: uniqueWingNames(_flats)
+                          .map(
+                            (w) => DropdownMenuItem(
+                              value: toWingSelectValue(w),
+                              child: Text(wingLabel(w)),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (w) {
+                        if (w == null) return;
+                        setState(() {
+                          _flatId = firstFlatIdInWing(
+                            _flats,
+                            fromWingSelectValue(w),
+                          );
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      // ignore: deprecated_member_use
+                      value: _flatId,
+                      decoration: underlineFieldDecoration('Flat'),
+                      items: flatsInWing(_flats, wingForFlatId(_flats, _flatId))
+                          .map(
+                            (f) => DropdownMenuItem(
+                              value: f.id,
+                              child: Text(f.number),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) => setState(() => _flatId = v),
+                    ),
+                  ],
                 ),
               ],
               DropdownButtonFormField<String>(
@@ -387,7 +421,9 @@ class _NewComplaintPageState extends ConsumerState<NewComplaintPage> {
             child: ShPrimaryButton(
               label: 'Submit complaint',
               busy: _busy,
-              onPressed: _submit,
+              onPressed: linkedFlatMissing || (staffPicker && (_flatId == null || _flatId!.isEmpty))
+                  ? null
+                  : _submit,
             ),
           ),
         ),
