@@ -9,7 +9,7 @@ const url =
   process.env.DATABASE_URL ??
   "mysql://root:1900Summer%40@127.0.0.1:3306/societyhub";
 
-async function main() {
+export async function applyMigrations() {
   const conn = await mysql.createConnection(mysqlConnectOptions(url));
   const db = drizzle(conn);
   const migrationsFolder = join(
@@ -21,7 +21,9 @@ async function main() {
   await conn.end();
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  applyMigrations().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
