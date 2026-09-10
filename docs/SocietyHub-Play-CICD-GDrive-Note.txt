@@ -1,22 +1,49 @@
-SocietyHub — Android Play CI/CD operator note
-Last updated: 9 Sep 2026
+SocietyHub — Play / CI/CD operator note
+Last updated: 10 Sep 2026
 Owner: Sandesh Salunke (sandesh@engineersbay.in / Engineers Bay)
-Keep this file in Google Drive. Do NOT put keystore files or JSON keys in Drive or git.
+
+Keep a copy in Google Drive for when you are away from the repo.
+Do NOT put keystores, key.properties, Play/Apple JSON keys, or tester
+email CSVs in Drive or git. Those are PII / secrets.
+
+In-repo twins (source of truth when you have the laptop):
+  README.md                          — URLs, local Android/iOS run + checks
+  docs/12-CICD.md                    — pipelines
+  docs/08-Local-Development.md §12   — Flutter local
+  docs/10-Go-Live.md §6–7            — Play Console / OAuth
+  apps/mobile/README.md              — AAB, signing, verify steps
 
 ============================================================
 WHAT THIS IS
 ============================================================
-SocietyHub Android app (package com.societyhub.societyhub_mobile) is built by
-GitHub Actions workflow "Mobile CI" (.github/workflows/mobile.yml).
+Flutter Client App in apps/mobile/ — one codebase, two stores later.
 
-CI can:
-  1) flutter analyze + test
-  2) Sign a release AAB (upload keystore in GitHub secrets)
-  3) Upload that AAB and roll out the Play INTERNAL track (testers can install)
+  Android (now)
+    Package:   com.societyhub.societyhub_mobile
+    Version:   1.0.3+4   (apps/mobile/pubspec.yaml)
+    Listing:   https://play.google.com/store/apps/details?id=com.societyhub.societyhub_mobile
+    Console:   https://play.google.com/console
+    Track:     Internal (CI can roll this out). Closed testers + Production
+               are Console clicks. New personal Play accounts also need
+               Closed testing: 12 testers for 14 days before Google unlocks
+               "Apply for production".
 
-CI never publishes Production. Production stays a Play Console click.
-New personal Play accounts also need Closed testing: 12 testers for 14 days
-before Google unlocks "Apply for production".
+  iOS (local only)
+    Bundle:    com.societyhub.societyhubMobile
+    Status:    Simulator / signed Debug on a device. NO TestFlight / App Store.
+    CI IPA:    Off until ENABLE_IOS_IPA=true + Apple Developer $99 + ASC secrets.
+
+GitHub Actions workflow "Mobile CI" (.github/workflows/mobile.yml) can:
+  1) flutter analyze + test     (every PR/push that touches apps/mobile)
+  2) Sign a release AAB         (upload keystore in GitHub secrets)
+  3) Upload + roll out Play INTERNAL  (testers who opted in can install)
+
+CI never publishes Production.
+
+Git flow (do not skip):
+  feature/…  →  PR  →  staging  →  Promote preview  →  main  →  Render
+Play store jobs may run from staging or main. Render API only updates after
+Promote preview merges staging into main.
 
 ============================================================
 GOOGLE CLOUD
@@ -62,20 +89,26 @@ Invite this user if not already invited:
 Privacy / website (until societyhub.in is live):
   https://societyhub-client.onrender.com
   https://societyhub-client.onrender.com/privacy
+  https://societyhub-client.onrender.com/terms
 
-Store listing files on the laptop / repo:
-  apps/mobile/store/icon-512.png
-  apps/mobile/store/feature-graphic-1024x500.png
-  apps/mobile/store/screenshot-01-login.png
-  apps/mobile/store/screenshot-02-complaints.png
-  apps/mobile/store/screenshot-03-new.png
-  apps/mobile/store/screenshot-04-detail.png
+Store listing files on the laptop / repo (apps/mobile/store/):
+  icon-512.png
+  feature-graphic-1024x500.png
+  screenshot-01-login.png
+  screenshot-02-complaints.png
+  screenshot-03-new.png
+  screenshot-04-detail.png
+  (see apps/mobile/store/README.md)
+
+Do not upload testers-closed.csv to Drive or Play as a public file.
 
 ============================================================
 GITHUB (engineersbay/society-hub)
 ============================================================
 Environment used by Mobile CI store jobs: prod
-(The staging git branch is still where PRs merge. It is not a Run workflow environment.)
+(The staging git branch is still where PRs merge. It is not a
+"Run workflow" environment. Do not pick "production" — the YAML
+says environment: prod.)
 
 Secrets (never commit, never paste in chat/Drive):
   ANDROID_KEYSTORE_BASE64
@@ -100,10 +133,16 @@ folder — not this note, not Slack, not the git repo.
 ============================================================
 HOW TO RUN A STORE BUILD
 ============================================================
-GitHub → Actions → Mobile CI → Run workflow
-  Use workflow from: staging (or main after promote)
-  Build IPA:         false
-  Upload to Play:    true
+1. Land the code: PR into staging, wait until CI + Mobile analyze/test are green.
+2. If testers should hit new API/web too: Actions → Promote preview
+   (staging → main → Render). Hobby cold start ~60s.
+3. GitHub → Actions → Mobile CI → Run workflow
+     Use workflow from:  staging  (or main after promote)
+     Build IPA:          false
+     Upload to Play:     true
+4. Watch the run: Analyze and test → Android AAB → Play internal.
+   AAB/Play are skipped on pull_request; they only run on this dispatch
+   (or a mobile-v* tag).
 
 Result:
   Artifact societyhub-android-aab
@@ -111,7 +150,33 @@ Result:
   Closed testing testers and Production stay Console clicks.
 
 Local AAB (same signing), if CI is down:
-  apps/mobile/build/app/outputs/bundle/release/app-release.aab
+  cd apps/mobile
+  flutter build appbundle --release \
+    --dart-define=ENV=prod \
+    --dart-define=API_BASE_URL=https://societyhub-api-ece6.onrender.com \
+    --dart-define=GOOGLE_SERVER_CLIENT_ID=<web-oauth-client-id> \
+    --dart-define=PRIVACY_POLICY_URL=https://societyhub-client.onrender.com/privacy
+  Output: apps/mobile/build/app/outputs/bundle/release/app-release.aab
+
+============================================================
+VERIFY AFTER AN INTERNAL UPLOAD
+============================================================
+1. Play Console → Internal testing → latest release = 1.0.3 (or the
+   version you just shipped). Testers get an update (or the opt-in link).
+2. On a tester phone, open SocietyHub → login (real OTP / Google / password).
+   Store builds must talk to https://societyhub-api-ece6.onrender.com
+   (DEV_AUTH should be false on that API).
+3. Smoke: raise a complaint; Account → Family shows people, not only counts.
+   Chairperson with a linked flat must see the household list (API GET
+   /v1/household/members).
+4. If login "network" / timeout: Render Hobby may be cold — wait ~60s,
+   open https://societyhub-api-ece6.onrender.com/health then retry.
+
+Local (not Play) check — Mac + emulator/Simulator:
+  See README.md "Check / test local Android and iOS"
+  Android emulator API:  http://10.0.2.2:3000
+  iOS Simulator API:     http://127.0.0.1:3000
+  OTP when DEV_AUTH=true: 9999999999 / 8888888888  code 123456
 
 ============================================================
 WHAT IS NOT AUTOMATED
@@ -123,18 +188,31 @@ WHAT IS NOT AUTOMATED
 - Azure
 
 ============================================================
-RENDER (preview API the app talks to)
+RENDER (preview the Play / web apps talk to)
 ============================================================
-API:     https://societyhub-api-ece6.onrender.com
-Client:  https://societyhub-client.onrender.com
-Manage:  https://societyhub-manage.onrender.com
+API:      https://societyhub-api-ece6.onrender.com
+Health:   https://societyhub-api-ece6.onrender.com/health
+Docs:     https://societyhub-api-ece6.onrender.com/docs
+Client:   https://societyhub-client.onrender.com
+Manage:   https://societyhub-manage.onrender.com
+Privacy:  https://societyhub-client.onrender.com/privacy
+Terms:    https://societyhub-client.onrender.com/terms
+
+Do NOT use societyhub-api.onrender.com — that host is not this API.
 Hobby cold start can take ~60s. Mobile timeouts are 90s.
 
 ============================================================
 IF SOMETHING BREAKS
 ============================================================
-Play upload 403: invite play-upload@… in Play Console and wait.
-Play upload 401: JSON secret missing or wrong environment.
-AAB signing fail: ANDROID_KEYSTORE_* secrets on that environment.
+Play upload 403: invite play-upload@… in Play Console and wait ~5 min.
+Play upload 401: JSON secret missing or wrong GitHub environment (must be prod).
+AAB signing fail: ANDROID_KEYSTORE_* secrets on environment prod.
+Analyze / test red: fix on the feature branch (flutter analyze, bun run quality).
+  Common: Bun per-file coverage <90%; Flutter analyze treats info as fail.
 Google Sign-In fail on Play build: add Play App Signing SHA-1 to
   societyhub-android (Play → App integrity → App signing key certificate).
+White screen / network on local Android: wrong API_BASE_URL (emulator needs
+  10.0.2.2, not localhost). On iOS Simulator use 127.0.0.1.
+OTP 123456 rejected: DEV_AUTH is not true, or you are hitting the hosted API.
+After merge, testers still see old API: Promote preview was not run (main
+  / Render is behind staging).

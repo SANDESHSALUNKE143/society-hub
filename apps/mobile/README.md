@@ -1,8 +1,15 @@
 # SocietyHub Mobile (Flutter)
 
-Native **Android first** (Play) + iOS later. Same Bun `/v1` API as `apps/client-app`.
+Native **Android first** (Play internal/closed) + **iOS Simulator locally**. Same Bun `/v1` API as `apps/client-app`. App Store / TestFlight listing is not open yet.
 
-Index: [docs/08-Local-Development.md](../../docs/08-Local-Development.md) (Mobile section). Store / CI: [docs/10-Go-Live.md](../../docs/10-Go-Live.md) §6–7. Agent skill: [`.cursor/skills/societyhub-flutter-future/`](../../.cursor/skills/societyhub-flutter-future/SKILL.md)
+Index: root [README.md](../../README.md) · [docs/08-Local-Development.md](../../docs/08-Local-Development.md) §12. Store / CI: [docs/10-Go-Live.md](../../docs/10-Go-Live.md) §6–7 · [docs/12-CICD.md](../../docs/12-CICD.md). Agent skill: [`.cursor/skills/societyhub-flutter-future/`](../../.cursor/skills/societyhub-flutter-future/SKILL.md)
+
+| | Android | iOS |
+|--|---------|-----|
+| Id | `com.societyhub.societyhub_mobile` | `com.societyhub.societyhubMobile` |
+| Version | `1.0.3+4` | same `pubspec.yaml` |
+| Store | [Play listing](https://play.google.com/store/apps/details?id=com.societyhub.societyhub_mobile) (internal/closed today) | Not listed |
+| Local API | `http://10.0.2.2:3000` (emulator) | `http://127.0.0.1:3000` (Simulator) |
 
 ## Scope
 
@@ -55,6 +62,47 @@ flutter run --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=ENV=d
 Local OTP when `DEV_AUTH=true`: Chairperson `9999999999`, Resident `8888888888`, code `123456`.
 
 Hot reload: `r` in the terminal. Restart: `R`.
+
+## Verify setup (do this after first `flutter run`)
+
+Longer checklist: root [README.md](../../README.md) — **Check / test local Android and iOS**.
+
+```bash
+# Machine (no device)
+cd apps/mobile && flutter analyze && flutter test
+
+# API must already be running
+curl -sS http://127.0.0.1:3000/health
+grep DEV_AUTH ../api/.env            # from apps/mobile; expect true
+```
+
+**Android device check**
+
+```bash
+flutter emulators --launch <emulator_id>
+adb devices                                          # … device
+adb shell curl -sS http://10.0.2.2:3000/health || adb reverse tcp:3000 tcp:3000
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000 --dart-define=ENV=dev
+```
+
+Physical Android: same Wi‑Fi + `http://<LAN>:3000`, or USB `adb reverse tcp:3000 tcp:3000` + `http://127.0.0.1:3000`.
+
+**iOS Simulator check**
+
+```bash
+cd ios && pod install && cd ..
+open -a Simulator
+curl -sS http://127.0.0.1:3000/health
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=ENV=dev
+```
+
+**In-app smoke (same on both)** — login is Email first; switch to **OTP**:
+
+1. Chairperson `9999999999` / `123456` → dashboard (Admin). Toggle Resident.
+2. Complaints → New → plumbing → submit → ticket is **In queue**.
+3. Account → Family → people list (owner + family), not only counts.
+4. Log out. Resident `8888888888` / `123456` → raise a complaint.
+5. Optional: Email `superadmin@societyhub.local` / `Test@1234`.
 
 ### Common failures
 
@@ -138,9 +186,28 @@ iOS later: set variable `ENABLE_IOS_IPA=true` and ASC secrets. Do not buy Apple 
 5. Store listing files: [`store/`](store/) (icon, feature graphic, 4 phone screenshots). Copy in [Go-Live §7.2a](../../docs/10-Go-Live.md).
 6. Production after smoke; staged rollout 20% → 100%.
 
-## Next: iOS (not this phase)
+## Local iOS (Simulator)
 
-Same Flutter project. After Android is on an internal Play track: Apple Developer $99, bundle `com.societyhub.societyhubMobile`, Info.plist camera/photo strings, Google iOS URL scheme, paste ASC secrets, re-run workflow with `build_ios`.
+Mac + Xcode + CocoaPods. Same Flutter project — no second app.
+
+```bash
+# Once: Xcode from the Mac App Store, then
+xcode-select --install
+sudo gem install cocoapods   # or: brew install cocoapods
+
+cd apps/mobile
+flutter pub get
+cd ios && pod install && cd ..
+flutter doctor -v            # Xcode + iOS toolchain must be green
+open -a Simulator
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:3000 --dart-define=ENV=dev
+```
+
+Physical iPhone: same Wi‑Fi, `API_BASE_URL=http://<LAN-IP>:3000`, sign **Runner** in Xcode with a free Apple ID (Debug only).
+
+## App Store / TestFlight (not this phase)
+
+After Android stays on an internal Play track: Apple Developer $99, bundle `com.societyhub.societyhubMobile`, Info.plist camera/photo strings, Google iOS URL scheme, paste ASC secrets, re-run Mobile CI with `build_ios` and `ENABLE_IOS_IPA=true`.
 
 ## Tests
 
