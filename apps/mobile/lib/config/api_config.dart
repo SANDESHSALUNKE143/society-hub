@@ -40,7 +40,15 @@ class ApiConfig {
 
   static String resolveGoogleServerClientId(String fromDefine) {
     final trimmed = fromDefine.trim();
+    if (trimmed == defaultGoogleServerClientId) {
+      return trimmed;
+    }
     if (trimmed.isEmpty || !trimmed.contains('apps.googleusercontent.com')) {
+      return defaultGoogleServerClientId;
+    }
+    // Any other client in this GCP project is an Android OAuth client.
+    // Using one as serverClientId is Play Services error 10.
+    if (trimmed.startsWith('583640086898-')) {
       return defaultGoogleServerClientId;
     }
     final prefix = trimmed.split('.').first;

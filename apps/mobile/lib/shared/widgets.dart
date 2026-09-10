@@ -92,6 +92,7 @@ class BrandMark extends StatelessWidget {
           child: Text(
             'SH',
             style: TextStyle(
+              fontFamily: 'sans-serif',
               color: Colors.white,
               fontWeight: FontWeight.bold,
               fontSize: compact ? 14 : 16,
@@ -106,9 +107,10 @@ class BrandMark extends StatelessWidget {
             Text(
               compact ? 'CLIENT' : 'Resident sign-in',
               style: TextStyle(
+                fontFamily: 'sans-serif',
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                letterSpacing: 0.2,
+                letterSpacing: 0,
                 color: AppColors.gold,
               ),
             ),

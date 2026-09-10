@@ -182,6 +182,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             _modeHint,
                             textAlign: TextAlign.center,
                             style: const TextStyle(
+                              fontFamily: 'sans-serif',
                               color: Colors.black54,
                               fontSize: 14,
                               height: 1.4,
@@ -566,6 +567,7 @@ class _ErrorBanner extends StatelessWidget {
           key: AppKeys.loginError,
           textAlign: TextAlign.center,
           style: const TextStyle(
+            fontFamily: 'sans-serif',
             color: AppColors.danger,
             fontSize: 13,
             height: 1.4,
