@@ -106,9 +106,9 @@ class BrandMark extends StatelessWidget {
             Text(
               compact ? 'CLIENT' : 'Resident sign-in',
               style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 2,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.2,
                 color: AppColors.gold,
               ),
             ),

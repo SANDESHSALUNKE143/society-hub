@@ -19,18 +19,19 @@ void attachApi(WidgetTester tester, SocietyHubApi api) {
 }
 
 void main() {
-  testWidgets('shows password fields by default and switches modes', (tester) async {
+  testWidgets('shows OTP first and switches modes', (tester) async {
     await tester.pumpWidget(wrapForWidgetTest(child: const LoginPage()));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(AppKeys.loginEmail), findsOneWidget);
-    expect(find.byKey(AppKeys.loginPassword), findsOneWidget);
-    expect(find.text('SocietyHub'), findsWidgets);
-
-    await tester.tap(find.byKey(AppKeys.loginModeOtp));
-    await tester.pumpAndSettle();
     expect(find.byKey(AppKeys.loginPhone), findsOneWidget);
     expect(find.text('Send OTP'), findsOneWidget);
+    expect(find.byKey(AppKeys.loginEmail), findsNothing);
+    expect(find.text('SocietyHub'), findsWidgets);
+
+    await tester.tap(find.byKey(AppKeys.loginModePassword));
+    await tester.pumpAndSettle();
+    expect(find.byKey(AppKeys.loginEmail), findsOneWidget);
+    expect(find.byKey(AppKeys.loginPassword), findsOneWidget);
 
     await tester.tap(find.byKey(AppKeys.loginModePin));
     await tester.pumpAndSettle();
@@ -65,6 +66,8 @@ void main() {
     await tester.pumpAndSettle();
     attachApi(tester, bundle.api);
 
+    await tester.tap(find.byKey(AppKeys.loginModePassword));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(AppKeys.loginEmail), 'a@b.com');
     await tester.enterText(find.byKey(AppKeys.loginPassword), 'secret');
     await tester.tap(find.byKey(AppKeys.loginSubmit));
@@ -88,6 +91,8 @@ void main() {
     await tester.pumpAndSettle();
     attachApi(tester, bundle.api);
 
+    await tester.tap(find.byKey(AppKeys.loginModePassword));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(AppKeys.loginEmail), 'a@b.com');
     await tester.enterText(find.byKey(AppKeys.loginPassword), 'bad');
     await tester.tap(find.byKey(AppKeys.loginSubmit));
@@ -255,6 +260,7 @@ void main() {
     expect(find.byKey(AppKeys.loginVersion), findsOneWidget);
     expect(find.text('Installed version 1.0.0 (1)'), findsOneWidget);
     expect(find.byKey(AppKeys.loginUpdate), findsNothing);
+    expect(find.text('Privacy'), findsOneWidget);
   });
 
   testWidgets('login footer shows Update when Play has a newer build', (tester) async {

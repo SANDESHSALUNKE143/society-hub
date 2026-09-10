@@ -51,7 +51,7 @@ Web preview does **not** wait for Mobile CI. A mobile-only PR still runs **CI** 
 **How to build an AAB in CI**
 
 1. GitHub → **Actions** → **Mobile CI** → **Run workflow**
-2. Use workflow from the **`staging`** git branch (or `main` after promote). Store jobs always use GitHub environment **`production`**.
+2. Use workflow from the **`staging`** git branch (or `main` after promote). Store jobs always use GitHub environment **`prod`**.
 3. Tick `upload_play` to upload and roll out to Play **internal**. Leave `build_ios` off until Apple. Production and closed testers stay in the Console.
 4. Download artifact `societyhub-android-aab`
 
