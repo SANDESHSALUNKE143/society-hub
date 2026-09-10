@@ -127,6 +127,42 @@ void main() {
     });
   });
 
+  group('SocietyResidentDto', () {
+    test('parses household member and display name', () {
+      final person = SocietyResidentDto.fromJson({
+        'userId': 'u2',
+        'name': 'Kid',
+        'email': null,
+        'phone': '8888888881',
+        'flatId': 'f1',
+        'flatNumber': '101',
+        'wingName': 'A',
+        'isOwner': false,
+      });
+      expect(person.displayName, 'Kid');
+      expect(person.isOwner, isFalse);
+    });
+  });
+
+  group('ParkingSlotDto', () {
+    test('parses puzzle parking label', () {
+      final slot = ParkingSlotDto.fromJson({
+        'id': 'p1',
+        'flatId': null,
+        'flatNumber': null,
+        'slotNumber': '101',
+        'vehicleNumber': null,
+        'type': 'car',
+        'kind': 'puzzle',
+        'wing': 'A',
+        'floor': 1,
+        'createdAt': '2026-01-01T00:00:00.000Z',
+      });
+      expect(slot.kind, 'puzzle');
+      expect(slot.label, 'A · 101');
+    });
+  });
+
   group('complaint labels', () {
     test('maps status and type', () {
       expect(complaintStatusLabel('assigned'), 'Acknowledged');

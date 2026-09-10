@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import type { FlatDto } from "@society-hub/types";
 import { ApiClientError } from "@society-hub/sdk";
+import { WingFlatSelect } from "@society-hub/ui";
 import { useAuth } from "../auth";
 
 export function OnboardPage() {
@@ -122,31 +123,22 @@ export function OnboardPage() {
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
-        <div>
-          <label className="label" htmlFor="flat">
-            Flat
-          </label>
-          <select
-            id="flat"
-            className="input"
+        <div className="grid gap-3 sm:grid-cols-2">
+          <WingFlatSelect
+            flats={flats}
             value={flatId}
-            onChange={(e) => {
-              const id = e.target.value;
+            onChange={(id) => {
               setFlatId(id);
               const selected = flats.find((f) => f.id === id);
               setAdultCount(String(selected?.adultCount ?? 0));
               setChildCount(String(selected?.childCount ?? 0));
               setSeniorCitizenCount(String(selected?.seniorCitizenCount ?? 0));
             }}
-            required
-          >
-            {flats.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.wingName ? `${f.wingName}-` : ""}
-                {f.number}
-              </option>
-            ))}
-          </select>
+            wingHtmlFor="onboard-wing"
+            flatHtmlFor="flat"
+            wingTestId="onboard-wing"
+            flatTestId="onboard-flat"
+          />
         </div>
         <p className="text-xs text-black/50">Family members in this flat</p>
         <div>

@@ -240,10 +240,23 @@ describe("sdk client", () => {
     await client.listMemberships();
     await client.selectTenant("11111111-1111-1111-1111-111111111111");
     await client.updateProfile({ vehicleNumber: "MH12AB1234" });
+    await client.listHouseholdMembers();
+    await client.addHouseholdMember({ name: "Kid", phone: "8888888881" });
+    await client.updateHouseholdMember("u-kid", {
+      name: "Kid",
+      phone: "8888888881",
+    });
+    await client.removeHouseholdMember("u-kid");
+    await client.removeResident("u-kid");
     expect(paths).toEqual([
       "http://api.test/v1/auth/memberships",
       "http://api.test/v1/auth/select-tenant",
       "http://api.test/v1/auth/profile",
+      "http://api.test/v1/household/members",
+      "http://api.test/v1/household/members",
+      "http://api.test/v1/household/members/u-kid",
+      "http://api.test/v1/household/members/u-kid",
+      "http://api.test/v1/admin/residents/u-kid",
     ]);
   });
 
@@ -267,14 +280,46 @@ describe("sdk client", () => {
       role: "secretary",
     });
     await client.removeSocietyTeamMember("s1", "u1");
+    await client.listManageSocietyFlats("s1");
+    await client.addManageSocietyFlat("s1", {
+      wing: "A",
+      floor: 3,
+      flatNumber: "101",
+    });
+    await client.importManageSocietyFlats("s1", [
+      { wing: "B", floor: 1, flatNumber: "201" },
+    ]);
+    await client.updateManageSocietyFlat("s1", "f1", {
+      wing: "A",
+      floor: 4,
+      flatNumber: "102",
+    });
+    await client.deleteManageSocietyFlat("s1", "f1");
+    await client.listManageSocietyParkings("s1");
+    await client.addManageSocietyParking("s1", {
+      kind: "puzzle",
+      wing: "A",
+      slotNumber: "12",
+    });
+    await client.importManageSocietyParkings("s1", [
+      { kind: "open", slotNumber: "OP-1" },
+    ]);
+    await client.updateManageSocietyParking("s1", "p1", {
+      kind: "open",
+      slotNumber: "OP-2",
+    });
+    await client.deleteManageSocietyParking("s1", "p1");
+    await client.listParkings();
     await client.listBuildings("s1");
     await client.createBuilding("s1", "Tower A");
     await client.listWings("b1");
     await client.createWing("b1", "A");
     await client.listFlatsForWing("w1");
     await client.createFlat("w1", "101");
-    expect(paths.length).toBe(12);
+    expect(paths.length).toBe(23);
     expect(paths.some((p) => p.includes("/v1/manage/societies/s1/team"))).toBe(true);
+    expect(paths.some((p) => p.includes("/v1/manage/societies/s1/flats"))).toBe(true);
+    expect(paths.some((p) => p.includes("/v1/manage/societies/s1/parkings"))).toBe(true);
     expect(paths.some((p) => p.includes("/v1/manage/societies/s1/team/u1"))).toBe(true);
   });
 

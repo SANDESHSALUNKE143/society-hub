@@ -161,6 +161,45 @@ class FlatDto {
   }
 }
 
+class ParkingSlotDto {
+  const ParkingSlotDto({
+    required this.id,
+    required this.slotNumber,
+    required this.kind,
+    this.flatId,
+    this.flatNumber,
+    this.wing,
+    this.floor,
+  });
+
+  final String id;
+  final String slotNumber;
+  final String kind;
+  final String? flatId;
+  final String? flatNumber;
+  final String? wing;
+  final int? floor;
+
+  factory ParkingSlotDto.fromJson(Map<String, dynamic> json) {
+    return ParkingSlotDto(
+      id: json['id'] as String,
+      slotNumber: json['slotNumber'] as String,
+      kind: json['kind'] as String? ?? 'open',
+      flatId: json['flatId'] as String?,
+      flatNumber: json['flatNumber'] as String?,
+      wing: json['wing'] as String?,
+      floor: (json['floor'] as num?)?.toInt(),
+    );
+  }
+
+  String get label {
+    if (kind == 'puzzle') {
+      return '${wing ?? '—'} · $slotNumber';
+    }
+    return slotNumber;
+  }
+}
+
 class ComplaintAttachmentDto {
   const ComplaintAttachmentDto({
     required this.id,
@@ -424,6 +463,43 @@ class DashboardStatsDto {
           (json['unreadNotifications'] as num?)?.toInt() ?? 0,
     );
   }
+}
+
+class SocietyResidentDto {
+  const SocietyResidentDto({
+    required this.userId,
+    required this.name,
+    required this.email,
+    required this.phone,
+    required this.flatId,
+    required this.flatNumber,
+    required this.wingName,
+    required this.isOwner,
+  });
+
+  final String userId;
+  final String? name;
+  final String? email;
+  final String? phone;
+  final String flatId;
+  final String flatNumber;
+  final String? wingName;
+  final bool isOwner;
+
+  factory SocietyResidentDto.fromJson(Map<String, dynamic> json) {
+    return SocietyResidentDto(
+      userId: json['userId'] as String,
+      name: json['name'] as String?,
+      email: json['email'] as String?,
+      phone: json['phone'] as String?,
+      flatId: json['flatId'] as String? ?? '',
+      flatNumber: json['flatNumber'] as String? ?? '',
+      wingName: json['wingName'] as String?,
+      isOwner: json['isOwner'] as bool? ?? false,
+    );
+  }
+
+  String get displayName => name ?? phone ?? userId;
 }
 
 class TeamMemberDto {

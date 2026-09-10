@@ -21,6 +21,14 @@ export const STATUS_LABELS: Record<ComplaintStatus, string> = {
 export function statusBadgeClass(status: ComplaintStatus) {
   if (status === "resolved" || status === "closed") return "badge badge-success";
   if (status === "open") return "badge badge-danger";
+  if (status === "in_progress") return "badge badge-progress";
   if (status === "assigned") return "badge";
   return "badge";
+}
+
+export function statusTone(status: ComplaintStatus): "open" | "progress" | "ok" | "ack" {
+  if (status === "open") return "open";
+  if (status === "in_progress") return "progress";
+  if (status === "resolved" || status === "closed") return "ok";
+  return "ack";
 }

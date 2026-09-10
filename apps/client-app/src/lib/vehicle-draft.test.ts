@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  emptyVehicleRows,
   remainingIncluded,
   remainingIncludedForUser,
   toVehiclePayload,
@@ -17,6 +18,13 @@ function draft(overrides: Partial<VehicleDraft> = {}): VehicleDraft {
 }
 
 describe("vehicle-draft", () => {
+  it("seeds empty registration rows for onboard", () => {
+    const rows = emptyVehicleRows(2);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.registrationNumber).toBe("");
+    expect(rows[0]?.id).not.toBe(rows[1]?.id);
+  });
+
   it("computes remaining included slots for a household member", () => {
     expect(remainingIncluded(1, 2)).toBe(1);
     expect(remainingIncludedForUser(3, 1, 2)).toBe(0);

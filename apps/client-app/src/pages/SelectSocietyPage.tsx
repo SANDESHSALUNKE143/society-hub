@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import type { MembershipDto } from "@society-hub/types";
 import { ApiClientError } from "@society-hub/sdk";
+import { uniqueMembershipsBySociety } from "@society-hub/ui";
 import { useAuth } from "../auth";
 
 export function SelectSocietyPage() {
@@ -14,7 +15,7 @@ export function SelectSocietyPage() {
   useEffect(() => {
     client
       .listMemberships()
-      .then((rows) => setMemberships(rows))
+      .then((rows) => setMemberships(uniqueMembershipsBySociety(rows)))
       .catch(() => setMemberships([]));
   }, [client]);
 
@@ -68,10 +69,7 @@ export function SelectSocietyPage() {
               className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-[var(--mist)]/50 disabled:opacity-60"
               onClick={() => void pick(m.tenantId)}
             >
-              <span>
-                <span className="block font-medium">{m.societyName}</span>
-                <span className="text-xs uppercase tracking-wide text-black/40">{m.role}</span>
-              </span>
+              <span className="block font-medium">{m.societyName}</span>
               <span className="text-sm text-[var(--leaf)]">
                 {busy === m.tenantId ? "Switching…" : "Continue →"}
               </span>

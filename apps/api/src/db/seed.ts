@@ -110,7 +110,7 @@ async function ensureSociety() {
     tenantId: TENANT_ID,
     userId: ADMIN_USER_ID,
     flatId: FLAT_ID,
-    isOwner: true,
+    isOwner: false,
   });
 
   return true;
@@ -143,7 +143,7 @@ async function ensureChairpersonResident() {
     tenantId: TENANT_ID,
     userId: ADMIN_USER_ID,
     flatId: FLAT_ID,
-    isOwner: true,
+    isOwner: false,
   });
   console.log("Linked chairperson (9999999999) to flat 101 for Resident mode");
 }

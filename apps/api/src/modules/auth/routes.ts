@@ -28,7 +28,6 @@ import {
   passwordResetChallenges,
   refreshTokens,
   societies,
-  userRoles,
   users,
 } from "../../db/schema";
 import { AppError } from "../../lib/errors";
@@ -41,6 +40,7 @@ import {
   listMemberships,
   requireAuth,
   resolveMembership,
+  resolveRoleForTenant,
 } from "../../lib/auth-context";
 import { applyResidentProfilePatch, getProfileDto } from "../profile/routes";
 import {
@@ -465,25 +465,18 @@ export const authRoutes = new Elysia({ prefix: "/v1/auth" })
 
     let role = claims.role;
     if (claims.role !== "superadmin") {
-      const [membership] = await db
-        .select()
-        .from(userRoles)
-        .where(
-          and(
-            eq(userRoles.userId, claims.sub),
-            eq(userRoles.tenantId, parsed.tenantId),
-            eq(userRoles.isDeleted, false),
-          ),
-        )
-        .limit(1);
-      if (!membership) {
+      const membershipRole = await resolveRoleForTenant(
+        claims.sub,
+        parsed.tenantId,
+      );
+      if (!membershipRole) {
         throw new AppError(
           403,
           "not_a_member",
           "You do not have a role in that society",
         );
       }
-      role = membership.role;
+      role = membershipRole;
     }
 
     const dto = await buildUserDto(claims.sub, parsed.tenantId, role);

@@ -159,6 +159,67 @@ void main() {
       expect(user.role, 'resident');
     });
 
+    test('household members list and add', () async {
+      bundle.adapter
+        ..onGet(
+          '/v1/household/members',
+          (server) => server.reply(200, [
+            {
+              'userId': 'u1',
+              'name': 'Owner',
+              'email': null,
+              'phone': '9000000001',
+              'flatId': 'f1',
+              'flatNumber': '101',
+              'wingName': 'A',
+              'isOwner': true,
+            },
+          ]),
+        )
+        ..onPost(
+          '/v1/household/members',
+          (server) => server.reply(200, {
+            'user': userJson(
+              fixtureUser(role: 'resident', name: 'Kid', phone: '9000000002'),
+            ),
+          }),
+          data: Matchers.any,
+        );
+
+      final people = await bundle.api.listHouseholdMembers();
+      expect(people.first.name, 'Owner');
+      final added = await bundle.api.addHouseholdMember(
+        name: 'Kid',
+        phone: '9000000002',
+      );
+      expect(added.name, 'Kid');
+    });
+
+    test('household members update and remove', () async {
+      bundle.adapter
+        ..onPatch(
+          '/v1/household/members/u2',
+          (server) => server.reply(200, {
+            'user': userJson(
+              fixtureUser(role: 'resident', name: 'Kid 2', phone: '9000000002'),
+            ),
+          }),
+          data: Matchers.any,
+        )
+        ..onDelete(
+          '/v1/household/members/u2',
+          (server) => server.reply(200, {'ok': true}),
+        );
+
+      final updated = await bundle.api.updateHouseholdMember(
+        userId: 'u2',
+        name: 'Kid 2',
+        phone: '9000000002',
+      );
+      expect(updated.name, 'Kid 2');
+      await bundle.api.removeHouseholdMember('u2');
+    });
+
     test('createComplaint posts body', () async {
       bundle.adapter.onPost(
         '/v1/complaints',
@@ -203,6 +264,31 @@ void main() {
       expect(profile.societyName, 'Keshav Heights');
       expect(profile.flat!.number, '101');
       expect(profile.flat!.parkingSlot, 'P-12');
+    });
+
+    test('listParkings parses inventory', () async {
+      bundle.adapter.onGet(
+        '/v1/admin/parkings',
+        (server) => server.reply(200, [
+          {
+            'id': 'p1',
+            'flatId': null,
+            'flatNumber': null,
+            'slotNumber': 'OP-1',
+            'vehicleNumber': null,
+            'type': 'car',
+            'kind': 'open',
+            'wing': null,
+            'floor': null,
+            'createdAt': '2026-01-01T00:00:00.000Z',
+          },
+        ]),
+      );
+
+      final rows = await bundle.api.listParkings();
+      expect(rows, hasLength(1));
+      expect(rows.first.slotNumber, 'OP-1');
+      expect(rows.first.kind, 'open');
     });
 
     test('listTeam add update remove', () async {

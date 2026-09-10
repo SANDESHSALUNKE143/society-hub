@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../api/models.dart';
 import '../../../auth/session.dart';
 import '../../../core/theme.dart';
+import '../../../shared/complaint_ui.dart';
 import '../../../shared/widgets.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
@@ -114,10 +115,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   )
                 else
                   ..._recent.map(
-                    (c) => ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(c.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      trailing: StatusBadge(status: c.status),
+                    (c) => ComplaintListTile(
+                      complaint: c,
                       onTap: () => context.go('/home/complaints/${c.id}'),
                     ),
                   ),

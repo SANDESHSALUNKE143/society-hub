@@ -9,13 +9,22 @@ export function ShPage({
   children,
   className,
   wide,
+  full,
 }: {
   children: ReactNode;
   className?: string;
   wide?: boolean;
+  full?: boolean;
 }) {
   return (
-    <div className={cx(wide ? "sh-page sh-page-wide" : "sh-page", className)}>
+    <div
+      className={cx(
+        "sh-page",
+        wide && "sh-page-wide",
+        full && "sh-page-full",
+        className,
+      )}
+    >
       {children}
     </div>
   );

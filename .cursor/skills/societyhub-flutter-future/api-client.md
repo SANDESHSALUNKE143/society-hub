@@ -100,4 +100,4 @@ If downloading media with `GET /v1/media/:id`, support Bearer **or** documented 
 
 ## Multi-tenant
 
-After login, if user has multiple memberships, call documented select-tenant / memberships endpoints before feature APIs. Persist active `tenantId` with the session (not only in memory).
+After login, if the user belongs to **more than one society**, call `GET /v1/auth/memberships` then `POST /v1/auth/select-tenant`. Memberships are **one row per society** (not per role). Persist active `tenantId` with the session (not only in memory).

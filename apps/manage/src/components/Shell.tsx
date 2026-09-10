@@ -105,7 +105,7 @@ export function Shell() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="min-h-screen lg:flex">
+    <div className="flex h-screen overflow-hidden">
       <aside className="hidden w-64 shrink-0 border-r border-[var(--sand)] bg-[#fffdfb] lg:block">
         <div className="fixed h-screen w-64">
           <SidebarContent />
@@ -121,7 +121,7 @@ export function Shell() {
         </div>
       )}
 
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex h-screen min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-[var(--sand)] bg-[#fffdfb]/80 px-4 py-3 backdrop-blur lg:hidden">
           <button
             type="button"
@@ -160,7 +160,7 @@ export function Shell() {
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-6 lg:px-8 lg:py-8">
+        <main className="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-4 lg:px-8 lg:py-5">
           <Outlet />
         </main>
       </div>

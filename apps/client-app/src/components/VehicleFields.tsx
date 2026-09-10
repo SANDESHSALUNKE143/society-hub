@@ -43,6 +43,7 @@ export function VehicleFields({
             >
               <input
                 id={`${row.id}-reg`}
+                data-testid={`${testIdPrefix}-${kind}-reg-${index}`}
                 className="input"
                 value={row.registrationNumber}
                 onChange={(e) =>

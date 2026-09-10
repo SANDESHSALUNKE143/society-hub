@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../api/models.dart';
 import '../core/theme.dart';
 
 class ShCard extends StatelessWidget {
@@ -116,40 +115,6 @@ class BrandMark extends StatelessWidget {
           ],
         ),
       ],
-    );
-  }
-}
-
-class StatusBadge extends StatelessWidget {
-  const StatusBadge({super.key, required this.status});
-
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final ok = status == 'resolved' || status == 'closed';
-    final open = status == 'open';
-    final bg = ok
-        ? const Color(0xFFE8F5E9)
-        : open
-            ? const Color(0xFFFDECEA)
-            : AppColors.mist;
-    final fg = ok
-        ? const Color(0xFF2E7D32)
-        : open
-            ? AppColors.danger
-            : AppColors.ink;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.sand.withValues(alpha: 0.6)),
-      ),
-      child: Text(
-        complaintStatusLabel(status),
-        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fg),
-      ),
     );
   }
 }
