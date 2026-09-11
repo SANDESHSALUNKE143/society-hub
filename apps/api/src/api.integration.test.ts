@@ -1406,6 +1406,144 @@ describe("api integration", () => {
       },
     );
     expect(addWing.ok).toBe(true);
+    const wingA = (await addWing.json()) as { id: string; name: string };
+
+    const buildingsDetailed = await fetch(
+      `${base}/v1/manage/societies/${society.id}/buildings`,
+      { headers: { Authorization: `Bearer ${session.tokens.accessToken}` } },
+    );
+    expect(buildingsDetailed.ok).toBe(true);
+    const detailed = (await buildingsDetailed.json()) as {
+      id: string;
+      wingCount: number;
+      flatCount: number;
+    }[];
+    expect(detailed.some((b) => b.id === tower.id && b.wingCount >= 1)).toBe(true);
+
+    const wingsList = await fetch(
+      `${base}/v1/manage/societies/${society.id}/buildings/${tower.id}/wings`,
+      { headers: { Authorization: `Bearer ${session.tokens.accessToken}` } },
+    );
+    expect(wingsList.ok).toBe(true);
+    expect(
+      ((await wingsList.json()) as { name: string }[]).some((w) => w.name === "A"),
+    ).toBe(true);
+
+    const renameWing = await fetch(
+      `${base}/v1/manage/societies/${society.id}/wings/${wingA.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ name: "A1" }),
+      },
+    );
+    expect(renameWing.ok).toBe(true);
+    expect(((await renameWing.json()) as { name: string }).name).toBe("A1");
+
+    // Rename back so later flat CSV / wing "A" assertions stay stable.
+    await fetch(`${base}/v1/manage/societies/${society.id}/wings/${wingA.id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.tokens.accessToken}`,
+      },
+      body: JSON.stringify({ name: "A" }),
+    });
+
+    const spareWing = await fetch(
+      `${base}/v1/manage/societies/${society.id}/buildings/${tower.id}/wings`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ name: "Z" }),
+      },
+    );
+    expect(spareWing.ok).toBe(true);
+    const spareWingBody = (await spareWing.json()) as { id: string };
+    const deleteWing = await fetch(
+      `${base}/v1/manage/societies/${society.id}/wings/${spareWingBody.id}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${session.tokens.accessToken}` } },
+    );
+    expect(deleteWing.ok).toBe(true);
+
+    const spareTower = await fetch(
+      `${base}/v1/manage/societies/${society.id}/buildings`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ name: "Spare Tower" }),
+      },
+    );
+    expect(spareTower.ok).toBe(true);
+    const spareTowerBody = (await spareTower.json()) as { id: string };
+
+    const towerClash = await fetch(
+      `${base}/v1/manage/societies/${society.id}/buildings/${spareTowerBody.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ name: "Tower Alpha" }),
+      },
+    );
+    expect(towerClash.status).toBe(409);
+
+    const deleteTower = await fetch(
+      `${base}/v1/manage/societies/${society.id}/buildings/${spareTowerBody.id}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${session.tokens.accessToken}` } },
+    );
+    expect(deleteTower.ok).toBe(true);
+
+    // Tower with empty flats can be deleted (soft-deletes inventory).
+    const doomed = await fetch(`${base}/v1/manage/societies/${society.id}/buildings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.tokens.accessToken}`,
+      },
+      body: JSON.stringify({ name: "Doomed" }),
+    });
+    const doomedTower = (await doomed.json()) as { id: string };
+    await fetch(
+      `${base}/v1/manage/societies/${society.id}/buildings/${doomedTower.id}/wings`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ name: "D" }),
+      },
+    );
+    await fetch(`${base}/v1/manage/societies/${society.id}/flats`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.tokens.accessToken}`,
+      },
+      body: JSON.stringify({
+        buildingId: doomedTower.id,
+        wing: "D",
+        floor: 1,
+        flatNumber: "D-1",
+      }),
+    });
+    const wipeDoomed = await fetch(
+      `${base}/v1/manage/societies/${society.id}/buildings/${doomedTower.id}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${session.tokens.accessToken}` } },
+    );
+    expect(wipeDoomed.ok).toBe(true);
 
     const addFlat = await fetch(
       `${base}/v1/manage/societies/${society.id}/flats`,

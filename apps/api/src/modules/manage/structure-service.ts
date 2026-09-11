@@ -183,16 +183,6 @@ export async function listSocietyFlats(societyId: string): Promise<FlatDto[]> {
   );
 }
 
-export async function listSocietyBuildings(societyId: string) {
-  await requireSociety(societyId);
-  const rows = await db
-    .select({ id: buildings.id, name: buildings.name })
-    .from(buildings)
-    .where(and(eq(buildings.tenantId, societyId), eq(buildings.isDeleted, false)))
-    .orderBy(asc(buildings.name));
-  return rows;
-}
-
 export async function addSocietyBuilding(
   societyId: string,
   actorUserId: string,
