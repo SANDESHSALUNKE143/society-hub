@@ -4109,7 +4109,17 @@ describe("api integration", () => {
     );
     expect(revokeMissing.status).toBe(404);
 
-    // Resident cannot open another resident's complaint (create as staff for other flat then try)
+    // Resident cannot open a complaint on a flat they do not occupy
+    const linkedFlatId = resident.user.flatId;
+    const societyFlats = (
+      (await (
+        await fetch(`${base}/v1/admin/flats`, {
+          headers: { Authorization: sAuth.Authorization },
+        })
+      ).json()) as { id: string }[]
+    );
+    const otherFlatId = societyFlats.find((f) => f.id !== linkedFlatId)?.id;
+    expect(otherFlatId).toBeTruthy();
     const otherComplaint = await fetch(`${base}/v1/complaints`, {
       method: "POST",
       headers: sAuth,
@@ -4117,18 +4127,11 @@ describe("api integration", () => {
         title: "Staff raised",
         type: "security",
         description: "Gate issue",
-        flatId: (
-          await (
-            await fetch(`${base}/v1/admin/flats`, {
-              headers: { Authorization: sAuth.Authorization },
-            })
-          ).json() as { id: string }[]
-        )[0]!.id,
+        flatId: otherFlatId,
       }),
     });
     expect(otherComplaint.ok).toBe(true);
     const otherId = ((await otherComplaint.json()) as { id: string }).id;
-    // Resident may still see if they raised it — staff raised so resident GET should 404
     const peek = await fetch(`${base}/v1/complaints/${otherId}`, {
       headers: { Authorization: rAuth.Authorization },
     });

@@ -58,7 +58,7 @@ void main() {
     expect(find.byKey(AppKeys.modeToggle), findsOneWidget);
     expect(find.byKey(AppKeys.modeAdmin), findsOneWidget);
     expect(find.byKey(AppKeys.modeResident), findsOneWidget);
-    expect(find.text('Onboard resident'), findsOneWidget);
+    expect(find.text('Residents'), findsOneWidget);
   });
 
   testWidgets('switching to Resident hides admin-only nav', (tester) async {
@@ -69,12 +69,12 @@ void main() {
 
     tester.state<ScaffoldState>(find.byType(Scaffold)).openDrawer();
     await tester.pumpAndSettle();
-    expect(find.text('Onboard resident'), findsOneWidget);
+    expect(find.text('Residents'), findsOneWidget);
 
     await tester.tap(find.byKey(AppKeys.modeResident));
     await tester.pumpAndSettle();
 
-    expect(find.text('Onboard resident'), findsNothing);
+    expect(find.text('Residents'), findsNothing);
     expect(find.text('Complaints'), findsOneWidget);
   });
 
@@ -92,7 +92,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(AppKeys.modeToggle), findsNothing);
-    expect(find.text('Onboard resident'), findsNothing);
+    expect(find.text('Residents'), findsNothing);
     expect(find.text('Complaints'), findsOneWidget);
   });
 }
