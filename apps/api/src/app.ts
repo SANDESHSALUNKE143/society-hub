@@ -5,7 +5,14 @@ import { ZodError } from "zod";
 import { env } from "./config";
 import { AppError, toErrorBody } from "./lib/errors";
 import { authRoutes } from "./modules/auth/routes";
-import { adminRoutes, teamRoutes } from "./modules/admin/routes";
+import { adminRoutes } from "./modules/admin/routes";
+import { teamRoutes } from "./modules/team/routes";
+import {
+  adminDocumentRoutes,
+  adminFlatRoutes,
+  adminOccupancyRoutes,
+  adminResidentRoutes,
+} from "./modules/residents/routes";
 import { complaintRoutes, mediaRoutes } from "./modules/complaints/routes";
 import {
   buildingRoutes,
@@ -13,10 +20,13 @@ import {
   societyRoutes,
   wingRoutes,
 } from "./modules/societies/routes";
-import { invitationRoutes } from "./modules/invitations/routes";
+import {
+  invitationPublicRoutes,
+  invitationRoutes,
+} from "./modules/invitations/routes";
 import { billRoutes } from "./modules/bills/routes";
 import { paymentRoutes } from "./modules/payments/routes";
-import { noticeRoutes } from "./modules/notices/routes";
+import { noticeRoutes, noticeMediaRoutes } from "./modules/notices/routes";
 import { notificationRoutes } from "./modules/notifications/routes";
 import { dashboardRoutes } from "./modules/dashboard/routes";
 import { auditAliasRoutes, auditRoutes } from "./modules/audit/routes";
@@ -102,6 +112,10 @@ export function createApp() {
     .get("/health", () => ({ ok: true, service: "society-hub-api" }))
     .use(authRoutes)
     .use(adminRoutes)
+    .use(adminResidentRoutes)
+    .use(adminDocumentRoutes)
+    .use(adminFlatRoutes)
+    .use(adminOccupancyRoutes)
     .use(teamRoutes)
     .use(complaintRoutes)
     .use(mediaRoutes)
@@ -114,9 +128,11 @@ export function createApp() {
     .use(wingRoutes)
     .use(flatRoutes)
     .use(invitationRoutes)
+    .use(invitationPublicRoutes)
     .use(billRoutes)
     .use(paymentRoutes)
     .use(noticeRoutes)
+    .use(noticeMediaRoutes)
     .use(notificationRoutes)
     .use(dashboardRoutes)
     .use(auditRoutes)

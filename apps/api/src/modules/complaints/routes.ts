@@ -5,6 +5,7 @@ import {
   createComplaintCommentSchema,
   createComplaintSchema,
   listQuerySchema,
+  updateComplaintSchema,
   updateComplaintStatusSchema,
 } from "@society-hub/validation";
 import { mkdir } from "node:fs/promises";
@@ -32,7 +33,16 @@ import {
   requireRole,
   requireSocietyStaff,
 } from "../../lib/auth-context";
+import { toApiIsoDateTime } from "../../lib/api-datetime";
+import {
+  canDeleteComplaint,
+  canResidentEditComplaint,
+} from "./complaint-access";
 import { resolveComplaintFlatId } from "./resolve-complaint-flat";
+import {
+  assertCanViewComplaint,
+  listActiveFlatIdsForUser,
+} from "./flat-access";
 
 function slaDueAt(days: number) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000)
@@ -115,6 +125,7 @@ async function toComplaintDto(complaintId: string, tenantId: string): Promise<Co
       userId: complaintComments.userId,
       authorName: users.name,
       body: complaintComments.body,
+      kind: complaintComments.kind,
       createdAt: complaintComments.createdAt,
     })
     .from(complaintComments)
@@ -168,9 +179,11 @@ async function toComplaintDto(complaintId: string, tenantId: string): Promise<Co
     flatNumber: row.flatNumber,
     residentName: row.residentName,
     assignedToUserId: row.complaint.assignedToUserId,
-    slaDueAt: row.complaint.slaDueAt,
-    createdAt: row.complaint.createdAt,
-    updatedAt: row.complaint.updatedAt,
+    slaDueAt: row.complaint.slaDueAt
+      ? toApiIsoDateTime(row.complaint.slaDueAt)
+      : null,
+    createdAt: toApiIsoDateTime(row.complaint.createdAt),
+    updatedAt: toApiIsoDateTime(row.complaint.updatedAt),
     ...queue,
     attachments: attachments.map((a) => ({
       id: a.id,
@@ -179,14 +192,18 @@ async function toComplaintDto(complaintId: string, tenantId: string): Promise<Co
       url: `${env.publicApiUrl}/v1/media/${a.id}`,
       byteSize: a.byteSize,
     })),
-    comments,
+    comments: comments.map((c) => ({
+      ...c,
+      kind: c.kind === "question" ? "question" : "comment",
+      createdAt: toApiIsoDateTime(c.createdAt),
+    })),
     statusEvents: events.map((e) => ({
       id: e.id,
       fromStatus: (e.fromStatus as ComplaintStatus | null) ?? null,
       toStatus: e.toStatus as ComplaintStatus,
       note: e.note,
       actorName: e.actorName,
-      createdAt: e.createdAt,
+      createdAt: toApiIsoDateTime(e.createdAt),
     })),
     closingNote: closing?.note ?? null,
   };
@@ -199,17 +216,24 @@ export const complaintRoutes = new Elysia({ prefix: "/v1/complaints" })
     const q = listQuerySchema.parse(query);
     const offset = (q.page - 1) * q.limit;
 
-    const where =
-      isStaffRole(claims.role) && !q.mine
-        ? and(
-            eq(complaints.tenantId, claims.tenantId),
-            eq(complaints.isDeleted, false),
-          )
-        : and(
-            eq(complaints.tenantId, claims.tenantId),
-            eq(complaints.raisedByUserId, claims.sub),
-            eq(complaints.isDeleted, false),
-          );
+    const societyWide = isStaffRole(claims.role) && !q.mine;
+    let where;
+    if (societyWide) {
+      where = and(
+        eq(complaints.tenantId, claims.tenantId),
+        eq(complaints.isDeleted, false),
+      );
+    } else {
+      const flatIds = await listActiveFlatIdsForUser(claims.tenantId, claims.sub);
+      if (flatIds.length === 0) {
+        return { items: [], page: q.page, limit: q.limit, total: 0 };
+      }
+      where = and(
+        eq(complaints.tenantId, claims.tenantId),
+        inArray(complaints.flatId, flatIds),
+        eq(complaints.isDeleted, false),
+      );
+    }
 
     const countRows = await db
       .select({ total: count() })
@@ -233,18 +257,25 @@ export const complaintRoutes = new Elysia({ prefix: "/v1/complaints" })
   })
   .get("/:id", async ({ auth, params }) => {
     const claims = requireAuth(auth);
-    const dto = await toComplaintDto(params.id, claims.tenantId);
-    if (claims.role === "resident") {
-      const [c] = await db
-        .select()
-        .from(complaints)
-        .where(eq(complaints.id, params.id))
-        .limit(1);
-      if (c?.raisedByUserId !== claims.sub) {
-        throw new AppError(404, "not_found", "Complaint not found");
-      }
-    }
-    return dto;
+    const [c] = await db
+      .select()
+      .from(complaints)
+      .where(
+        and(
+          eq(complaints.id, params.id),
+          eq(complaints.tenantId, claims.tenantId),
+          eq(complaints.isDeleted, false),
+        ),
+      )
+      .limit(1);
+    if (!c) throw new AppError(404, "not_found", "Complaint not found");
+    await assertCanViewComplaint({
+      role: claims.role,
+      tenantId: claims.tenantId,
+      userId: claims.sub,
+      complaintFlatId: c.flatId,
+    });
+    return toComplaintDto(params.id, claims.tenantId);
   })
   .post("/", async ({ auth, body }) => {
     const claims = requireAuth(auth);
@@ -390,19 +421,79 @@ export const complaintRoutes = new Elysia({ prefix: "/v1/complaints" })
 
     return toComplaintDto(params.id, claims.tenantId);
   })
+  .patch("/:id", async ({ auth, params, body }) => {
+    const claims = requireAuth(auth);
+    const parsed = updateComplaintSchema.parse(body);
+    const [existing] = await db
+      .select()
+      .from(complaints)
+      .where(
+        and(
+          eq(complaints.id, params.id),
+          eq(complaints.tenantId, claims.tenantId),
+          eq(complaints.isDeleted, false),
+        ),
+      )
+      .limit(1);
+    if (!existing) throw new AppError(404, "not_found", "Complaint not found");
+    if (
+      !canResidentEditComplaint({
+        role: claims.role,
+        userId: claims.sub,
+        raisedByUserId: existing.raisedByUserId,
+        status: existing.status as ComplaintStatus,
+      })
+    ) {
+      throw new AppError(403, "forbidden", "You cannot edit this complaint");
+    }
+
+    const nextType = parsed.type ?? existing.type;
+    await db
+      .update(complaints)
+      .set({
+        title: parsed.title ?? existing.title,
+        type: nextType,
+        typeOtherText:
+          nextType === "other"
+            ? (parsed.typeOtherText ?? existing.typeOtherText)
+            : null,
+        description: parsed.description ?? existing.description,
+        updatedBy: claims.sub,
+      })
+      .where(eq(complaints.id, params.id));
+
+    await recordAudit({
+      tenantId: claims.tenantId,
+      actorUserId: claims.sub,
+      action: "complaint.updated",
+      entityType: "complaint",
+      entityId: params.id,
+      meta: { ticketNumber: existing.ticketNumber },
+    });
+
+    return toComplaintDto(params.id, claims.tenantId);
+  })
   .get("/:id/comments", async ({ auth, params }) => {
     const claims = requireAuth(auth);
+    const [c] = await db
+      .select()
+      .from(complaints)
+      .where(
+        and(
+          eq(complaints.id, params.id),
+          eq(complaints.tenantId, claims.tenantId),
+          eq(complaints.isDeleted, false),
+        ),
+      )
+      .limit(1);
+    if (!c) throw new AppError(404, "not_found", "Complaint not found");
+    await assertCanViewComplaint({
+      role: claims.role,
+      tenantId: claims.tenantId,
+      userId: claims.sub,
+      complaintFlatId: c.flatId,
+    });
     const dto = await toComplaintDto(params.id, claims.tenantId);
-    if (claims.role === "resident") {
-      const [c] = await db
-        .select()
-        .from(complaints)
-        .where(eq(complaints.id, params.id))
-        .limit(1);
-      if (c?.raisedByUserId !== claims.sub) {
-        throw new AppError(404, "not_found", "Complaint not found");
-      }
-    }
     return dto.comments;
   })
   .post("/:id/comments", async ({ auth, params, body }) => {
@@ -420,9 +511,12 @@ export const complaintRoutes = new Elysia({ prefix: "/v1/complaints" })
       )
       .limit(1);
     if (!existing) throw new AppError(404, "not_found", "Complaint not found");
-    if (claims.role === "resident" && existing.raisedByUserId !== claims.sub) {
-      throw new AppError(403, "forbidden", "Not your complaint");
-    }
+    await assertCanViewComplaint({
+      role: claims.role,
+      tenantId: claims.tenantId,
+      userId: claims.sub,
+      complaintFlatId: existing.flatId,
+    });
 
     await db.insert(complaintComments).values({
       id: crypto.randomUUID(),
@@ -430,15 +524,26 @@ export const complaintRoutes = new Elysia({ prefix: "/v1/complaints" })
       complaintId: params.id,
       userId: claims.sub,
       body: parsed.body,
+      kind: parsed.kind,
       createdBy: claims.sub,
       updatedBy: claims.sub,
     });
 
+    const label = parsed.kind === "question" ? "New question" : "New comment";
     if (claims.sub !== existing.raisedByUserId) {
       await notifyUser({
         tenantId: claims.tenantId,
         userId: existing.raisedByUserId,
-        title: `New comment on ${existing.ticketNumber}`,
+        title: `${label} on ${existing.ticketNumber}`,
+        body: parsed.body,
+        kind: "complaint",
+        linkPath: `/complaints/${params.id}`,
+      });
+    } else if (existing.assignedToUserId && existing.assignedToUserId !== claims.sub) {
+      await notifyUser({
+        tenantId: claims.tenantId,
+        userId: existing.assignedToUserId,
+        title: `${label} on ${existing.ticketNumber}`,
         body: parsed.body,
         kind: "complaint",
         linkPath: `/complaints/${params.id}`,
@@ -449,7 +554,6 @@ export const complaintRoutes = new Elysia({ prefix: "/v1/complaints" })
   })
   .delete("/:id", async ({ auth, params }) => {
     const claims = requireAuth(auth);
-    requireSocietyStaff(claims);
     const [existing] = await db
       .select()
       .from(complaints)
@@ -462,6 +566,16 @@ export const complaintRoutes = new Elysia({ prefix: "/v1/complaints" })
       )
       .limit(1);
     if (!existing) throw new AppError(404, "not_found", "Complaint not found");
+    if (
+      !canDeleteComplaint({
+        role: claims.role,
+        userId: claims.sub,
+        raisedByUserId: existing.raisedByUserId,
+        status: existing.status as ComplaintStatus,
+      })
+    ) {
+      throw new AppError(403, "forbidden", "You cannot delete this complaint");
+    }
 
     await softDelete(complaints, params.id, claims.sub);
     await recordAudit({
@@ -487,12 +601,12 @@ export const complaintRoutes = new Elysia({ prefix: "/v1/complaints" })
       )
       .limit(1);
     if (!existing) throw new AppError(404, "not_found", "Complaint not found");
-    if (
-      claims.role === "resident" &&
-      existing.raisedByUserId !== claims.sub
-    ) {
-      throw new AppError(403, "forbidden", "Not your complaint");
-    }
+    await assertCanViewComplaint({
+      role: claims.role,
+      tenantId: claims.tenantId,
+      userId: claims.sub,
+      complaintFlatId: existing.flatId,
+    });
 
     const form = await request.formData();
     const file = form.get("file");

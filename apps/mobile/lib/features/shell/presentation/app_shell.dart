@@ -26,8 +26,7 @@ const _adminSections = [
   ]),
   _NavSection('Operations', [
     _NavItem('/home/complaints', 'Complaints', Icons.report_problem_outlined),
-    _NavItem('/home/onboard', 'Onboard resident', Icons.person_add_alt_1_outlined),
-    _NavItem('/home/invites', 'Invites', Icons.mail_outline),
+    _NavItem('/home/residents', 'Residents', Icons.people_outline),
     _NavItem('/home/team', 'Team', Icons.groups_outlined),
   ]),
   _NavSection('Finance', [
@@ -57,7 +56,7 @@ const _residentSections = [
     _NavItem('/home/dashboard', 'Dashboard', Icons.dashboard_outlined),
   ]),
   _NavSection('Complaints', [
-    _NavItem('/home/complaints', 'My complaints', Icons.report_problem_outlined),
+    _NavItem('/home/complaints', 'Complaints', Icons.report_problem_outlined),
   ]),
   _NavSection('Finance', [
     _NavItem('/home/bills', 'Bills', Icons.receipt_long_outlined),

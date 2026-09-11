@@ -452,7 +452,11 @@ class _ComplaintDetailPageState extends ConsumerState<ComplaintDetailPage> {
   ComplaintDto? _item;
   String? _error;
   bool _busy = false;
+  bool _editing = false;
   final _note = TextEditingController();
+  final _thread = TextEditingController();
+  final _editTitle = TextEditingController();
+  final _editDescription = TextEditingController();
   final List<_PickedFile> _evidence = [];
 
   @override
@@ -464,13 +468,20 @@ class _ComplaintDetailPageState extends ConsumerState<ComplaintDetailPage> {
   @override
   void dispose() {
     _note.dispose();
+    _thread.dispose();
+    _editTitle.dispose();
+    _editDescription.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
     try {
       final c = await ref.read(apiProvider).getComplaint(widget.id);
-      if (mounted) setState(() => _item = c);
+      if (mounted) {
+        _editTitle.text = c.title;
+        _editDescription.text = c.description;
+        setState(() => _item = c);
+      }
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     }
@@ -527,6 +538,87 @@ class _ComplaintDetailPageState extends ConsumerState<ComplaintDetailPage> {
     }
   }
 
+  Future<void> _postThread(String kind) async {
+    final body = _thread.text.trim();
+    if (body.isEmpty) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final updated = await ref.read(apiProvider).addComplaintComment(
+            widget.id,
+            body,
+            kind: kind,
+          );
+      if (mounted) {
+        _thread.clear();
+        setState(() => _item = updated);
+      }
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _saveEdits() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final updated = await ref.read(apiProvider).updateComplaint(
+            widget.id,
+            title: _editTitle.text.trim(),
+            description: _editDescription.text.trim(),
+          );
+      if (mounted) {
+        setState(() {
+          _item = updated;
+          _editing = false;
+        });
+      }
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _deleteComplaint() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete complaint?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(apiProvider).deleteComplaint(widget.id);
+      if (mounted) context.go('/home/complaints');
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final staffView = ref.watch(sessionProvider.notifier).isStaffView;
@@ -558,6 +650,10 @@ class _ComplaintDetailPageState extends ConsumerState<ComplaintDetailPage> {
             ),
           ],
         ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(_error!, style: const TextStyle(color: AppColors.danger)),
+        ],
         if (widget.justCreated) ...[
           const SizedBox(height: 8),
           Container(
@@ -590,7 +686,14 @@ class _ComplaintDetailPageState extends ConsumerState<ComplaintDetailPage> {
           ),
         ],
         const SizedBox(height: 8),
-        Text(c.title, style: displayStyle(size: 28)),
+        if (_editing)
+          TextField(
+            key: AppKeys.complaintEditTitle,
+            controller: _editTitle,
+            decoration: const InputDecoration(labelText: 'Title'),
+          )
+        else
+          Text(c.title, style: displayStyle(size: 28)),
         const SizedBox(height: 8),
         Align(
           alignment: Alignment.centerLeft,
@@ -633,7 +736,7 @@ class _ComplaintDetailPageState extends ConsumerState<ComplaintDetailPage> {
                   style: TextStyle(fontSize: 12, color: Colors.black45),
                 ),
                 Text(
-                  formatComplaintRaised(c.createdAt),
+                  formatComplaintWhen(c.createdAt),
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     color: AppColors.leafDark,
@@ -651,21 +754,40 @@ class _ComplaintDetailPageState extends ConsumerState<ComplaintDetailPage> {
           ),
         ],
         const SizedBox(height: 16),
-        Text(c.description, style: const TextStyle(height: 1.45, fontSize: 15)),
-        if (c.statusEvents.isNotEmpty) ...[
-          const SizedBox(height: 24),
-          ComplaintTimeline(events: c.statusEvents),
-        ],
-        if (c.closingNote != null && c.closingNote!.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          CommitteeNoteCard(
-            key: AppKeys.complaintClosingNote,
-            note: c.closingNote!,
+        if (_editing)
+          TextField(
+            key: AppKeys.complaintEditDescription,
+            controller: _editDescription,
+            maxLines: 4,
+            decoration: const InputDecoration(labelText: 'Description'),
+          )
+        else
+          Text(c.description, style: const TextStyle(height: 1.45, fontSize: 15)),
+        if (!staffView && (c.status != 'resolved' && c.status != 'closed')) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            children: [
+              if (_editing)
+                FilledButton(
+                  key: AppKeys.complaintEditSave,
+                  onPressed: _busy ? null : _saveEdits,
+                  child: const Text('Save changes'),
+                )
+              else
+                OutlinedButton(
+                  key: AppKeys.complaintEdit,
+                  onPressed: () => setState(() => _editing = true),
+                  child: const Text('Edit'),
+                ),
+              if (c.status == 'open')
+                OutlinedButton(
+                  key: AppKeys.complaintDelete,
+                  onPressed: _busy ? null : _deleteComplaint,
+                  child: const Text('Delete'),
+                ),
+            ],
           ),
-        ],
-        if (c.attachments.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          ComplaintPhotoStrip(attachments: c.attachments),
         ],
         if (staffView) ...[
           const SizedBox(height: 24),
@@ -737,16 +859,102 @@ class _ComplaintDetailPageState extends ConsumerState<ComplaintDetailPage> {
                       ),
                   ],
                 ),
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    _error!,
-                    style: const TextStyle(color: AppColors.danger),
-                  ),
-                ],
               ],
             ),
           ),
+        ],
+        if (c.comments.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Text('Updates & comments', style: displayStyle(size: 20)),
+          const SizedBox(height: 12),
+          Column(
+            key: AppKeys.complaintComments,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final comment in c.comments) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.mist.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        [
+                          comment.kind == 'question' ? 'Question' : 'Comment',
+                          if (comment.authorName != null &&
+                              comment.authorName!.isNotEmpty)
+                            comment.authorName!,
+                        ].join(' · '),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(comment.body),
+                      if (comment.createdAt.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          formatComplaintTimelineWhen(comment.createdAt),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black45,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+        if (c.status != 'closed') ...[
+          const SizedBox(height: 12),
+          TextField(
+            key: AppKeys.complaintThreadBody,
+            controller: _thread,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Ask a question or add a comment',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              FilledButton(
+                key: AppKeys.complaintAddComment,
+                onPressed: _busy ? null : () => _postThread('comment'),
+                child: const Text('Add comment'),
+              ),
+              OutlinedButton(
+                key: AppKeys.complaintAskQuestion,
+                onPressed: _busy ? null : () => _postThread('question'),
+                child: const Text('Ask a question'),
+              ),
+            ],
+          ),
+        ],
+        if (c.statusEvents.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          ComplaintTimeline(events: c.statusEvents),
+        ],
+        if (c.closingNote != null && c.closingNote!.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          CommitteeNoteCard(
+            key: AppKeys.complaintClosingNote,
+            note: c.closingNote!,
+          ),
+        ],
+        if (c.attachments.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          ComplaintPhotoStrip(attachments: c.attachments),
         ],
       ],
       ),

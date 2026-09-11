@@ -13,6 +13,30 @@ function rupees(paise: number) {
   return `₹${(paise / 100).toLocaleString("en-IN")}`;
 }
 
+/** Occupancy metric that doubles as a link into the matching filtered list. */
+function OccupancyTile({
+  to,
+  label,
+  value,
+  testId,
+}: {
+  to: string;
+  label: string;
+  value: number;
+  testId: string;
+}) {
+  return (
+    <Link to={to} className="kpi-card block transition-transform hover:-translate-y-0.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-black/45">
+        {label}
+      </p>
+      <p className="mt-1 font-display text-2xl text-[var(--leaf-dark)]" data-testid={testId}>
+        {value}
+      </p>
+    </Link>
+  );
+}
+
 export function DashboardPage() {
   const { client, user } = useAuth();
   const { mode } = useAppMode();
@@ -60,6 +84,68 @@ export function DashboardPage() {
         </Link>
       </div>
 
+      {staffView && stats?.occupancy && (
+        <section className="mt-5" data-testid="dashboard-occupancy">
+          <h2 className="mb-2 font-semibold">Occupancy</h2>
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            <OccupancyTile
+              to="/residents?tab=flats"
+              label="Total flats"
+              value={stats.occupancy.totalFlats}
+              testId="occupancy-total-flats"
+            />
+            <OccupancyTile
+              to="/residents?tab=flats&occupancy=owner_occupied"
+              label="Owner occupied"
+              value={stats.occupancy.ownerOccupiedFlats}
+              testId="occupancy-owner-occupied"
+            />
+            <OccupancyTile
+              to="/residents?tab=flats&occupancy=tenant_occupied"
+              label="Tenant occupied"
+              value={stats.occupancy.tenantOccupiedFlats}
+              testId="occupancy-tenant-occupied"
+            />
+            <OccupancyTile
+              to="/residents?tab=flats&occupancy=vacant"
+              label="Vacant"
+              value={stats.occupancy.vacantFlats}
+              testId="occupancy-vacant"
+            />
+            <OccupancyTile
+              to="/residents?status=active"
+              label="Active residents"
+              value={stats.occupancy.activeResidents}
+              testId="occupancy-active-residents"
+            />
+            <OccupancyTile
+              to="/residents"
+              label="Total residents"
+              value={stats.occupancy.totalResidents}
+              testId="occupancy-total-residents"
+            />
+            <OccupancyTile
+              to="/residents?verificationStatus=pending"
+              label="Pending verification"
+              value={stats.occupancy.pendingVerification}
+              testId="occupancy-pending-verification"
+            />
+            <OccupancyTile
+              to="/residents?tab=invites"
+              label="Pending invitations"
+              value={stats.occupancy.pendingInvitations}
+              testId="occupancy-pending-invitations"
+            />
+            <OccupancyTile
+              to="/residents?status=moved_out"
+              label="Moved out"
+              value={stats.occupancy.movedOut}
+              testId="occupancy-moved-out"
+            />
+          </div>
+        </section>
+      )}
+
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <div className="card p-4">
           <div className="mb-2 flex items-center justify-between">
@@ -96,8 +182,12 @@ export function DashboardPage() {
           <div className="grid grid-cols-2 gap-2">
             {staffView ? (
               <>
-                <Link to="/onboard" className="btn btn-ghost text-sm">Onboard resident</Link>
-                <Link to="/invites" className="btn btn-ghost text-sm">Send invite</Link>
+                <Link to="/residents?add=1" className="btn btn-ghost text-sm">
+                  Add resident
+                </Link>
+                <Link to="/residents?tab=invites" className="btn btn-ghost text-sm">
+                  Pending invitations
+                </Link>
                 <Link to="/bills" className="btn btn-ghost text-sm">Generate bills</Link>
                 <Link to="/notices" className="btn btn-ghost text-sm">New notice</Link>
               </>

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import {
   accessExpiresInSeconds,
   signAccessToken,
@@ -60,6 +60,8 @@ export async function buildUserDto(
   let flatId: string | null = null;
   let flatNumber: string | null = null;
   // Staff (e.g. chairperson/president) may also live in a flat — attach it whenever present.
+  // A person can hold several memberships over time, so only the *live* one
+  // (`active_key = 'Y'`) may drive the session's flat.
   const [res] = await db
     .select({
       flatId: residents.flatId,
@@ -72,9 +74,11 @@ export async function buildUserDto(
         eq(residents.userId, userId),
         eq(residents.tenantId, tenantId),
         eq(residents.isDeleted, false),
+        isNotNull(residents.activeKey),
         eq(flats.isDeleted, false),
       ),
     )
+    .orderBy(desc(residents.isPrimary), desc(residents.moveInDate))
     .limit(1);
   flatId = res?.flatId ?? null;
   flatNumber = res?.number ?? null;

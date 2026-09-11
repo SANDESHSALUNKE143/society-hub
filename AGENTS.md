@@ -22,9 +22,12 @@ Build SocietyHub per the Spec. **Docs are source of truth.** Never invent busine
 
 - **MVP clients = two simple responsive React web apps** (phone browser + desktop): `apps/client-app` (residents) and `apps/manage` (Admin / Super Admin). Keep UI/UX simple: few screens, one primary action, no clutter.
 - **Native mobile (in progress):** Flutter Client App under `apps/mobile/` — mirrors client-app UX; bulk CSV stays on web. Use `.cursor/skills/societyhub-flutter-future`.
-- **MVP product:** start with **Complaints** (auth + onboard + raise/track). Show other **planned** features in nav as **Coming soon** (PRD §5.2)—do not implement their APIs until Phase 2. Do not invent extra modules.
-- **Multi-tenant:** every query and blob path scoped by `tenant_id`.
-- **RBAC:** enforce Admin vs Resident on the server (MVP).
+- **MVP product:** **Complaints** (auth + onboard + raise/track) and **Society & Resident Management** (directory, membership lifecycle, verification, documents, family, occupancy, invitations, society team) — see [docs/implementation/phase-1-domain.md](docs/implementation/phase-1-domain.md). Show other **planned** features in nav as **Coming soon** (PRD §5.2)—do not implement their APIs until Phase 2. Do not invent extra modules.
+- **Residents:** `residents` is the **membership + occupancy period**, not a flat pointer. Move-out closes a row; move-in inserts a new one; **never overwrite or delete occupancy history**. `active_key IS NOT NULL` is the one predicate for "currently occupies". Flat occupancy is **derived**, never stored.
+- **Multi-tenant:** every query and blob path scoped by `tenant_id`. A resource in another society must return **404**, not a partial read. Add a negative cross-tenant test for every new tenant-owned route.
+- **RBAC:** enforce Admin vs Resident on the server (MVP). Extend the role predicates in `apps/api/src/lib/auth-helpers.ts` — do **not** add a second authorization mechanism.
+- **Audit & notifications:** reuse `recordAudit`/`ActivityType` and `notifyUser`. Never put document content or full document numbers in `audit_logs`.
+- **Admin lists:** server-side pagination, search and filters (`Paginated<T>` = `{ items, page, limit, total }`). Never fetch everything and filter in React.
 - **Deploy:** follow [`devops/PIPELINE.md`](devops/PIPELINE.md). Features PR into **`staging`**. Preview is **`main` → Render**. Promote with Actions → **Promote preview**. Azure later. Do **not** provision Azure production until Phase 1 UAT.
 - Prefer updating Spec + GitHub issue over guessing product behavior.
 - Conventional commits; strict TypeScript; Zod at boundaries; repository pattern.

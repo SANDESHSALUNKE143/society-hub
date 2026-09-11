@@ -2,9 +2,10 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { ParkingKind, ParkingSlotDto } from "@society-hub/types";
 import { ApiClientError } from "@society-hub/sdk";
 import { useAuth } from "../auth";
-import { PARKING_CSV_TEMPLATE, parseParkingCsv } from "../lib/parking-csv";
+import { PARKING_CSV_TEMPLATE, parseParkingCsv, type ParsedParkingRow } from "../lib/parking-csv";
 import { paginateItems } from "../lib/flat-list";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { CsvImportPreviewDialog } from "./CsvImportPreviewDialog";
 
 function errMessage(err: unknown, fallback: string) {
   return err instanceof ApiClientError ? err.body.message : fallback;
@@ -13,6 +14,25 @@ function errMessage(err: unknown, fallback: string) {
 function kindLabel(kind: ParkingKind) {
   return kind === "puzzle" ? "Puzzle" : "Open";
 }
+
+const PARKING_PREVIEW_COLUMNS = [
+  {
+    key: "kind",
+    header: "Kind",
+    render: (row: Record<string, unknown>) =>
+      kindLabel((row.kind as ParkingKind) ?? "open"),
+  },
+  {
+    key: "wing",
+    header: "Wing",
+    render: (row: Record<string, unknown>) => (row.wing as string | null) ?? "—",
+  },
+  {
+    key: "slot",
+    header: "Slot",
+    render: (row: Record<string, unknown>) => String(row.slotNumber ?? ""),
+  },
+];
 
 export function SocietyParkingsPanel({ societyId }: { societyId: string }) {
   const { client } = useAuth();
@@ -28,6 +48,11 @@ export function SocietyParkingsPanel({ societyId }: { societyId: string }) {
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ParkingSlotDto | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFileName, setPreviewFileName] = useState<string | null>(null);
+  const [previewRows, setPreviewRows] = useState<ParsedParkingRow[]>([]);
+  const [parseErrors, setParseErrors] = useState<Array<{ row: number; message: string }>>([]);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const paged = useMemo(() => paginateItems(rows ?? [], page), [rows, page]);
 
@@ -156,35 +181,59 @@ export function SocietyParkingsPanel({ societyId }: { societyId: string }) {
     }
   }
 
-  async function onCsv(file: File | null) {
+  async function onCsvSelected(file: File | null) {
     if (!file) return;
+    setError(null);
+    setMessage(null);
+    setPreviewError(null);
+    try {
+      const parsed = parseParkingCsv(await file.text());
+      setParseErrors(parsed.errors);
+      setPreviewRows(parsed.rows);
+      setPreviewFileName(file.name);
+      setPreviewOpen(true);
+      if (parsed.rows.length === 0 && parsed.errors.length > 0) {
+        setPreviewError("No valid rows to import. Fix the CSV and try again.");
+      }
+    } catch {
+      setError("Could not read that CSV file");
+    }
+  }
+
+  function closePreview() {
+    if (busy) return;
+    setPreviewOpen(false);
+    setPreviewRows([]);
+    setPreviewFileName(null);
+    setPreviewError(null);
+  }
+
+  async function confirmCsvImport() {
+    if (previewRows.length === 0) return;
     setBusy(true);
+    setPreviewError(null);
     setError(null);
     setMessage(null);
     try {
-      const parsed = parseParkingCsv(await file.text());
-      if (parsed.rows.length === 0) {
-        setError(
-          parsed.errors[0]?.message ?? "No valid rows. Use kind, wing, slotNumber.",
-        );
-        return;
-      }
-      const result = await client.importManageSocietyParkings(societyId, parsed.rows);
-      const extra = parsed.errors.length
-        ? ` CSV parse skipped ${parsed.errors.length} row(s).`
+      const result = await client.importManageSocietyParkings(societyId, previewRows);
+      const extra = parseErrors.length
+        ? ` CSV parse skipped ${parseErrors.length} row(s).`
         : "";
       setMessage(
         `Created ${result.created} · Updated ${result.updated} · Unchanged ${result.skipped} · Errors ${result.errors.length}.${extra}`,
       );
       if (result.errors[0]) {
-        setError(`Row ${result.errors[0].row}: ${result.errors[0].message}`);
+        setPreviewError(`Row ${result.errors[0].row}: ${result.errors[0].message}`);
       } else {
+        setPreviewOpen(false);
+        setPreviewRows([]);
+        setPreviewFileName(null);
         setDialogOpen(false);
         clearForm();
       }
       await load();
     } catch (err) {
-      setError(errMessage(err, "Failed to import parking"));
+      setPreviewError(errMessage(err, "Failed to import parking"));
     } finally {
       setBusy(false);
     }
@@ -442,7 +491,7 @@ export function SocietyParkingsPanel({ societyId }: { societyId: string }) {
                     onChange={(e) => {
                       const file = e.target.files?.[0] ?? null;
                       e.target.value = "";
-                      void onCsv(file);
+                      void onCsvSelected(file);
                     }}
                   />
                 </div>
@@ -460,6 +509,21 @@ export function SocietyParkingsPanel({ societyId }: { societyId: string }) {
           </div>
         </div>
       )}
+
+      <CsvImportPreviewDialog
+        open={previewOpen}
+        title="Review parking CSV"
+        fileName={previewFileName}
+        columns={PARKING_PREVIEW_COLUMNS}
+        rows={previewRows as unknown as Array<Record<string, unknown>>}
+        parseErrors={parseErrors}
+        busy={busy}
+        error={previewError}
+        confirmLabel={`Import ${previewRows.length} lot${previewRows.length === 1 ? "" : "s"}`}
+        onCancel={closePreview}
+        onConfirm={() => void confirmCsvImport()}
+        testId="parking-csv-preview"
+      />
 
       <ConfirmDialog
         open={pendingDelete !== null}

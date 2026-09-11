@@ -47,7 +47,7 @@ export function ComplaintsPage() {
           <p className="mt-1 text-sm text-black/55">
             {staffView
               ? "Acknowledge when you can — leave untouched tickets in the queue."
-              : "Track ticket numbers and progress"}
+              : "All complaints for your flat — raised by you or anyone in the household."}
           </p>
         </div>
         <Link

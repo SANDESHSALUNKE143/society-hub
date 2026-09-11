@@ -50,12 +50,15 @@ export type UserDto = {
   hasPin: boolean;
 };
 
+export type ComplaintCommentKind = "comment" | "question";
+
 export type ComplaintCommentDto = {
   id: string;
   complaintId: string;
   userId: string;
   authorName: string | null;
   body: string;
+  kind: ComplaintCommentKind;
   createdAt: string;
 };
 
@@ -109,6 +112,8 @@ export type FlatDto = {
   number: string;
   wingName: string | null;
   wingId?: string;
+  buildingId?: string | null;
+  buildingName?: string | null;
   floor?: number | null;
   parkingSlot?: string | null;
   pngGasConnection?: boolean;
@@ -215,14 +220,23 @@ export type WingDto = {
   flatCount?: number;
 };
 
-export type InvitationStatus = "pending" | "accepted" | "revoked";
+export type InvitationStatus = "pending" | "accepted" | "revoked" | "expired";
 
 export type InvitationDto = {
   id: string;
+  name: string | null;
   email: string | null;
   phone: string | null;
   role: Role;
   status: InvitationStatus;
+  flatId: string | null;
+  flatNumber: string | null;
+  residentType: ResidentType | null;
+  expiresAt: string | null;
+  acceptedAt: string | null;
+  revokedAt: string | null;
+  lastSentAt: string | null;
+  resendCount: number;
   createdAt: string;
   /** Only present in DEV_AUTH so testers can accept without email/SMS delivery. */
   devToken?: string;
@@ -232,12 +246,228 @@ export type InvitationDto = {
   };
 };
 
+/** Owner / tenant / household family member, per society membership. */
+export type ResidentType = "owner" | "tenant" | "family";
+
+/** Membership lifecycle. See docs/implementation/phase-1-domain.md. */
+export type ResidentStatus =
+  | "invited"
+  | "pending_verification"
+  | "active"
+  | "suspended"
+  | "moved_out"
+  | "rejected";
+
+export type VerificationStatus =
+  | "pending"
+  | "under_review"
+  | "approved"
+  | "rejected";
+
+export type ResidentDocumentType =
+  | "identity"
+  | "address_proof"
+  | "tenant_agreement"
+  | "police_verification"
+  | "other";
+
+export type FamilyRelationship =
+  | "spouse"
+  | "child"
+  | "parent"
+  | "sibling"
+  | "other";
+
+/** Derived from active memberships — never stored on `flats`. */
+export type FlatOccupancyStatus = "vacant" | "owner_occupied" | "tenant_occupied";
+
+export type CommunicationPreferences = {
+  inApp: boolean;
+  push: boolean;
+  email: boolean;
+  whatsapp: boolean;
+  sms: boolean;
+};
+
+export type ResidentFlatSummaryDto = {
+  id: string;
+  number: string;
+  wingId: string | null;
+  wingName: string | null;
+  buildingId: string | null;
+  buildingName: string | null;
+  floor: number | null;
+  parkingSlot: string | null;
+};
+
+/** One row of the Admin resident directory. */
+export type ResidentSummaryDto = {
+  /** `residents.id` — the membership id, not the user id. */
+  id: string;
+  userId: string;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  residentType: ResidentType;
+  isPrimary: boolean;
+  status: ResidentStatus;
+  verificationStatus: VerificationStatus;
+  moveInDate: string | null;
+  moveOutDate: string | null;
+  flat: ResidentFlatSummaryDto | null;
+  createdAt: string;
+};
+
+export type ResidentFamilyMemberDto = {
+  id: string;
+  residentId: string;
+  name: string;
+  relationship: FamilyRelationship;
+  phone: string | null;
+  email: string | null;
+  linkedUserId: string | null;
+  createdAt: string;
+};
+
+export type ResidentDocumentDto = {
+  id: string;
+  residentId: string;
+  docType: ResidentDocumentType;
+  documentNumber: string | null;
+  fileName: string;
+  contentType: string;
+  byteSize: number | null;
+  status: VerificationStatus;
+  rejectionReason: string | null;
+  expiresAt: string | null;
+  verifiedAt: string | null;
+  verifiedByName: string | null;
+  uploadedAt: string;
+  /** Authenticated, tenant-scoped download path — never a public blob URL. */
+  downloadPath: string;
+};
+
+export type ResidentDetailDto = ResidentSummaryDto & {
+  societyName: string | null;
+  remarks: string | null;
+  moveOutReason: string | null;
+  rejectionReason: string | null;
+  verifiedAt: string | null;
+  verifiedByName: string | null;
+  roles: Role[];
+  emergencyContactName: string | null;
+  emergencyContactRelation: string | null;
+  emergencyContactPhone: string | null;
+  vehicleNumber: string | null;
+  communicationPreferences: CommunicationPreferences;
+  family: ResidentFamilyMemberDto[];
+  documents: ResidentDocumentDto[];
+  vehicles: ResidentVehicleDto[];
+  /** Other memberships of the same person in this society (past and present). */
+  otherMemberships: ResidentSummaryDto[];
+};
+
+export type FlatOccupantDto = {
+  residentId: string;
+  userId: string;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  residentType: ResidentType;
+  isPrimary: boolean;
+  status: ResidentStatus;
+  verificationStatus: VerificationStatus;
+  moveInDate: string | null;
+  moveOutDate: string | null;
+  familyCount: number;
+};
+
+export type FlatDetailDto = {
+  id: string;
+  number: string;
+  wingId: string | null;
+  wingName: string | null;
+  buildingId: string | null;
+  buildingName: string | null;
+  floor: number | null;
+  parkingSlot: string | null;
+  details: Record<string, string> | null;
+  occupancyStatus: FlatOccupancyStatus;
+  primaryOwner: FlatOccupantDto | null;
+  coOwners: FlatOccupantDto[];
+  tenants: FlatOccupantDto[];
+  currentOccupants: FlatOccupantDto[];
+  vehicles: ResidentVehicleDto[];
+  documentCount: number;
+};
+
+/** A closed or open occupancy period on a flat, newest first. */
+export type FlatOccupancyHistoryEntryDto = {
+  residentId: string;
+  userId: string;
+  name: string | null;
+  residentType: ResidentType;
+  status: ResidentStatus;
+  moveInDate: string | null;
+  moveOutDate: string | null;
+  moveOutReason: string | null;
+  isCurrent: boolean;
+};
+
+/** One row of the Admin flat directory. */
+export type FlatOccupancySummaryDto = {
+  id: string;
+  number: string;
+  wingId: string | null;
+  wingName: string | null;
+  buildingId: string | null;
+  buildingName: string | null;
+  floor: number | null;
+  parkingSlot: string | null;
+  occupantCount: number;
+  occupancyStatus: FlatOccupancyStatus;
+};
+
+export type OccupancyStatsDto = {
+  totalFlats: number;
+  occupiedFlats: number;
+  vacantFlats: number;
+  ownerOccupiedFlats: number;
+  tenantOccupiedFlats: number;
+  totalResidents: number;
+  activeResidents: number;
+  pendingVerification: number;
+  pendingInvitations: number;
+  movedOut: number;
+};
+
 export type ResidentProfileDto = {
   userId: string;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  /** @deprecated Legacy free-text field; prefer the structured fields below. */
   emergencyContact: string | null;
+  emergencyContactName: string | null;
+  emergencyContactRelation: string | null;
+  emergencyContactPhone: string | null;
   vehicleNumber: string | null;
+  communicationPreferences: CommunicationPreferences;
   vehicles: ResidentVehicleDto[];
   societyName: string | null;
+  /** The signed-in user's active membership in the current society. */
+  membership: {
+    id: string;
+    residentType: ResidentType;
+    isPrimary: boolean;
+    status: ResidentStatus;
+    verificationStatus: VerificationStatus;
+    rejectionReason: string | null;
+    moveInDate: string | null;
+    moveOutDate: string | null;
+  } | null;
+  family: ResidentFamilyMemberDto[];
+  documents: ResidentDocumentDto[];
   flat: {
     id: string;
     number: string;
@@ -253,19 +483,6 @@ export type ResidentProfileDto = {
     fourWheelerCount: number;
     isOwner: boolean;
   } | null;
-};
-
-export type BillStatus = "draft" | "issued" | "paid" | "void" | "corrected";
-
-export type BillDto = {
-  id: string;
-  flatId: string;
-  flatNumber: string;
-  periodYm: string;
-  amountPaise: number;
-  status: BillStatus;
-  notes: string | null;
-  createdAt: string;
 };
 
 export type PaymentMethod = "razorpay" | "cash" | "cheque" | "neft" | "upi";
@@ -293,6 +510,43 @@ export type PaymentDto = {
   createdAt: string;
 };
 
+export type BillStatus = "draft" | "issued" | "paid" | "void" | "corrected";
+
+export type BillLineItemDto = {
+  id: string;
+  label: string;
+  amountPaise: number;
+};
+
+/** Current flat resident shown on bill detail (owner / occupants). */
+export type BillResidentDto = {
+  userId: string;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  residentType: ResidentType;
+  isPrimary: boolean;
+};
+
+export type BillDto = {
+  id: string;
+  flatId: string;
+  flatNumber: string;
+  periodYm: string;
+  amountPaise: number;
+  status: BillStatus;
+  notes: string | null;
+  createdAt: string;
+  /** Present on `GET /v1/bills/:id` — charge breakdown for this bill. */
+  lineItems?: BillLineItemDto[];
+  /** Present on `GET /v1/bills/:id` — payments linked to this bill. */
+  payments?: PaymentDto[];
+  /** Present on `GET /v1/bills/:id` — primary owner of the flat, if any. */
+  owner?: BillResidentDto | null;
+  /** Present on `GET /v1/bills/:id` — other current occupants (excludes owner). */
+  occupants?: BillResidentDto[];
+};
+
 export type ReceiptDto = {
   receiptNumber: string;
   paymentId: string;
@@ -304,6 +558,14 @@ export type ReceiptDto = {
 
 export type NoticeAudience = "all" | "wing" | "flat";
 
+export type NoticeAttachmentDto = {
+  id: string;
+  contentKind: "image" | "video";
+  contentType: string;
+  url: string;
+  byteSize: number;
+};
+
 export type NoticeDto = {
   id: string;
   title: string;
@@ -314,6 +576,7 @@ export type NoticeDto = {
   publishedAt: string | null;
   unpublishedAt: string | null;
   createdAt: string;
+  attachments: NoticeAttachmentDto[];
 };
 
 export type NotificationDto = {
@@ -372,16 +635,46 @@ export type PlatformUserDto = {
 
 export type ResidentImportRowError = {
   row: number;
+  /** Flat number from the offending row, when it could be read. */
+  flatNumber?: string | null;
+  field?: string | null;
   message: string;
 };
 
 export type ResidentImportResultDto = {
+  total: number;
   created: number;
   updated: number;
   invited: number;
   skipped: number;
   unchanged: number;
   errors: ResidentImportRowError[];
+};
+
+export type ResidentImportPreviewRowDto = {
+  row: number;
+  name: string;
+  phone: string;
+  email: string | null;
+  flatNumber: string;
+  wingName: string | null;
+  residentType: ResidentType;
+  /** What the import will do to this row if confirmed. */
+  action: "create" | "update" | "unchanged" | "skip";
+  flatExists: boolean;
+  errors: string[];
+  warnings: string[];
+};
+
+export type ResidentImportPreviewDto = {
+  total: number;
+  valid: number;
+  invalid: number;
+  willCreate: number;
+  willUpdate: number;
+  willSkip: number;
+  unchanged: number;
+  rows: ResidentImportPreviewRowDto[];
 };
 
 export type SocietyFlatInput = {
@@ -501,4 +794,6 @@ export type DashboardStatsDto = {
   upcomingBookings: number;
   publishedNotices: number;
   unreadNotifications: number;
+  /** Society-wide occupancy roll-up; null in Resident mode. */
+  occupancy: OccupancyStatsDto | null;
 };

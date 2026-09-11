@@ -8,6 +8,7 @@ import { parseSocietyTab, SocietyDetailPage } from "./pages/SocietyDetailPage";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { SocietyFlatsPanel } from "./components/SocietyFlatsPanel";
 import { SocietyParkingsPanel } from "./components/SocietyParkingsPanel";
+import { SocietyStructurePanel } from "./components/SocietyStructurePanel";
 import { ComingSoonPage } from "./pages/ComingSoonPage";
 import { MANAGE_NAV } from "./manage-nav";
 
@@ -24,6 +25,7 @@ describe("manage smoke unit", () => {
       DashboardPage,
       SocietiesPage,
       SocietyDetailPage,
+      SocietyStructurePanel,
       SocietyFlatsPanel,
       SocietyParkingsPanel,
       ConfirmDialog,
@@ -38,11 +40,12 @@ describe("manage smoke unit", () => {
     expect(MANAGE_NAV.some((n) => n.to === "/subscriptions" && n.status === "soon")).toBe(true);
   });
 
-  it("defaults society detail tab to team", () => {
-    expect(parseSocietyTab(null)).toBe("team");
+  it("defaults society detail tab to structure", () => {
+    expect(parseSocietyTab(null)).toBe("structure");
     expect(parseSocietyTab("parkings")).toBe("parkings");
     expect(parseSocietyTab("flats")).toBe("flats");
+    expect(parseSocietyTab("team")).toBe("team");
     expect(parseSocietyTab("controls")).toBe("controls");
-    expect(parseSocietyTab("nope")).toBe("team");
+    expect(parseSocietyTab("nope")).toBe("structure");
   });
 });

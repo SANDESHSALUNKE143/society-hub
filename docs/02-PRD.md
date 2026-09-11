@@ -26,7 +26,7 @@ SocietyHub is a multi-tenant SaaS for housing societies. The **product roadmap i
 | App | Audience | Modes |
 |-----|----------|--------|
 | `apps/client-app` (`app.localhost:5173`) | Society members | **Admin \| Resident** toggle (like Fassport Raise \| Invest). Staff: Chairperson, Secretary, Treasurer, Cashier, Committee. Residents/tenants: Resident mode only. |
-| `apps/manage` (`manage.localhost:5174`) | SocietyHub **platform employees** only | Create societies, list/add/remove a society team, **add / edit / remove flats** and **parking slots** (puzzle or open; form or CSV). Day-to-day society admin (residents, complaints) stays in Client App Admin. |
+| `apps/manage` (`manage.localhost:5174`) | SocietyHub **platform employees** only | Create societies, list/add/remove a society team, and define **all society structure**: towers (buildings), flats, and parking slots (form or CSV). Day-to-day society admin (residents, complaints, occupancy) stays in Client App Admin — Client Admin **lists** flats/parking and does **not** create inventory. |
 
 Both share one API (`apps/api`) and `packages/sdk`.
 
@@ -50,7 +50,7 @@ Long-term platform metrics (payments, SLA %, etc.) remain in [BRD](01-BRD.md) fo
 | Role | Description |
 |------|-------------|
 | Society Admin (Admin) | Onboards society structure/residents; views all complaints; updates status |
-| Resident | Linked to a flat; raises and tracks own complaints |
+| Resident | Linked to a flat; raises complaints for the flat; tracks flat complaints |
 | Super Admin | Optional platform operator to create the society (pilot may seed one society) |
 
 Secretary / Treasurer / Committee / Tenant refinements and full RBAC matrix apply in **Phase 2**; for MVP, **Admin** and **Resident** are sufficient.
@@ -63,7 +63,7 @@ Secretary / Treasurer / Committee / Tenant refinements and full RBAC matrix appl
 | Login / logout | ✓ | ✓ |
 | Raise complaint | ✓ (optional) | ✓ |
 | Update Account household details (linked flat) | ✓ | ✓ |
-| View own complaints + status | ✓ | ✓ |
+| View flat complaints + status | ✓ | ✓ |
 | View all society complaints + status | ✓ | |
 | Update complaint status | ✓ | |
 
@@ -95,12 +95,12 @@ Navigation (simple list or bottom/side nav) includes **all planned product areas
 | Nav item | Phase 1 behavior |
 |----------|------------------|
 | Home / Complaints | **Live** — residents raise/track in `apps/client-app`; admins list all + status in `apps/manage` |
-| Bills / Maintenance | **Coming soon** — placeholder screen, no API |
-| Payments | **Coming soon** |
-| Notices | **Coming soon** |
+| Bills / Maintenance | **Early stub live** in Client App — generate, list, bill detail (owner/occupants, line items, payments), staff notify residents, offline UPI proof. Full FR-BIL-* (due dates, partial pay, defaulters) remains Phase 2 |
+| Payments | **Early stub live** in Client App — publish UPI/QR, review screenshots, credit/reject, record cash/cheque/NEFT. Full FR-PAY-* (Razorpay online) remains Phase 2 |
+| Notices | **Early stub live** — draft/publish, photos & videos, WhatsApp share link. Full FR-NOT-* (read receipts) remains Phase 2 |
 | Notifications | **Coming soon** (optional entry) |
 | Dashboard / Reports | **Coming soon** |
-| Residents / Directory | **Live in Manage** — Admin onboard only; richer directory Coming soon if not needed |
+| Residents | **Live** in Client App Admin and Flutter Admin — **one blade**: **Flats** (all units / occupancy) and **People** (directory of app users + pending invitations); **Add resident** opens the household form. Manage does not host day-to-day resident add |
 | Settings / Profile | Minimal live (logout, PIN); extras Coming soon |
 
 **Coming soon screen:** short title, one-line “This feature is coming soon”, optional back to Complaints. No forms that submit. No dead ends without a way back.
@@ -115,7 +115,7 @@ Do **not** invent nav items outside the planned roadmap (PRD Phase 2 / Future).
 2. **Onboard Resident** (link resident to flat + mobile/SSO identity).
 3. **Login / logout** via SSO (Google), mobile OTP, or PIN (after verified identity).
 4. **Raise complaint** — title; flat auto-populated; description; type (Electric, Plumbing, …, Other); voice-to-text mic; photos and videos.
-5. **Resident** — list own complaints + status; **Admin** — list all + update status (`Open` → `In Progress` → `Resolved` → `Closed`).
+5. **Resident** — list **flat** complaints + status; **Admin** — list all + update status (`Open` → `In Progress` → `Resolved` → `Closed`).
 6. **App shell** — simple responsive nav that lists **all planned features**; non-live items open a **Coming soon** page (§5.2, §6.1a).
 
 Minimal society/flat data required so flat can auto-populate.
@@ -171,16 +171,17 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 
 - FR-ONB-1: Admin onboarding for the pilot society (or Super Admin creates society + first Admin).
 - FR-ONB-2: Admin registers residents against **flats**. The form is **flat first**: pick wing/flat on the same screen as the tabs — **Owner**, **Family**, **Parking Details**, **Two-wheelers**, **Four-wheelers**, and **Gas**. The owner tab captures name, contact number, email, and emergency contact, and can **edit the existing owner**. **Parking Details** assigns a Manage parking lot (puzzle or open). The number list shows free lots of the selected type plus lots already on this flat; lots on other flats stay visible but cannot be stolen. Family tab lists family members in a table (add / edit dialog, delete). Household age counts stay on that tab. Staff can remove a family member; the owner cannot be removed there. **A flat has exactly one owner.** Everyone else on that flat is a family member. Each person is a separate resident with their own mobile (OTP). Email is optional and must be unique if provided. Parking included slots (FR-ONB-7) apply to the **flat**, not per person. Adding another person as owner (without `editOwner`) is stored as family.
-- FR-ONB-2b: After the owner is onboarded, that **owner resident** can add family members to their own flat (name, contact number, optional email). Each family member can log in with their own mobile OTP and raise complaints for that flat. Only the owner can add household members; society staff can still add people from Onboard resident.
-- FR-ONB-3: **SocietyHub platform employees** add, edit, and remove flats from **Manage** society detail: wing, floor, and flat number (one form or CSV). The flats list is paginated. Remove is blocked while residents are linked to the flat. Client App Admin **lists** those flats for onboard and does not create them. Buildings/wings are created as needed to store the wing name.
-- FR-ONB-3b: **SocietyHub platform employees** add, edit, and remove **parking slots** from Manage society detail. Two kinds: **puzzle** (wing + parking number; typical wings A–D) and **open** (parking number only). Puzzle parking number is the slot only (101, not A-101); the same number may exist in another wing. Floor is not collected for parking. Open parking numbers are unique in the society. Remove is blocked while a flat still uses that slot. Client App Admin **picks** a slot when onboarding; they do not invent parking numbers.
-- FR-ONB-4: Society Admin can add, update (name / email / mobile / role), and remove society team members in Client App Admin. A team member cannot remove themselves.
-- FR-ONB-5: Society Admin can list all onboarded residents in Client App Admin (name, mobile, email, flat). Adding stays on Onboard resident. Searchable directory / move-out is Phase 2 (FR-RES-*).
+- FR-ONB-2b: After the owner is onboarded, that **owner resident** can add family members to their own flat (name, contact number, optional email). Each family member can log in with their own mobile OTP and raise complaints for that flat. Only the owner can add household members; society staff can still add people from **Add resident** on Residents.
+- FR-ONB-3: **SocietyHub platform employees** define society structure only from **Manage**, in hierarchy order: **Society** → **Towers (buildings)** → **Wings** → **Flats** (and parking separately). New societies start with **no** towers/wings/flats — the operator adds them on society detail under **Structure**, then **Flats**. Platform can **rename** the society, and **add / rename / delete** towers and wings. Delete of a tower or wing is blocked while any linked flat still has residents (or any live flat under that node — remove flats first). Flat add/CSV requires a selected tower; CSV columns stay `wing,floor,flatNumber` (no tower column). Wings under that tower are created as needed when adding flats, or managed explicitly on Structure. Flats list is paginated. Client App Admin **lists** flats (Occupancy + Layout) for onboard and does **not** create or bulk-import flats.
+- FR-ONB-3b: **SocietyHub platform employees** add, edit, and remove **parking slots** only from Manage society detail. Two kinds: **puzzle** (wing + parking number; typical wings A–D) and **open** (parking number only). Puzzle parking number is the slot only (101, not A-101); the same number may exist in another wing. Floor is not collected for parking. Open parking numbers are unique in the society. Remove is blocked while a flat still uses that slot. Client App Admin **picks** a slot when onboarding; they do not invent parking numbers or run parking CSV.
+- FR-ONB-3c: Client App Admin uses **one Residents blade** with two views: **Flats** (occupancy + read-only layout) and **People** (directory of members who can sign in, plus pending invitations). Structure inventory (towers / flats / parking create) lives only in Manage.
+- FR-ONB-4: Society Admin can add, update (name / email / mobile / role), and remove society team members in Client App Admin. A team member cannot remove themselves. From **Residents → People** (directory action) or **resident detail**, staff can **Assign team role** to an existing member (same person keeps flat membership + gains Admin-mode access).
+- FR-ONB-5: Society Admin uses one **Residents** blade on Client App Admin and Flutter Admin: **Flats** (all units) and **People** (**Directory** of members who can access the app + **Pending invitations**). **Add resident** opens the household onboard form (Owner / Family / Parking / vehicles / Gas). Optional Email / WhatsApp checkboxes send a **welcome** (sign in with OTP) — they do **not** create an invitation token. Staff create path is onboard-now, not a separate Invite form. Bulk CSV stays web-only. Move-out / verification detail remain on resident detail (web).
 - FR-ONB-6: Platform employees on Manage society detail can list that society's team, add members (email, mobile, role), and remove members. They cannot remove themselves. Contact/role edits stay in Client App Admin.
 - FR-ONB-7: Each flat includes **2 two-wheeler** and **1 four-wheeler** parking by default. Admins can record more than one bike and more than one car; any vehicle beyond those included slots must be marked as **purchased parking** (optional slot label). **CSV import may skip registration numbers** and record only counts in `twoWheelers` / `fourWheelers` (for example `2` and `1`). Count-only extras beyond the included slots are stored as purchased parking.
 - FR-ONB-8: Onboard records whether the flat has taken a **PNG gas connection** (yes / no).
 - FR-ONB-9: Onboard records how many people live in the flat by age group: **Adult**, **Child**, and **Senior citizen**. These counts are per **flat** (shared by everyone onboarded to that flat). CSV columns: `adults`, `children`, `seniorCitizens`.
-- FR-ONB-10: **Account** has three sections: **My flat**, **Household**, and **Security**. Household uses the same tabs as Onboard resident: **Owner**, **Family**, **Parking Details**, **Two-wheelers**, **Four-wheelers**, and **Gas**. Owner shows the flat owner’s name / mobile / email (read-only) plus emergency contact. Family holds the family table (add / edit / delete only for the owner) plus Adult / Child / Senior citizen counts. Parking Details assigns a Manage lot the same way staff onboard does. Vehicles and PNG stay on their tabs. Household fields apply to the **flat**. Vehicle parking quota (FR-ONB-7) is enforced across the household. Security holds password and PIN.
+- FR-ONB-10: **Account** has three sections: **My flat**, **Household**, and **Security**. Household uses the same tabs as **Add resident**: **Owner**, **Family**, **Parking Details**, **Two-wheelers**, **Four-wheelers**, and **Gas**. Owner shows the flat owner’s name / mobile / email (read-only) plus emergency contact. Family holds the family table (add / edit / delete only for the owner) plus Adult / Child / Senior citizen counts. Parking Details assigns a Manage lot the same way staff Add resident does. Vehicles and PNG stay on their tabs. Household fields apply to the **flat**. Vehicle parking quota (FR-ONB-7) is enforced across the household. Security holds password and PIN.
 
 ### 7.3 Complaint management (MVP)
 
@@ -188,9 +189,11 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 - FR-CMP-2: **Types** include at least: `electric`, `plumbing`, plus other predefined society types, and `other` (optional free-text subtype when Other).
 - FR-CMP-3: **Voice-to-text**: UI mic control uses browser speech recognition (e.g. Web Speech API) to fill description; if unsupported, mic disabled with short message; typing still works.
 - FR-CMP-4: Attach **photos and videos** to Azure Blob; show on detail; enforce size/type limits (Architecture).
-- FR-CMP-5: Resident **lists own complaints** with status.
+- FR-CMP-5: Resident **lists complaints for their linked flat(s)** with status (all household tickets on that flat, not only tickets they personally raised).
 - FR-CMP-6: Admin **lists all society complaints** with status; can change status along: `Open` → `In Progress` → `Resolved` → `Closed` (assignment/SLA optional in MVP).
-- FR-CMP-7: Complaint detail shows title, type, flat, description, media, status, timestamps.
+- FR-CMP-7: Complaint detail shows title, type, flat, description, media, status, timestamps in the **viewer's local timezone** (API stores UTC).
+- FR-CMP-8: The raiser can **edit** title/type/description until the ticket is resolved or closed, and **delete** an `Open` ticket they raised. Staff can still soft-delete any ticket. Flat-mates may view and comment but cannot edit/delete someone else’s ticket.
+- FR-CMP-9: Flat members and staff can **add comments**, **ask questions**, and see the thread plus status-update notes on tickets they can view.
 
 ### 7.3a App shell — Coming soon (Phase 1)
 
@@ -208,7 +211,7 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 | Society settings (SLA, billing defaults) | | ✓ | ✓ | ✓ (billing defaults) | | |
 | Assign committee roles | | ✓ | ✓ | | | |
 | Manage residents / tenants | | ✓ | ✓ | | | |
-| Raise / view own complaints | | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Raise / view flat complaints | | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Assign / transition all complaints | | ✓ | ✓ | | view | |
 | Generate / edit bills | | ✓ | | ✓ | | |
 | Pay own bills online | | | | | | ✓ |
@@ -221,7 +224,7 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 ### 7.5 Phase 2 — society & residents (extended)
 
 - FR-SOC-1: Super Admin creates society (name, address, timezone); system assigns `tenant_id`.
-- FR-SOC-2: Society Admin/Secretary CRUD buildings → wings → flats; unique flat identity within society.
+- FR-SOC-2: Society Admin/Secretary CRUD buildings → wings → flats remains **Phase 2**. Until then, towers / flats / parking inventory are **Manage-only** (FR-ONB-3 / FR-ONB-3b).
 - FR-SOC-3: Society settings store complaint SLA days and billing period defaults.
 - FR-SOC-4: Assign/revoke Secretary, Treasurer, Committee, Society Admin roles.
 - FR-RES-1: Register owners against flats; searchable directory.
@@ -253,8 +256,9 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 - FR-PAY-5: Resident views payment history (pending / success / rejected) and receipt after acknowledgement.
 - FR-PAY-6 **(future):** Resident pays bill via Razorpay (UPI/card/netbanking); verified webhooks; do not treat client-reported success as paid.
 
-### 7.9 Phase 2 — notices
+### 7.9 Notices (early stub + Phase 2)
 
+- FR-NOT-0 (live stub): Staff create draft/publish notices; optional **image/video** attachments; staff and residents can **Share on WhatsApp** (pre-filled message + deep link). Not WhatsApp Business API delivery.
 - FR-NOT-1: Secretary publishes notice to all residents or wing/flat subset.
 - FR-NOT-2: Opening a notice records read; publisher sees read vs unread counts.
 - FR-NOT-3: Edit/unpublish; unpublished hidden from residents; audited.

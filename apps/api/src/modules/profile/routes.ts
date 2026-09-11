@@ -1,7 +1,10 @@
 import { Elysia } from "elysia";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import type { ResidentProfileDto } from "@society-hub/types";
-import { updateResidentProfileSchema } from "@society-hub/validation";
+import {
+  updateResidentProfileSchema,
+  uploadDocumentMetaSchema,
+} from "@society-hub/validation";
 import { db } from "../../db/client";
 import {
   buildings,
@@ -9,9 +12,21 @@ import {
   residentProfiles,
   residents,
   societies,
+  users,
   wings,
 } from "../../db/schema";
+import { AppError } from "../../lib/errors";
 import { authPlugin, requireAuth } from "../../lib/auth-context";
+import {
+  listDocuments,
+  listFamilyMembers,
+  parseCommunicationPreferences,
+} from "../residents/repository";
+import {
+  getDocumentRow,
+  readDocumentFile,
+  storeDocument,
+} from "../residents/documents";
 import { upsertProfile } from "./upsert-profile";
 import { applyResidentProfilePatch, vehicleCountsForFlat } from "./apply-patch";
 import { listResidentVehicles } from "../admin/onboard-resident";
@@ -19,67 +34,111 @@ import { listResidentVehicles } from "../admin/onboard-resident";
 /** Shared with auth/routes.ts so `PATCH /v1/auth/profile` (used by the SDK) stays in sync. */
 export { upsertProfile, applyResidentProfilePatch };
 
-export async function getProfileDto(
-  tenantId: string,
-  userId: string,
-): Promise<ResidentProfileDto> {
+/** The signed-in user's live membership in the current society, if any. */
+async function findOwnMembership(tenantId: string, userId: string) {
   const [row] = await db
     .select()
-    .from(residentProfiles)
-    .where(
-      and(
-        eq(residentProfiles.tenantId, tenantId),
-        eq(residentProfiles.userId, userId),
-        eq(residentProfiles.isDeleted, false),
-      ),
-    )
-    .limit(1);
-
-  const [society] = await db
-    .select({ name: societies.name })
-    .from(societies)
-    .where(and(eq(societies.id, tenantId), eq(societies.isDeleted, false)))
-    .limit(1);
-
-  const [flatRow] = await db
-    .select({
-      id: flats.id,
-      number: flats.number,
-      floor: flats.floor,
-      parkingSlot: flats.parkingSlot,
-      pngGasConnection: flats.pngGasConnection,
-      adultCount: flats.adultCount,
-      childCount: flats.childCount,
-      seniorCitizenCount: flats.seniorCitizenCount,
-      wingName: wings.name,
-      buildingName: buildings.name,
-      isOwner: residents.isOwner,
-    })
     .from(residents)
-    .innerJoin(flats, eq(flats.id, residents.flatId))
-    .leftJoin(wings, eq(wings.id, flats.wingId))
-    .leftJoin(buildings, eq(buildings.id, wings.buildingId))
     .where(
       and(
         eq(residents.tenantId, tenantId),
         eq(residents.userId, userId),
         eq(residents.isDeleted, false),
-        eq(flats.isDeleted, false),
+        isNotNull(residents.activeKey),
       ),
     )
+    .orderBy(desc(residents.isPrimary), desc(residents.moveInDate))
     .limit(1);
+  return row ?? null;
+}
 
-  const vehicles = await listResidentVehicles(tenantId, userId);
+export async function getProfileDto(
+  tenantId: string,
+  userId: string,
+): Promise<ResidentProfileDto> {
+  const [[profile], [society], [user], membership] = await Promise.all([
+    db
+      .select()
+      .from(residentProfiles)
+      .where(
+        and(
+          eq(residentProfiles.tenantId, tenantId),
+          eq(residentProfiles.userId, userId),
+          eq(residentProfiles.isDeleted, false),
+        ),
+      )
+      .limit(1),
+    db
+      .select({ name: societies.name })
+      .from(societies)
+      .where(and(eq(societies.id, tenantId), eq(societies.isDeleted, false)))
+      .limit(1),
+    db.select().from(users).where(eq(users.id, userId)).limit(1),
+    findOwnMembership(tenantId, userId),
+  ]);
+
+  const [flatRow] = membership
+    ? await db
+        .select({
+          id: flats.id,
+          number: flats.number,
+          floor: flats.floor,
+          parkingSlot: flats.parkingSlot,
+          pngGasConnection: flats.pngGasConnection,
+          adultCount: flats.adultCount,
+          childCount: flats.childCount,
+          seniorCitizenCount: flats.seniorCitizenCount,
+          wingName: wings.name,
+          buildingName: buildings.name,
+        })
+        .from(flats)
+        .leftJoin(wings, eq(wings.id, flats.wingId))
+        .leftJoin(buildings, eq(buildings.id, wings.buildingId))
+        .where(and(eq(flats.id, membership.flatId), eq(flats.isDeleted, false)))
+        .limit(1)
+    : [];
+
+  const [family, documents, vehicles] = await Promise.all([
+    membership ? listFamilyMembers(tenantId, membership.id) : Promise.resolve([]),
+    membership ? listDocuments(tenantId, membership.id) : Promise.resolve([]),
+    listResidentVehicles(tenantId, userId),
+  ]);
   const vehicleCounts = flatRow
     ? await vehicleCountsForFlat(tenantId, flatRow.id)
     : { twoWheelerCount: 0, fourWheelerCount: 0 };
 
   return {
     userId,
-    emergencyContact: row?.emergencyContact ?? null,
-    vehicleNumber: row?.vehicleNumber ?? null,
+    name: user?.name ?? null,
+    phone: user?.phone ?? null,
+    email: user?.email ?? null,
+    emergencyContact: profile?.emergencyContact ?? null,
+    emergencyContactName: profile?.emergencyContactName ?? null,
+    emergencyContactRelation: profile?.emergencyContactRelation ?? null,
+    emergencyContactPhone: profile?.emergencyContactPhone ?? null,
+    vehicleNumber: profile?.vehicleNumber ?? null,
+    communicationPreferences: parseCommunicationPreferences(
+      profile?.communicationPrefsJson,
+    ),
     vehicles,
     societyName: society?.name ?? null,
+    membership: membership
+      ? {
+          id: membership.id,
+          residentType: membership.residentType,
+          isPrimary: Boolean(membership.isPrimary),
+          status: membership.status,
+          verificationStatus: membership.verificationStatus,
+          rejectionReason: membership.rejectionReason,
+          moveInDate: membership.moveInDate,
+          moveOutDate: membership.moveOutDate,
+        }
+      : null,
+    family,
+    documents: documents.map((d) => ({
+      ...d,
+      downloadPath: `/v1/profile/documents/${d.id}/file`,
+    })),
     flat: flatRow
       ? {
           id: flatRow.id,
@@ -94,7 +153,7 @@ export async function getProfileDto(
           seniorCitizenCount: Number(flatRow.seniorCitizenCount ?? 0),
           twoWheelerCount: vehicleCounts.twoWheelerCount,
           fourWheelerCount: vehicleCounts.fourWheelerCount,
-          isOwner: Boolean(flatRow.isOwner),
+          isOwner: membership?.residentType === "owner",
         }
       : null,
   };
@@ -109,6 +168,69 @@ export const profileRoutes = new Elysia({ prefix: "/v1/profile" })
   .patch("/", async ({ auth, body }) => {
     const claims = requireAuth(auth);
     const parsed = updateResidentProfileSchema.parse(body);
+    if (parsed.name !== undefined) {
+      await db
+        .update(users)
+        .set({ name: parsed.name, updatedBy: claims.sub })
+        .where(eq(users.id, claims.sub));
+    }
     await applyResidentProfilePatch(claims.tenantId, claims.sub, parsed);
+    if (
+      parsed.emergencyContactName !== undefined ||
+      parsed.emergencyContactRelation !== undefined ||
+      parsed.emergencyContactPhone !== undefined ||
+      parsed.communicationPreferences !== undefined
+    ) {
+      await upsertProfile(claims.tenantId, claims.sub, parsed);
+    }
     return getProfileDto(claims.tenantId, claims.sub);
+  })
+  /** Residents upload their own verification documents; admins review them. */
+  .post("/documents", async ({ auth, request }) => {
+    const claims = requireAuth(auth);
+    const membership = await findOwnMembership(claims.tenantId, claims.sub);
+    if (!membership) {
+      throw new AppError(
+        404,
+        "no_membership",
+        "You are not linked to a flat in this society yet",
+      );
+    }
+    const form = await request.formData();
+    const meta = uploadDocumentMetaSchema.parse({
+      docType: form.get("docType") ?? undefined,
+      documentNumber: form.get("documentNumber") ?? undefined,
+      expiresAt: form.get("expiresAt") ?? undefined,
+    });
+    const dto = await storeDocument({
+      tenantId: claims.tenantId,
+      actorUserId: claims.sub,
+      residentId: membership.id,
+      file: form.get("file"),
+      meta,
+    });
+    return { ...dto, downloadPath: `/v1/profile/documents/${dto.id}/file` };
+  })
+  /** A resident may re-read only their own documents. */
+  .get("/documents/:id/file", async ({ auth, params }) => {
+    const claims = requireAuth(auth);
+    const doc = await getDocumentRow(claims.tenantId, params.id);
+    const owner = await db
+      .select({ userId: residents.userId })
+      .from(residents)
+      .where(
+        and(
+          eq(residents.id, doc.residentId),
+          eq(residents.tenantId, claims.tenantId),
+        ),
+      )
+      .limit(1);
+    if (owner[0]?.userId !== claims.sub) {
+      throw new AppError(403, "forbidden", "Not your document");
+    }
+    return readDocumentFile({
+      tenantId: claims.tenantId,
+      actorUserId: claims.sub,
+      documentId: params.id,
+    });
   });

@@ -1,7 +1,9 @@
 import { FormEvent, useEffect, useState } from "react";
 import type {
+  CommunicationPreferences,
   ParkingKind,
   ParkingSlotDto,
+  ResidentDocumentType,
   ResidentProfileDto,
   SocietyResidentDto,
 } from "@society-hub/types";
@@ -12,15 +14,20 @@ import {
 } from "@society-hub/types";
 import { ApiClientError } from "@society-hub/sdk";
 import {
+  DOCUMENT_TYPE_LABELS,
   HOUSEHOLD_TABS,
+  RESIDENT_STATUS_LABELS,
   ShField,
   ShFormGrid,
   ShPage,
   ShPageHeader,
   ShSection,
   ShTabs,
+  VERIFICATION_STATUS_LABELS,
   householdSubmitLabel,
   preferredParkingKind,
+  residentStatusBadgeClass,
+  verificationBadgeClass,
   type HouseholdTabId,
 } from "@society-hub/ui";
 import { useAuth } from "../auth";
@@ -46,14 +53,27 @@ const ACCOUNT_SECTIONS: Array<{ id: AccountSection; label: string }> = [
   { id: "security", label: "Security" },
 ];
 
+const CHANNELS: Array<{
+  key: keyof CommunicationPreferences;
+  label: string;
+  note?: string;
+}> = [
+  { key: "inApp", label: "In-app" },
+  { key: "push", label: "Push", note: "Coming with the mobile app" },
+  { key: "email", label: "Email" },
+  { key: "whatsapp", label: "WhatsApp" },
+  { key: "sms", label: "SMS" },
+];
+
 function vehiclesForAccountSave(
   flat: NonNullable<ResidentProfileDto["flat"]>,
   savedVehicles: ResidentProfileDto["vehicles"],
   twoWheelers: VehicleDraft[],
   fourWheelers: VehicleDraft[],
 ) {
-  const myTwo = savedVehicles.filter((v) => v.kind === "two_wheeler").length;
-  const myFour = savedVehicles.filter((v) => v.kind === "four_wheeler").length;
+  const saved = savedVehicles ?? [];
+  const myTwo = saved.filter((v) => v.kind === "two_wheeler").length;
+  const myFour = saved.filter((v) => v.kind === "four_wheeler").length;
   const remainingTw = remainingIncludedForUser(
     flat.twoWheelerCount,
     myTwo,
@@ -108,10 +128,14 @@ export function AccountPage() {
   const [parkingKind, setParkingKind] = useState<ParkingKind>("puzzle");
   const [parkingSlot, setParkingSlot] = useState("");
   const [parkingSlotId, setParkingSlotId] = useState("");
+  const [prefs, setPrefs] = useState<CommunicationPreferences | null>(null);
+  const [docType, setDocType] = useState<ResidentDocumentType>("identity");
+  const [uploadBusy, setUploadBusy] = useState(false);
 
   function applyProfile(next: ResidentProfileDto) {
     setProfile(next);
     setEmergencyContact(next.emergencyContact ?? "");
+    setPrefs(next.communicationPreferences ?? null);
     setPngGasConnection(Boolean(next.flat?.pngGasConnection));
     setAdultCount(String(next.flat?.adultCount ?? 0));
     setChildCount(String(next.flat?.childCount ?? 0));
@@ -274,6 +298,7 @@ export function AccountPage() {
           parkingSlot: parkingSlot.trim() || null,
           parkingSlotId: parkingSlotId || null,
           vehicles,
+          communicationPreferences: prefs ?? undefined,
         });
         applyProfile(next);
         try {
@@ -284,12 +309,29 @@ export function AccountPage() {
       } else {
         const next = await client.updateProfile({
           emergencyContact: emergencyContact || null,
+          communicationPreferences: prefs ?? undefined,
         });
         applyProfile(next);
       }
       setProfileMessage("Profile updated.");
     } catch (err) {
       setProfileError(err instanceof ApiClientError ? err.body.message : "Failed");
+    }
+  }
+
+  async function uploadDocument(file: File | null) {
+    if (!file) return;
+    setUploadBusy(true);
+    setProfileError(null);
+    try {
+      await client.uploadMyDocument(file, { docType });
+      const next = await client.getProfile();
+      applyProfile(next);
+      setProfileMessage("Document uploaded — an admin will review it.");
+    } catch (err) {
+      setProfileError(err instanceof ApiClientError ? err.body.message : "Upload failed");
+    } finally {
+      setUploadBusy(false);
     }
   }
 
@@ -312,6 +354,10 @@ export function AccountPage() {
     INCLUDED_FOUR_WHEELER_PARKING,
   );
   const ownerOnFlat = household.find((person) => person.isOwner);
+  const membership = profile?.membership ?? null;
+  const documents = profile?.documents ?? [];
+  const token = localStorage.getItem("sh_web_access") ?? "";
+  const apiBase = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
   return (
     <ShPage wide>
@@ -328,6 +374,30 @@ export function AccountPage() {
       />
 
       <ShSection>
+        {membership ? (
+          <div className="mb-4 space-y-2" data-testid="account-verification">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={verificationBadgeClass(membership.verificationStatus)}
+                data-testid="account-verification-status"
+              >
+                {VERIFICATION_STATUS_LABELS[membership.verificationStatus]}
+              </span>
+              <span className={residentStatusBadgeClass(membership.status)}>
+                {RESIDENT_STATUS_LABELS[membership.status]}
+              </span>
+            </div>
+            {membership.verificationStatus === "rejected" && membership.rejectionReason && (
+              <p className="text-sm text-[var(--danger)]" data-testid="account-rejection-reason">
+                Reason: {membership.rejectionReason}
+              </p>
+            )}
+          </div>
+        ) : !flat ? (
+          <p className="mb-4 text-sm text-black/55" data-testid="account-no-membership">
+            You are not linked to a flat in this society yet. Ask an admin to add you.
+          </p>
+        ) : null}
         <ShTabs
           items={ACCOUNT_SECTIONS}
           value={section}
@@ -423,6 +493,68 @@ export function AccountPage() {
                 No flat linked yet. Ask an admin to onboard you.
               </p>
             )}
+            <div className="mt-5" data-testid="account-documents">
+              <h3 className="text-sm font-semibold">My documents</h3>
+              <p className="mt-0.5 text-xs text-black/50">
+                Only you and society admins can open these files.
+              </p>
+              {documents.length ? (
+                <ul className="mt-3 mb-3 space-y-2 text-sm">
+                  {documents.map((doc) => (
+                    <li key={doc.id} className="rounded-lg border border-[var(--sand)] p-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="badge">{DOCUMENT_TYPE_LABELS[doc.docType]}</span>
+                        <a
+                          className="font-medium text-[var(--leaf-dark)]"
+                          href={`${apiBase}${doc.downloadPath}?access_token=${encodeURIComponent(token)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {doc.fileName}
+                        </a>
+                        <span className={verificationBadgeClass(doc.status)}>
+                          {VERIFICATION_STATUS_LABELS[doc.status]}
+                        </span>
+                      </div>
+                      {doc.rejectionReason && (
+                        <p className="mt-1 text-xs text-[var(--danger)]">
+                          Reason: {doc.rejectionReason}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 mb-3 text-sm text-black/55">No documents uploaded yet.</p>
+              )}
+              {membership && (
+                <div className="flex flex-wrap items-end gap-2">
+                  <ShField label="Document type" htmlFor="account-doc-type" className="min-w-[10rem]">
+                    <select
+                      id="account-doc-type"
+                      className="input"
+                      value={docType}
+                      data-testid="account-doc-type"
+                      onChange={(e) => setDocType(e.target.value as ResidentDocumentType)}
+                    >
+                      {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </ShField>
+                  <input
+                    type="file"
+                    className="text-xs"
+                    accept="image/*,application/pdf"
+                    disabled={uploadBusy}
+                    data-testid="account-doc-upload"
+                    onChange={(e) => void uploadDocument(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         ) : null}
 
@@ -581,6 +713,35 @@ export function AccountPage() {
                 </p>
               )}
             </ShFormGrid>
+            <fieldset>
+              <legend className="label">How we may contact you</legend>
+              <div className="flex flex-wrap gap-3 text-xs">
+                {CHANNELS.map((channel) => (
+                  <label key={channel.key} className="flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      data-testid={`account-pref-${channel.key}`}
+                      checked={prefs?.[channel.key] ?? false}
+                      onChange={(e) =>
+                        setPrefs((p) => ({
+                          inApp: false,
+                          push: false,
+                          email: false,
+                          whatsapp: false,
+                          sms: false,
+                          ...p,
+                          [channel.key]: e.target.checked,
+                        }))
+                      }
+                    />
+                    {channel.label}
+                    {channel.note && (
+                      <span className="text-black/35">({channel.note})</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <button className="btn btn-primary" type="submit">
               {householdSubmitLabel(tab)}
             </button>
@@ -658,6 +819,12 @@ export function AccountPage() {
           <p className="mt-2 text-sm text-[var(--leaf)]">{profileMessage}</p>
         ) : null}
         {section === "household" && profileError ? (
+          <p className="mt-2 text-sm text-[var(--danger)]">{profileError}</p>
+        ) : null}
+        {section === "flat" && profileMessage ? (
+          <p className="mt-2 text-sm text-[var(--leaf)]">{profileMessage}</p>
+        ) : null}
+        {section === "flat" && profileError ? (
           <p className="mt-2 text-sm text-[var(--danger)]">{profileError}</p>
         ) : null}
         {section === "security" && message ? (
