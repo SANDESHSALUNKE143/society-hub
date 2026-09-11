@@ -9,11 +9,41 @@ export {
 } from "./layout";
 
 export {
+  ShDataTable,
+  ShPagination,
+  ShFilterBar,
+  ShSelect,
+  ShConfirmDialog,
+  ShCountTabs,
+  ShDetailItem,
+  ShDetailGrid,
+  type ShColumn,
+  type ShSortState,
+} from "./data";
+
+export {
   TYPE_LABELS,
   STATUS_LABELS,
   statusBadgeClass,
   statusTone,
 } from "./complaint-labels";
+
+export {
+  RESIDENT_TYPE_LABELS,
+  RESIDENT_STATUS_LABELS,
+  VERIFICATION_STATUS_LABELS,
+  DOCUMENT_TYPE_LABELS,
+  RELATIONSHIP_LABELS,
+  OCCUPANCY_LABELS,
+  INVITATION_STATUS_LABELS,
+  residentStatusBadgeClass,
+  verificationBadgeClass,
+  invitationBadgeClass,
+  occupancyBadgeClass,
+  flatLabel,
+  occupancyPeriod,
+} from "./resident-labels";
+
 export {
   complaintFlatLabel,
   complaintQueueLine,
@@ -28,6 +58,7 @@ export { ComplaintTypeIcon } from "./complaint-type-icon";
 export { ComplaintListCard } from "./complaint-list-card";
 export {
   CommitteeNoteCard,
+  ComplaintComments,
   ComplaintMetaRow,
   ComplaintQueueBanner,
   ComplaintStatusPill,
@@ -60,6 +91,10 @@ export {
 } from "./parking-picker";
 export { WingFlatSelect } from "./wing-flat-select";
 export { ShTabPanel, ShTabs } from "./tabs";
+export {
+  CsvImportPreviewDialog,
+  type CsvPreviewColumn,
+} from "./csv-import-preview";
 export {
   HOUSEHOLD_TABS,
   householdSubmitLabel,

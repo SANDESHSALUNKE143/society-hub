@@ -1,30 +1,21 @@
 import { Elysia } from "elysia";
 import { and, count, eq } from "drizzle-orm";
 import {
-  addSocietyTeamMemberSchema,
   createInvitationSchema,
-  onboardResidentSchema,
   residentImportSchema,
-  updateSocietyTeamMemberSchema,
 } from "@society-hub/validation";
 import type { FlatDto } from "@society-hub/types";
 import { db } from "../../db/client";
 import { buildings, flats, residentVehicles, residents, wings } from "../../db/schema";
-import {
-  addTeamMemberToTenant,
-  listTeamForTenant,
-  removeTeamMemberFromTenant,
-  updateTeamMemberInTenant,
-} from "./team-service";
+import { listTeamForTenant } from "./team-service";
 import { createInvitationForTenant } from "../invitations/routes";
 import {
   authPlugin,
   requireAuth,
   requireSocietyStaff,
 } from "../../lib/auth-context";
-import { onboardResidentIntoTenant } from "./onboard-resident";
 import { removeResidentFromTenant } from "./remove-resident";
-import { importResidentsCsvRows } from "./import-residents";
+import { importResidentsCsvRows, previewResidentImport } from "./import-residents";
 import { listResidentsForTenant } from "./list-residents";
 import { listSocietyParkings } from "../manage/parking-service";
 
@@ -70,36 +61,6 @@ function toFlatDto(
     details: parseDetails(row.detailsJson),
   };
 }
-
-export const teamRoutes = new Elysia({ prefix: "/v1/team" })
-  .use(authPlugin)
-  .get("/", async ({ auth }) => {
-    const claims = requireAuth(auth);
-    requireSocietyStaff(claims);
-    return listTeamForTenant(claims.tenantId);
-  })
-  .post("/", async ({ auth, body }) => {
-    const claims = requireAuth(auth);
-    requireSocietyStaff(claims);
-    const parsed = addSocietyTeamMemberSchema.parse(body);
-    return addTeamMemberToTenant(claims.tenantId, claims.sub, parsed);
-  })
-  .patch("/:userId", async ({ auth, params, body }) => {
-    const claims = requireAuth(auth);
-    requireSocietyStaff(claims);
-    const parsed = updateSocietyTeamMemberSchema.parse(body);
-    return updateTeamMemberInTenant(
-      claims.tenantId,
-      claims.sub,
-      params.userId,
-      parsed,
-    );
-  })
-  .delete("/:userId", async ({ auth, params }) => {
-    const claims = requireAuth(auth);
-    requireSocietyStaff(claims);
-    return removeTeamMemberFromTenant(claims.tenantId, claims.sub, params.userId);
-  });
 
 export const adminRoutes = new Elysia({ prefix: "/v1/admin" })
   .use(authPlugin)
@@ -232,36 +193,17 @@ export const adminRoutes = new Elysia({ prefix: "/v1/admin" })
     const parsed = createInvitationSchema.parse(body);
     return createInvitationForTenant(claims.tenantId, claims.sub, parsed);
   })
-  .get("/residents", async ({ auth }) => {
+  .get("/society-residents", async ({ auth }) => {
     const claims = requireAuth(auth);
     requireSocietyStaff(claims);
     return listResidentsForTenant(claims.tenantId);
   })
-  .post("/residents", async ({ auth, body }) => {
+  /** Dry run: validate + resolve flats and report what an import would do. */
+  .post("/residents/import/preview", async ({ auth, body }) => {
     const claims = requireAuth(auth);
     requireSocietyStaff(claims);
-    const parsed = onboardResidentSchema.parse(body);
-    return onboardResidentIntoTenant({
-      tenantId: claims.tenantId,
-      actorUserId: claims.sub,
-      name: parsed.name,
-      phone: parsed.phone,
-      email: parsed.email,
-      flatId: parsed.flatId,
-      floor: parsed.floor,
-      parkingSlot: parsed.parkingSlot,
-      parkingSlotId: parsed.parkingSlotId,
-      isOwner: parsed.isOwner,
-      editOwner: parsed.editOwner,
-      editUserId: parsed.editUserId,
-      emergencyContact: parsed.emergencyContact,
-      vehicleNumber: parsed.vehicleNumber,
-      vehicles: parsed.vehicles,
-      pngGasConnection: parsed.pngGasConnection,
-      adultCount: parsed.adultCount,
-      childCount: parsed.childCount,
-      seniorCitizenCount: parsed.seniorCitizenCount,
-    });
+    residentImportSchema.parse(body);
+    return previewResidentImport(claims.tenantId, body);
   })
   .post("/residents/import", async ({ auth, body }) => {
     const claims = requireAuth(auth);
@@ -270,7 +212,7 @@ export const adminRoutes = new Elysia({ prefix: "/v1/admin" })
     residentImportSchema.parse(body);
     return importResidentsCsvRows(claims.tenantId, claims.sub, body);
   })
-  .delete("/residents/:userId", async ({ auth, params }) => {
+  .delete("/residents/by-user/:userId", async ({ auth, params }) => {
     const claims = requireAuth(auth);
     requireSocietyStaff(claims);
     return removeResidentFromTenant({

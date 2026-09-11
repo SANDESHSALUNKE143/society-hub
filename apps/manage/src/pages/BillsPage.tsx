@@ -47,6 +47,7 @@ export function BillsPage() {
       const res = await client.generateBills({
         periodYm,
         amountPaise: Math.round(Number(amount) * 100),
+        reason: "Monthly maintenance",
         notes: notes || undefined,
       });
       setMessage(`Generated ${res.created} bill(s) for ${periodYm}.`);

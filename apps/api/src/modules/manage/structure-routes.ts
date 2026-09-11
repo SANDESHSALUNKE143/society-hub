@@ -1,7 +1,9 @@
 import { Elysia } from "elysia";
 import {
+  createSocietyBuildingSchema,
   createSocietyFlatSchema,
   createSocietyParkingSchema,
+  createSocietyWingSchema,
   importSocietyFlatsSchema,
   importSocietyParkingsSchema,
 } from "@society-hub/validation";
@@ -11,10 +13,18 @@ import {
   requirePlatform,
 } from "../../lib/auth-context";
 import {
+  addSocietyBuilding,
   addSocietyFlat,
+  addSocietyWing,
+  deleteSocietyBuilding,
   deleteSocietyFlat,
+  deleteSocietyWing,
   importSocietyFlats,
+  listSocietyBuildingsDetailed,
   listSocietyFlats,
+  listSocietyWings,
+  renameSocietyBuilding,
+  renameSocietyWing,
   updateSocietyFlat,
 } from "./structure-service";
 import {
@@ -29,6 +39,55 @@ export const manageStructureRoutes = new Elysia({
   prefix: "/v1/manage/societies",
 })
   .use(authPlugin)
+  .get("/:id/buildings", async ({ auth, params }) => {
+    const claims = requireAuth(auth);
+    requirePlatform(claims);
+    return listSocietyBuildingsDetailed(params.id);
+  })
+  .post("/:id/buildings", async ({ auth, params, body }) => {
+    const claims = requireAuth(auth);
+    requirePlatform(claims);
+    const parsed = createSocietyBuildingSchema.parse(body);
+    return addSocietyBuilding(params.id, claims.sub, parsed.name);
+  })
+  .patch("/:id/buildings/:buildingId", async ({ auth, params, body }) => {
+    const claims = requireAuth(auth);
+    requirePlatform(claims);
+    const parsed = createSocietyBuildingSchema.parse(body);
+    return renameSocietyBuilding(
+      params.id,
+      params.buildingId,
+      claims.sub,
+      parsed.name,
+    );
+  })
+  .delete("/:id/buildings/:buildingId", async ({ auth, params }) => {
+    const claims = requireAuth(auth);
+    requirePlatform(claims);
+    return deleteSocietyBuilding(params.id, params.buildingId, claims.sub);
+  })
+  .get("/:id/buildings/:buildingId/wings", async ({ auth, params }) => {
+    const claims = requireAuth(auth);
+    requirePlatform(claims);
+    return listSocietyWings(params.id, params.buildingId);
+  })
+  .post("/:id/buildings/:buildingId/wings", async ({ auth, params, body }) => {
+    const claims = requireAuth(auth);
+    requirePlatform(claims);
+    const parsed = createSocietyWingSchema.parse(body);
+    return addSocietyWing(params.id, params.buildingId, claims.sub, parsed.name);
+  })
+  .patch("/:id/wings/:wingId", async ({ auth, params, body }) => {
+    const claims = requireAuth(auth);
+    requirePlatform(claims);
+    const parsed = createSocietyWingSchema.parse(body);
+    return renameSocietyWing(params.id, params.wingId, claims.sub, parsed.name);
+  })
+  .delete("/:id/wings/:wingId", async ({ auth, params }) => {
+    const claims = requireAuth(auth);
+    requirePlatform(claims);
+    return deleteSocietyWing(params.id, params.wingId, claims.sub);
+  })
   .get("/:id/flats", async ({ auth, params }) => {
     const claims = requireAuth(auth);
     requirePlatform(claims);
@@ -38,7 +97,10 @@ export const manageStructureRoutes = new Elysia({
     const claims = requireAuth(auth);
     requirePlatform(claims);
     const parsed = importSocietyFlatsSchema.parse(body);
-    return importSocietyFlats(params.id, claims.sub, parsed.rows);
+    return importSocietyFlats(params.id, claims.sub, parsed.rows, {
+      buildingId: parsed.buildingId,
+      buildingName: parsed.buildingName,
+    });
   })
   .patch("/:id/flats/:flatId", async ({ auth, params, body }) => {
     const claims = requireAuth(auth);

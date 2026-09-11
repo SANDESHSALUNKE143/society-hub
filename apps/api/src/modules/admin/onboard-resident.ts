@@ -1,5 +1,11 @@
-import { and, asc, eq, ne } from "drizzle-orm";
-import type { ResidentVehicleDto, ResidentVehicleKind, UserDto } from "@society-hub/types";
+import { and, asc, eq, isNotNull, ne } from "drizzle-orm";
+import type {
+  ResidentStatus,
+  ResidentType,
+  ResidentVehicleDto,
+  ResidentVehicleKind,
+  UserDto,
+} from "@society-hub/types";
 import { vehicleParkingQuotaMessage } from "@society-hub/types";
 import { db } from "../../db/client";
 import {
@@ -12,6 +18,11 @@ import {
 } from "../../db/schema";
 import { AppError } from "../../lib/errors";
 import { buildUserDto } from "../../lib/auth-context";
+import { ActivityType, AuditEntity, recordAudit } from "../../lib/audit";
+import {
+  activeKeyFor,
+  toMysqlDateTime,
+} from "../../lib/resident-lifecycle";
 import { upsertProfile } from "../profile/upsert-profile";
 import { resolveIsOwnerForFlat } from "./flat-owner";
 
@@ -35,6 +46,12 @@ export type OnboardResidentInput = {
   isOwner?: boolean;
   editOwner?: boolean;
   editUserId?: string;
+  /** @deprecated Prefer `residentType`; kept so the CSV contract still works. */
+  residentType?: ResidentType;
+  isPrimary?: boolean;
+  status?: ResidentStatus;
+  moveInDate?: string | null;
+  remarks?: string | null;
   emergencyContact?: string | null;
   vehicleNumber?: string | null;
   vehicles?: OnboardVehicleInput[];
@@ -50,6 +67,8 @@ export type OnboardResidentResult = {
   created: boolean;
   /** True when an existing resident/user record was updated. */
   updated: boolean;
+  /** `residents.id` of the membership this call created or touched. */
+  residentId: string;
 };
 
 export async function onboardResidentIntoTenant(
@@ -314,14 +333,6 @@ export async function onboardResidentIntoTenant(
     updated = true;
   }
 
-  const [res] = await db
-    .select()
-    .from(residents)
-    .where(
-      and(eq(residents.userId, userId), eq(residents.tenantId, input.tenantId)),
-    )
-    .limit(1);
-
   const isOwner = input.editOwner
     ? true
     : resolveIsOwnerForFlat({
@@ -329,33 +340,98 @@ export async function onboardResidentIntoTenant(
         existingOwnerUserId: currentOwner?.userId ?? null,
         userId,
       });
-  if (!res) {
-    await db.insert(residents).values({
-      id: crypto.randomUUID(),
-      tenantId: input.tenantId,
-      userId,
-      flatId: input.flatId,
-      isOwner,
-      createdBy: input.actorUserId,
-      updatedBy: input.actorUserId,
-    });
-    created = true;
-  } else {
-    const flatChanged = res.flatId !== input.flatId;
-    const ownerChanged = res.isOwner !== isOwner;
-    const wasDeleted = res.isDeleted;
-    if (flatChanged || ownerChanged || wasDeleted) {
+  const residentType: ResidentType =
+    input.residentType ?? (isOwner ? "owner" : "family");
+  const status: ResidentStatus = input.status ?? "active";
+  const now = toMysqlDateTime(input.moveInDate ?? undefined);
+
+  const [live] = await db
+    .select()
+    .from(residents)
+    .where(
+      and(
+        eq(residents.userId, userId),
+        eq(residents.tenantId, input.tenantId),
+        eq(residents.isDeleted, false),
+        isNotNull(residents.activeKey),
+      ),
+    )
+    .limit(1);
+
+  let residentId: string;
+  if (live && live.flatId === input.flatId) {
+    residentId = live.id;
+    const typeChanged =
+      live.residentType !== residentType || live.isOwner !== isOwner;
+    const primaryChanged =
+      input.isPrimary !== undefined && live.isPrimary !== input.isPrimary;
+    const remarksChanged =
+      input.remarks !== undefined && live.remarks !== input.remarks;
+    if (typeChanged || primaryChanged || remarksChanged) {
       await db
         .update(residents)
         .set({
-          flatId: input.flatId,
+          residentType,
           isOwner,
-          isDeleted: false,
+          ...(input.isPrimary !== undefined ? { isPrimary: input.isPrimary } : {}),
+          ...(input.remarks !== undefined ? { remarks: input.remarks } : {}),
           updatedBy: input.actorUserId,
         })
-        .where(eq(residents.id, res.id));
+        .where(eq(residents.id, live.id));
       updated = true;
     }
+  } else {
+    if (live) {
+      await db
+        .update(residents)
+        .set({
+          status: "moved_out",
+          activeKey: null,
+          moveOutDate: now,
+          moveOutReason: "Moved to another flat",
+          updatedBy: input.actorUserId,
+        })
+        .where(eq(residents.id, live.id));
+      await recordAudit({
+        tenantId: input.tenantId,
+        actorUserId: input.actorUserId,
+        action: ActivityType.RESIDENT_MOVED_OUT,
+        entityType: AuditEntity.RESIDENT,
+        entityId: live.id,
+        message: "Moved out — reassigned to another flat",
+        meta: { fromFlatId: live.flatId, toFlatId: input.flatId },
+      });
+    }
+
+    residentId = crypto.randomUUID();
+    await db.insert(residents).values({
+      id: residentId,
+      tenantId: input.tenantId,
+      userId,
+      flatId: input.flatId,
+      residentType,
+      isOwner,
+      isPrimary: input.isPrimary ?? true,
+      status,
+      verificationStatus: status === "active" ? "approved" : "pending",
+      verifiedAt: status === "active" ? now : null,
+      verifiedBy: status === "active" ? input.actorUserId : null,
+      moveInDate: now,
+      remarks: input.remarks ?? null,
+      activeKey: activeKeyFor(status),
+      createdBy: input.actorUserId,
+      updatedBy: input.actorUserId,
+    });
+    await recordAudit({
+      tenantId: input.tenantId,
+      actorUserId: input.actorUserId,
+      action: ActivityType.RESIDENT_MOVED_IN,
+      entityType: AuditEntity.RESIDENT,
+      entityId: residentId,
+      message: `Moved in as ${residentType}`,
+      meta: { flatId: input.flatId, residentType, moveInDate: now },
+    });
+    created = true;
   }
 
   const vehicles = resolveOnboardVehicles(input);
@@ -393,10 +469,23 @@ export async function onboardResidentIntoTenant(
   // Prefer "created" when this pass introduced the membership; otherwise mark update.
   if (created) updated = false;
 
+  if (created) {
+    await recordAudit({
+      tenantId: input.tenantId,
+      actorUserId: input.actorUserId,
+      action: ActivityType.RESIDENT_CREATED,
+      entityType: AuditEntity.RESIDENT,
+      entityId: residentId,
+      message: `Onboarded ${input.name}`,
+      meta: { flatId: input.flatId, residentType },
+    });
+  }
+
   return {
     user: await buildUserDto(userId, input.tenantId, "resident"),
     created,
     updated,
+    residentId,
   };
 }
 

@@ -25,6 +25,19 @@ void main() {
     });
   });
 
+  group('canPickComplaintFlat', () {
+    test('resident portal never lists society flats', () {
+      expect(canPickComplaintFlat('resident', AppMode.resident), isFalse);
+      expect(canPickComplaintFlat('resident', AppMode.admin), isFalse);
+      expect(canPickComplaintFlat('chairperson', AppMode.resident), isFalse);
+    });
+
+    test('admin mode staff may pick a lot', () {
+      expect(canPickComplaintFlat('chairperson', AppMode.admin), isTrue);
+      expect(canPickComplaintFlat('superadmin', AppMode.admin), isTrue);
+    });
+  });
+
   group('isPlatformRole', () {
     test('only superadmin', () {
       expect(isPlatformRole('superadmin'), isTrue);

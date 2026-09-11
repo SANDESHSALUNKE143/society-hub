@@ -23,6 +23,7 @@ ALTER TABLE `invitations` MODIFY COLUMN `role` ENUM(
   'tenant'
 ) NOT NULL;
 --> statement-breakpoint
+-- Legacy society admin → chairperson
 UPDATE `user_roles` SET `role` = 'chairperson' WHERE `role` = 'admin';
 --> statement-breakpoint
 UPDATE `invitations` SET `role` = 'chairperson' WHERE `role` = 'admin';

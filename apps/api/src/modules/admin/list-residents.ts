@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNotNull } from "drizzle-orm";
 import type { SocietyResidentDto } from "@society-hub/types";
 import { db } from "../../db/client";
 import { flats, residents, users, wings } from "../../db/schema";
@@ -26,6 +26,7 @@ export async function listResidentsForTenant(
       and(
         eq(residents.tenantId, tenantId),
         eq(residents.isDeleted, false),
+        isNotNull(residents.activeKey),
         eq(users.isDeleted, false),
         eq(flats.isDeleted, false),
         ...(flatId ? [eq(residents.flatId, flatId)] : []),

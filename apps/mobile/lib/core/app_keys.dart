@@ -27,6 +27,9 @@ abstract final class AppKeys {
   static const complaintsEmpty = Key('complaints-empty');
   static const newComplaintLink = Key('new-complaint-link');
   static const newComplaintForm = Key('new-complaint-form');
+  static const newComplaintFlatPicker = Key('new-complaint-flat-picker');
+  static const newComplaintLinkedFlat = Key('complaint-linked-flat');
+  static const newComplaintNoFlat = Key('complaint-no-flat');
   static const complaintCreatedBanner = Key('complaint-created-banner');
   static const complaintQueueHint = Key('complaint-queue-hint');
   static const complaintClosingNote = Key('complaint-closing-note');
@@ -36,6 +39,15 @@ abstract final class AppKeys {
   static const complaintStart = Key('complaint-start');
   static const complaintResolve = Key('complaint-resolve');
   static const complaintClose = Key('complaint-close');
+  static const complaintComments = Key('complaint-comments');
+  static const complaintThreadBody = Key('complaint-thread-body');
+  static const complaintAddComment = Key('complaint-add-comment');
+  static const complaintAskQuestion = Key('complaint-ask-question');
+  static const complaintEdit = Key('complaint-edit');
+  static const complaintDelete = Key('complaint-delete');
+  static const complaintEditTitle = Key('complaint-edit-title');
+  static const complaintEditDescription = Key('complaint-edit-description');
+  static const complaintEditSave = Key('complaint-edit-save');
 
   static const accountFlatDetails = Key('account-flat-details');
   static const accountFlatEmpty = Key('account-flat-empty');
@@ -63,6 +75,13 @@ abstract final class AppKeys {
   static const onboardTabFourWheeler = Key('onboard-tab-four_wheeler');
   static const onboardTabGas = Key('onboard-tab-gas');
   static const onboardSubmit = Key('onboard-submit');
+  static const onboardNotifyEmail = Key('onboard-notify-email');
+  static const onboardNotifyWhatsapp = Key('onboard-notify-whatsapp');
+  static const residentsAdd = Key('residents-add');
+  static const residentsTabs = Key('residents-tabs');
+  static const residentsSearch = Key('residents-search');
+  static const residentsList = Key('residents-list');
+  static const residentsInvites = Key('residents-invites');
   static const accountFamilyMembers = Key('account-family-members');
   static const accountFamilyName = Key('account-family-name');
   static const accountFamilyPhone = Key('account-family-phone');

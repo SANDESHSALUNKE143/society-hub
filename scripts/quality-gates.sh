@@ -48,7 +48,9 @@ bun run test:unit
 
 echo "==> Integration coverage ≥90% (in-process API; Bun enforces per-file thresholds)"
 COV_LOG="$(mktemp)"
-if ! DEV_AUTH=true bun test --coverage apps/api/src/api.integration.test.ts >"$COV_LOG" 2>&1; then
+if ! DEV_AUTH=true bun test --coverage \
+    apps/api/src/api.integration.test.ts \
+    apps/api/src/residents.integration.test.ts >"$COV_LOG" 2>&1; then
   echo "ERROR: integration tests or coverage threshold failed" >&2
   cat "$COV_LOG" >&2
   rm -f "$COV_LOG"

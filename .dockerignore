@@ -1,0 +1,25 @@
+# This file must live at the repo root: every image in devops/docker builds with
+# `context: ../..`, and Docker only reads `.dockerignore` from the context root.
+#
+# Keep this list free of `!` negations. A negation that could match inside an
+# excluded directory forces BuildKit to walk that directory anyway — which makes
+# it stat bun's workspace symlinks under node_modules, and those are unreadable
+# to the Windows build-context sender, failing the build before it starts.
+# Nothing here is needed at build time: each Dockerfile runs its own bun install.
+.git
+.cursor
+docs
+**/node_modules
+**/dist
+**/build
+**/.turbo
+**/coverage
+**/uploads
+**/cypress/videos
+**/cypress/screenshots
+**/.env
+**/.env.local
+**/.env.development
+**/.env.production
+**/.DS_Store
+society-hub.code-workspace

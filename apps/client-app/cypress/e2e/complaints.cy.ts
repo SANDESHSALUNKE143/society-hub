@@ -40,9 +40,13 @@ describe("Resident complaints", () => {
   });
 
   it("links to raise a new complaint", () => {
+    cy.intercept("GET", "**/v1/admin/flats", { statusCode: 500 }).as("adminFlats");
     cy.visit("/complaints");
     cy.wait("@complaints");
     cy.get('[data-testid="new-complaint-link"]').click();
     cy.url().should("include", "/complaints/new");
+    cy.get('[data-testid="complaint-linked-flat"]').should("contain", "A-101");
+    cy.get('[data-testid="complaint-flat"]').should("not.exist");
+    cy.get("@adminFlats.all").should("have.length", 0);
   });
 });

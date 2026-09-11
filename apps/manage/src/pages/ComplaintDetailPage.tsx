@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ComplaintDto, ComplaintStatus } from "@society-hub/types";
+import { ApiClientError } from "@society-hub/sdk";
 import {
   CommitteeNoteCard,
+  ComplaintComments,
   ComplaintMetaRow,
   ComplaintStatusPill,
   ComplaintTimeline,
@@ -28,6 +30,8 @@ export function ComplaintDetailPage() {
   const { client, user } = useAuth();
   const [complaint, setComplaint] = useState<ComplaintDto | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [threadBody, setThreadBody] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -42,12 +46,28 @@ export function ComplaintDetailPage() {
     try {
       const updated = await client.updateComplaintStatus(id, status);
       setComplaint(updated);
+      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed");
+      setError(err instanceof ApiClientError ? err.body.message : "Failed");
     }
   }
 
-  if (error) return <p className="text-[var(--danger)]">{error}</p>;
+  async function postThread(kind: "comment" | "question") {
+    if (!id || threadBody.trim().length < 1) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await client.addComplaintComment(id, threadBody.trim(), kind);
+      setComplaint(updated);
+      setThreadBody("");
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.body.message : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (error && !complaint) return <p className="text-[var(--danger)]">{error}</p>;
   if (!complaint) return <p>Loading…</p>;
 
   const typeLabel =
@@ -82,6 +102,43 @@ export function ComplaintDetailPage() {
       />
 
       <p className="sh-complaint-copy whitespace-pre-wrap">{complaint.description}</p>
+
+      {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
+
+      <ComplaintComments comments={complaint.comments} currentUserId={user?.id} />
+
+      {complaint.status !== "closed" ? (
+        <section className="sh-complaint-block" data-testid="complaint-thread-form">
+          <h2 className="sh-complaint-block-title">Add an update</h2>
+          <textarea
+            className="input min-h-20"
+            data-testid="complaint-thread-body"
+            placeholder="Ask a question or add a comment"
+            value={threadBody}
+            onChange={(e) => setThreadBody(e.target.value)}
+          />
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn btn-primary"
+              data-testid="complaint-add-comment"
+              disabled={busy || threadBody.trim().length < 1}
+              onClick={() => void postThread("comment")}
+            >
+              Add comment
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              data-testid="complaint-ask-question"
+              disabled={busy || threadBody.trim().length < 1}
+              onClick={() => void postThread("question")}
+            >
+              Ask a question
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <ComplaintTimeline events={complaint.statusEvents} />
 

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { ComplaintStatus } from "@society-hub/types";
 import { STATUS_LABELS, statusTone } from "./complaint-labels";
 import {
-  formatComplaintRaised,
+  formatComplaintWhen,
   formatComplaintTimelineWhen,
   timelineEventIcon,
   timelineEventTitle,
@@ -113,7 +113,7 @@ export function ComplaintMetaRow({
         </span>
         <div>
           <p className="sh-complaint-fact-label">Raised</p>
-          <p className="sh-complaint-fact-value">{formatComplaintRaised(createdAt) || "—"}</p>
+          <p className="sh-complaint-fact-value">{formatComplaintWhen(createdAt) || "—"}</p>
         </div>
       </div>
       {typeLabel ? (
@@ -190,6 +190,48 @@ export function ComplaintTimeline({
             </div>
           </li>
         ))}
+      </ol>
+    </section>
+  );
+}
+
+export function ComplaintComments({
+  comments,
+  currentUserId,
+}: {
+  comments: Array<{
+    id: string;
+    userId: string;
+    authorName: string | null;
+    body: string;
+    kind?: "comment" | "question";
+    createdAt: string;
+  }>;
+  currentUserId?: string | null;
+}) {
+  if (comments.length === 0) return null;
+  return (
+    <section className="sh-complaint-block" data-testid="complaint-comments">
+      <h2 className="sh-complaint-block-title">Updates & comments</h2>
+      <ol className="space-y-3">
+        {comments.map((c) => {
+          const mine = Boolean(currentUserId && c.userId === currentUserId);
+          const question = c.kind === "question";
+          return (
+            <li key={c.id} className="rounded-xl bg-[var(--mist)]/50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-black/45">
+                {question ? "Question" : "Comment"}
+                {c.authorName ? ` · ${mine ? "You" : c.authorName}` : mine ? " · You" : ""}
+              </p>
+              <p className="mt-1 whitespace-pre-wrap text-sm">{c.body}</p>
+              {c.createdAt ? (
+                <p className="mt-1 text-xs text-black/45">
+                  {formatComplaintTimelineWhen(c.createdAt)}
+                </p>
+              ) : null}
+            </li>
+          );
+        })}
       </ol>
     </section>
   );

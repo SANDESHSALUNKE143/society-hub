@@ -144,6 +144,20 @@ export const userRoles = mysqlTable(
   ],
 );
 
+/**
+ * A person's membership of one society, occupying one flat, over one period.
+ *
+ * This table *is* the membership + occupancy record — a move-out closes the
+ * row (`status = 'moved_out'`, `move_out_date` set, `active_key = NULL`) and a
+ * move-in inserts a new one, so occupancy history is simply the row set and is
+ * never destroyed.
+ *
+ * `active_key` is the MySQL-compatible partial-unique trick: it holds `'Y'`
+ * while the membership still occupies the flat and `NULL` once it does not.
+ * MySQL allows repeated NULLs in a unique index, so historical rows are
+ * unconstrained while at most one *active* membership can exist per person per
+ * flat per society.
+ */
 export const residents = mysqlTable(
   "residents",
   {
@@ -151,12 +165,87 @@ export const residents = mysqlTable(
     tenantId: tenantId(),
     userId: char("user_id", { length: 36 }).notNull(),
     flatId: char("flat_id", { length: 36 }).notNull(),
+    /** Derived mirror of `residentType === 'owner'`; kept for existing callers. */
     isOwner: boolean("is_owner").notNull().default(false),
+    residentType: mysqlEnum("resident_type", ["owner", "tenant", "family"])
+      .notNull()
+      .default("owner"),
+    /** Primary owner / primary tenant of the flat (co-owners are `false`). */
+    isPrimary: boolean("is_primary").notNull().default(true),
+    status: mysqlEnum("status", [
+      "invited",
+      "pending_verification",
+      "active",
+      "suspended",
+      "moved_out",
+      "rejected",
+    ])
+      .notNull()
+      .default("active"),
+    verificationStatus: mysqlEnum("verification_status", [
+      "pending",
+      "under_review",
+      "approved",
+      "rejected",
+    ])
+      .notNull()
+      .default("pending"),
+    verifiedBy: char("verified_by", { length: 36 }),
+    verifiedAt: datetime("verified_at", { mode: "string", fsp: 3 }),
+    rejectionReason: varchar("rejection_reason", { length: 500 }),
+    moveInDate: datetime("move_in_date", { mode: "string", fsp: 3 }),
+    moveOutDate: datetime("move_out_date", { mode: "string", fsp: 3 }),
+    moveOutReason: varchar("move_out_reason", { length: 200 }),
+    remarks: varchar("remarks", { length: 500 }),
+    /** `'Y'` while occupying, NULL otherwise — see the note above. */
+    activeKey: char("active_key", { length: 1 }).default("Y"),
     ...timestamps,
   },
   (t) => [
     index("residents_tenant_idx").on(t.tenantId),
-    uniqueIndex("residents_tenant_user_uidx").on(t.tenantId, t.userId),
+    index("residents_tenant_flat_active_idx").on(t.tenantId, t.flatId, t.activeKey),
+    index("residents_tenant_status_idx").on(t.tenantId, t.status),
+    index("residents_tenant_verification_idx").on(t.tenantId, t.verificationStatus),
+    index("residents_tenant_user_idx").on(t.tenantId, t.userId),
+    uniqueIndex("residents_tenant_user_flat_active_uidx").on(
+      t.tenantId,
+      t.userId,
+      t.flatId,
+      t.activeKey,
+    ),
+  ],
+);
+
+/**
+ * Household members of a membership. A family member may have no SocietyHub
+ * login at all, so this cannot be modelled by `residents` (whose `user_id` is
+ * NOT NULL). `linked_user_id` connects the ones who do have an account.
+ */
+export const residentFamilyMembers = mysqlTable(
+  "resident_family_members",
+  {
+    id: id(),
+    tenantId: tenantId(),
+    residentId: char("resident_id", { length: 36 }).notNull(),
+    name: varchar("name", { length: 120 }).notNull(),
+    relationship: mysqlEnum("relationship", [
+      "spouse",
+      "child",
+      "parent",
+      "sibling",
+      "other",
+    ])
+      .notNull()
+      .default("other"),
+    phone: varchar("phone", { length: 20 }),
+    email: varchar("email", { length: 200 }),
+    /** Set when this household member also has a SocietyHub account. */
+    linkedUserId: char("linked_user_id", { length: 36 }),
+    ...timestamps,
+  },
+  (t) => [
+    index("resident_family_tenant_idx").on(t.tenantId),
+    index("resident_family_resident_idx").on(t.tenantId, t.residentId),
   ],
 );
 
@@ -247,6 +336,7 @@ export const complaintComments = mysqlTable(
     complaintId: char("complaint_id", { length: 36 }).notNull(),
     userId: char("user_id", { length: 36 }).notNull(),
     body: text("body").notNull(),
+    kind: mysqlEnum("kind", ["comment", "question"]).notNull().default("comment"),
     ...timestamps,
   },
   (t) => [index("complaint_comments_complaint_idx").on(t.complaintId)],
@@ -302,15 +392,34 @@ export const invitations = mysqlTable(
       "tenant",
     ]).notNull(),
     token: varchar("token", { length: 128 }).notNull(),
-    status: mysqlEnum("status", ["pending", "accepted", "revoked"])
+    status: mysqlEnum("status", ["pending", "accepted", "revoked", "expired"])
       .notNull()
       .default("pending"),
     invitedBy: char("invited_by", { length: 36 }).notNull(),
+    /** Display name to pre-fill on acceptance. */
+    name: varchar("name", { length: 120 }),
+    /** Flat the invitee will be onboarded into (optional for staff invites). */
+    flatId: char("flat_id", { length: 36 }),
+    residentType: mysqlEnum("resident_type", ["owner", "tenant", "family"]),
+    expiresAt: datetime("expires_at", { mode: "string", fsp: 3 }),
+    acceptedAt: datetime("accepted_at", { mode: "string", fsp: 3 }),
+    acceptedByUserId: char("accepted_by_user_id", { length: 36 }),
+    revokedAt: datetime("revoked_at", { mode: "string", fsp: 3 }),
+    lastSentAt: datetime("last_sent_at", { mode: "string", fsp: 3 }),
+    resendCount: int("resend_count").notNull().default(0),
+    /**
+     * `lower(email|phone|role)` while the invitation is pending, NULL otherwise.
+     * The unique index below therefore blocks a second *active* invitation for
+     * the same recipient while leaving revoked/accepted history unconstrained.
+     */
+    activeKey: varchar("active_key", { length: 240 }),
     ...timestamps,
   },
   (t) => [
     index("invitations_tenant_idx").on(t.tenantId),
+    index("invitations_tenant_status_idx").on(t.tenantId, t.status),
     uniqueIndex("invitations_token_uidx").on(t.token),
+    uniqueIndex("invitations_tenant_active_uidx").on(t.tenantId, t.activeKey),
   ],
 );
 
@@ -320,8 +429,18 @@ export const residentProfiles = mysqlTable(
     id: id(),
     tenantId: tenantId(),
     userId: char("user_id", { length: 36 }).notNull(),
+    /** @deprecated Free-text legacy field; prefer the structured columns below. */
     emergencyContact: varchar("emergency_contact", { length: 40 }),
+    emergencyContactName: varchar("emergency_contact_name", { length: 120 }),
+    emergencyContactRelation: varchar("emergency_contact_relation", { length: 40 }),
+    emergencyContactPhone: varchar("emergency_contact_phone", { length: 20 }),
     vehicleNumber: varchar("vehicle_number", { length: 32 }),
+    /**
+     * Channel opt-ins as JSON, e.g. `{"inApp":true,"push":true,"email":false}`.
+     * Only in-app delivery is implemented; the shape stays open so push/email/
+     * WhatsApp/SMS can be added without another migration.
+     */
+    communicationPrefsJson: text("communication_prefs_json"),
     ...timestamps,
   },
   (t) => [
@@ -352,13 +471,43 @@ export const verificationDocuments = mysqlTable(
   {
     id: id(),
     tenantId: tenantId(),
+    /** FK to `residents.id` — the membership the document belongs to. */
     residentId: char("resident_id", { length: 36 }).notNull(),
+    docType: mysqlEnum("doc_type", [
+      "identity",
+      "address_proof",
+      "tenant_agreement",
+      "police_verification",
+      "other",
+    ])
+      .notNull()
+      .default("other"),
+    /** Masked/partial reference only — never a full sensitive number. */
+    documentNumber: varchar("document_number", { length: 64 }),
     fileName: varchar("file_name", { length: 255 }).notNull(),
     blobPath: varchar("blob_path", { length: 500 }).notNull(),
     contentType: varchar("content_type", { length: 120 }).notNull(),
+    byteSize: int("byte_size"),
+    status: mysqlEnum("status", [
+      "pending",
+      "under_review",
+      "approved",
+      "rejected",
+    ])
+      .notNull()
+      .default("pending"),
+    uploadedByUserId: char("uploaded_by_user_id", { length: 36 }),
+    verifiedBy: char("verified_by", { length: 36 }),
+    verifiedAt: datetime("verified_at", { mode: "string", fsp: 3 }),
+    rejectionReason: varchar("rejection_reason", { length: 500 }),
+    expiresAt: datetime("expires_at", { mode: "string", fsp: 3 }),
     ...timestamps,
   },
-  (t) => [index("verification_documents_resident_idx").on(t.residentId)],
+  (t) => [
+    index("verification_documents_resident_idx").on(t.residentId),
+    index("verification_documents_tenant_resident_idx").on(t.tenantId, t.residentId),
+    index("verification_documents_tenant_status_idx").on(t.tenantId, t.status),
+  ],
 );
 
 export const bills = mysqlTable(
@@ -443,6 +592,21 @@ export const notices = mysqlTable(
     ...timestamps,
   },
   (t) => [index("notices_tenant_idx").on(t.tenantId)],
+);
+
+export const noticeAttachments = mysqlTable(
+  "notice_attachments",
+  {
+    id: id(),
+    tenantId: tenantId(),
+    noticeId: char("notice_id", { length: 36 }).notNull(),
+    contentKind: mysqlEnum("content_kind", ["image", "video"]).notNull(),
+    contentType: varchar("content_type", { length: 120 }).notNull(),
+    blobPath: varchar("blob_path", { length: 500 }).notNull(),
+    byteSize: int("byte_size").notNull(),
+    ...timestamps,
+  },
+  (t) => [index("notice_attachments_notice_idx").on(t.noticeId)],
 );
 
 export const noticeReads = mysqlTable(

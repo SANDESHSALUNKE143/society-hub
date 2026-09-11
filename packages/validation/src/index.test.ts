@@ -1,15 +1,30 @@
 import { describe, expect, test } from "bun:test";
 import {
+  acceptInvitationSchema,
+  addTeamMemberSchema,
+  changeTeamRoleSchema,
+  createFamilyMemberSchema,
+  flatListQuerySchema,
+  invitationListQuerySchema,
+  moveOutResidentSchema,
+  rejectDocumentSchema,
+  rejectResidentSchema,
+  residentListQuerySchema,
+  suspendResidentSchema,
+  updateFamilyMemberSchema,
+  uploadDocumentMetaSchema,
   changePasswordSchema,
   createAssetSchema,
   createBookingSchema,
   createBuildingSchema,
   createComplaintCommentSchema,
   createComplaintSchema,
+  updateComplaintSchema,
   createEventSchema,
   createFlatSchema,
   createSocietyFlatSchema,
   importSocietyFlatsSchema,
+  createSocietyBuildingSchema,
   createSocietyParkingSchema,
   createInvitationSchema,
   createNoticeSchema,
@@ -210,6 +225,21 @@ describe("validation schemas", () => {
         ],
       }),
     ).toThrow();
+    expect(
+      onboardResidentSchema.parse({
+        name: "Ravi",
+        phone: "7777777777",
+        flatId,
+        channels: ["email", "whatsapp"],
+      }).channels,
+    ).toEqual(["email", "whatsapp"]);
+    expect(
+      onboardResidentSchema.parse({
+        name: "Ravi",
+        phone: "7777777777",
+        flatId,
+      }).channels,
+    ).toBeUndefined();
   });
 
   test("createComplaintSchema and status update", () => {
@@ -237,6 +267,10 @@ describe("validation schemas", () => {
     expect(() =>
       updateComplaintStatusSchema.parse({ status: "closed" }),
     ).toThrow();
+    expect(updateComplaintSchema.parse({ title: "Updated leak" }).title).toBe(
+      "Updated leak",
+    );
+    expect(() => updateComplaintSchema.parse({})).toThrow();
   });
 
   test("listQuerySchema coerces page/limit", () => {
@@ -253,9 +287,13 @@ describe("validation schemas", () => {
     const tenantId = "11111111-1111-1111-1111-111111111111";
     expect(selectTenantSchema.parse({ tenantId }).tenantId).toBe(tenantId);
     expect(() => selectTenantSchema.parse({ tenantId: "bad" })).toThrow();
-    expect(createComplaintCommentSchema.parse({ body: "Update please" }).body).toBe(
-      "Update please",
-    );
+    expect(createComplaintCommentSchema.parse({ body: "Update please" })).toEqual({
+      body: "Update please",
+      kind: "comment",
+    });
+    expect(
+      createComplaintCommentSchema.parse({ body: "Need a photo?", kind: "question" }).kind,
+    ).toBe("question");
     expect(() => createComplaintCommentSchema.parse({ body: "" })).toThrow();
   });
 
@@ -271,9 +309,13 @@ describe("validation schemas", () => {
     ).toEqual({ wing: "A", floor: 3, flatNumber: "101" });
     expect(
       importSocietyFlatsSchema.parse({
+        buildingName: "Tower A",
         rows: [{ wing: "B", floor: 1, flatNumber: "201" }],
-      }).rows,
-    ).toHaveLength(1);
+      }).buildingName,
+    ).toBe("Tower A");
+    expect(
+      createSocietyBuildingSchema.parse({ name: " Tower B " }).name,
+    ).toBe("Tower B");
     expect(() =>
       createSocietyFlatSchema.parse({ wing: "", floor: 1, flatNumber: "101" }),
     ).toThrow();
@@ -386,11 +428,17 @@ describe("validation schemas", () => {
 
   test("billing and payment schemas", () => {
     expect(
-      generateBillsSchema.parse({ periodYm: "2026-07", amountPaise: 500000 })
-        .periodYm,
+      generateBillsSchema.parse({
+        periodYm: "2026-07",
+        amountPaise: 500000,
+        reason: "Monthly maintenance",
+      }).periodYm,
     ).toBe("2026-07");
     expect(() =>
       generateBillsSchema.parse({ periodYm: "bad", amountPaise: 100 }),
+    ).toThrow();
+    expect(() =>
+      generateBillsSchema.parse({ periodYm: "2026-07", amountPaise: 500000 }),
     ).toThrow();
     expect(voidBillSchema.parse({ reason: "duplicate" }).reason).toBe(
       "duplicate",
@@ -447,5 +495,159 @@ describe("validation schemas", () => {
     expect(createEventSchema.parse({ title: "Ganesh Utsav" }).title).toBe(
       "Ganesh Utsav",
     );
+  });
+  test("resident directory query defaults to page 1 of 20, sorted by name", () => {
+    const parsed = residentListQuerySchema.parse({});
+    expect(parsed.page).toBe(1);
+    expect(parsed.limit).toBe(20);
+    expect(parsed.sort).toBe("name");
+    expect(parsed.order).toBe("asc");
+
+    const coerced = residentListQuerySchema.parse({
+      page: "3",
+      limit: "50",
+      search: "rohan",
+      residentType: "tenant",
+      status: "moved_out",
+      verificationStatus: "under_review",
+      sort: "flat",
+      order: "desc",
+    });
+    expect(coerced.page).toBe(3);
+    expect(coerced.limit).toBe(50);
+    expect(coerced.residentType).toBe("tenant");
+    expect(coerced.status).toBe("moved_out");
+
+    expect(() => residentListQuerySchema.parse({ limit: 500 })).toThrow();
+    expect(() => residentListQuerySchema.parse({ status: "nope" })).toThrow();
+  });
+
+  test("flat directory query accepts only real occupancy values", () => {
+    expect(flatListQuerySchema.parse({}).limit).toBe(20);
+    expect(flatListQuerySchema.parse({ occupancy: "vacant" }).occupancy).toBe("vacant");
+    expect(() => flatListQuerySchema.parse({ occupancy: "empty" })).toThrow();
+  });
+
+  test("onboarding accepts a resident type and defaults to owner", () => {
+    const base = {
+      name: "Rohan Vichare",
+      phone: "9800000000",
+      email: "rohan@example.com",
+      flatId: "11111111-1111-1111-1111-111111111111",
+    };
+    expect(onboardResidentSchema.parse(base).residentType).toBe("owner");
+    expect(onboardResidentSchema.parse(base).isPrimary).toBe(true);
+    expect(
+      onboardResidentSchema.parse({ ...base, residentType: "tenant" }).residentType,
+    ).toBe("tenant");
+    expect(() =>
+      onboardResidentSchema.parse({ ...base, residentType: "landlord" }),
+    ).toThrow();
+  });
+
+  test("rejection needs a usable reason", () => {
+    expect(rejectResidentSchema.parse({ reason: "Blurry scan" }).reason).toBe(
+      "Blurry scan",
+    );
+    expect(() => rejectResidentSchema.parse({})).toThrow();
+    expect(() => rejectResidentSchema.parse({ reason: "no" })).toThrow();
+    expect(() => rejectDocumentSchema.parse({ reason: "" })).toThrow();
+    // Suspension and move-out reasons are optional.
+    expect(suspendResidentSchema.parse({}).reason).toBeUndefined();
+    expect(moveOutResidentSchema.parse({}).moveOutDate).toBeUndefined();
+  });
+
+  test("family and document schemas", () => {
+    expect(
+      createFamilyMemberSchema.parse({ name: "Sayali" }).relationship,
+    ).toBe("other");
+    expect(
+      createFamilyMemberSchema.parse({ name: "Aarav", relationship: "child" })
+        .relationship,
+    ).toBe("child");
+    expect(() =>
+      createFamilyMemberSchema.parse({ name: "X", relationship: "cousin" }),
+    ).toThrow();
+    expect(updateFamilyMemberSchema.parse({}).name).toBeUndefined();
+    expect(uploadDocumentMetaSchema.parse({}).docType).toBe("other");
+    expect(
+      uploadDocumentMetaSchema.parse({ docType: "tenant_agreement" }).docType,
+    ).toBe("tenant_agreement");
+  });
+
+  test("invitations carry a flat, a resident type and an expiry window", () => {
+    const parsed = createInvitationSchema.parse({ email: "a@b.com" });
+    expect(parsed.role).toBe("resident");
+    expect(parsed.expiresInDays).toBe(14);
+    expect(
+      createInvitationSchema.parse({ phone: "9800000000", expiresInDays: "30" })
+        .expiresInDays,
+    ).toBe(30);
+    expect(() =>
+      createInvitationSchema.parse({ email: "a@b.com", expiresInDays: 500 }),
+    ).toThrow();
+    expect(acceptInvitationSchema.parse({ token: "abcdefgh" }).token).toBe("abcdefgh");
+    expect(() => acceptInvitationSchema.parse({ token: "short" })).toThrow();
+    expect(invitationListQuerySchema.parse({}).page).toBe(1);
+  });
+
+  test("team member needs some way to identify the person", () => {
+    expect(
+      addTeamMemberSchema.parse({ email: "ops@x.test", role: "secretary" }).role,
+    ).toBe("secretary");
+    expect(
+      addTeamMemberSchema.parse({ phone: "9800000000", role: "committee" }).role,
+    ).toBe("committee");
+    expect(
+      addTeamMemberSchema.parse({
+        userId: "11111111-1111-1111-1111-111111111111",
+        role: "treasurer",
+      }).role,
+    ).toBe("treasurer");
+
+    // Neither userId, email nor phone — the superRefine must reject it.
+    const result = addTeamMemberSchema.safeParse({ role: "committee" });
+    expect(result.success).toBe(false);
+    expect(result.error!.issues[0]!.message).toBe(
+      "Provide a userId, an email or a phone",
+    );
+
+    expect(
+      changeTeamRoleSchema.parse({ fromRole: "secretary", toRole: "treasurer" })
+        .toRole,
+    ).toBe("treasurer");
+    expect(() =>
+      changeTeamRoleSchema.parse({ fromRole: "resident", toRole: "treasurer" }),
+    ).toThrow();
+  });
+
+  test("self-service profile edits cannot touch membership fields", () => {
+    const parsed = updateResidentProfileSchema.parse({
+      name: "Rohan",
+      emergencyContactName: "Aai",
+      communicationPreferences: { whatsapp: true },
+    });
+    expect(parsed.name).toBe("Rohan");
+    expect(parsed.communicationPreferences?.whatsapp).toBe(true);
+    // Flat, status and verification are simply not part of the schema.
+    expect("flatId" in parsed).toBe(false);
+    expect("verificationStatus" in parsed).toBe(false);
+  });
+
+  test("CSV import defaults to an all-or-nothing apply", () => {
+    const parsed = residentImportSchema.parse({
+      rows: [{ name: "A", phone: "9800000000", flatNumber: "101" }],
+    });
+    expect(parsed.allowPartial).toBe(false);
+    expect(parsed.updateFlats).toBe(true);
+    expect(parsed.rows[0]!.isOwner).toBe(true);
+    expect(
+      residentImportSchema.parse({
+        rows: [
+          { name: "A", phone: "9800000000", flatNumber: "101", residentType: "tenant" },
+        ],
+        allowPartial: true,
+      }).rows[0]!.residentType,
+    ).toBe("tenant");
   });
 });

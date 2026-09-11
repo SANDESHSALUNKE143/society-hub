@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import type { ComplaintType, FlatDto } from "@society-hub/types";
 import { ApiClientError } from "@society-hub/sdk";
 import { useAuth } from "../auth";
+import { canPickComplaintFlat, useAppMode } from "../app-mode";
 import { Icon } from "../components/icons";
 import { ComplaintPhotoDropzone, TYPE_LABELS, WingFlatSelect } from "@society-hub/ui";
 
@@ -27,6 +28,7 @@ type SpeechRecognitionLike = {
 
 export function NewComplaintPage() {
   const { client, user } = useAuth();
+  const { mode } = useAppMode();
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
   const [type, setType] = useState<ComplaintType>("plumbing");
@@ -38,7 +40,8 @@ export function NewComplaintPage() {
   const [busy, setBusy] = useState(false);
   const [flats, setFlats] = useState<FlatDto[]>([]);
   const [flatId, setFlatId] = useState(user?.flatId ?? "");
-  const needsFlatPicker = !user?.flatId;
+  const staffPicker = canPickComplaintFlat(user?.role, mode);
+  const linkedFlatMissing = !staffPicker && !user?.flatId;
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const previews = useMemo(
@@ -59,7 +62,7 @@ export function NewComplaintPage() {
   }, [previews]);
 
   useEffect(() => {
-    if (!needsFlatPicker) return;
+    if (!staffPicker) return;
     let cancelled = false;
     (async () => {
       try {
@@ -76,7 +79,7 @@ export function NewComplaintPage() {
     return () => {
       cancelled = true;
     };
-  }, [client, needsFlatPicker]);
+  }, [client, staffPicker]);
 
   function toggleMic() {
     const SR =
@@ -115,7 +118,12 @@ export function NewComplaintPage() {
     setBusy(true);
     setError(null);
     try {
-      if (needsFlatPicker && !flatId) {
+      if (linkedFlatMissing) {
+        setError("Your account is not linked to a flat. Ask your society office to onboard you.");
+        setBusy(false);
+        return;
+      }
+      if (staffPicker && !flatId) {
         setError("Select a flat to raise this complaint");
         setBusy(false);
         return;
@@ -125,7 +133,7 @@ export function NewComplaintPage() {
         type,
         typeOtherText: type === "other" ? typeOtherText : null,
         description,
-        flatId: needsFlatPicker ? flatId : undefined,
+        flatId: staffPicker ? flatId : undefined,
       });
       for (const file of files) {
         await client.uploadAttachment(created.id, file);
@@ -151,14 +159,20 @@ export function NewComplaintPage() {
           Add photos if you can — you get a ticket number right away.
         </p>
       </div>
-      {user?.flatNumber && (
-        <p className="sh-complaint-queue-banner">
+      {!staffPicker && user?.flatNumber && (
+        <p className="sh-complaint-queue-banner" data-testid="complaint-linked-flat">
           Filing for flat <strong>{user.flatNumber}</strong>
+        </p>
+      )}
+      {linkedFlatMissing && (
+        <p className="sh-complaint-queue-banner" data-testid="complaint-no-flat">
+          Your account is not linked to a flat. Ask your society office to onboard you
+          before raising a complaint.
         </p>
       )}
 
       <form className="sh-complaint-form" onSubmit={onSubmit} data-testid="new-complaint-form">
-        {needsFlatPicker && (
+        {staffPicker && (
           <div className="grid gap-3 sm:grid-cols-2">
             <WingFlatSelect
               flats={flats}
@@ -281,7 +295,7 @@ export function NewComplaintPage() {
         {error && <p className="mt-3 text-sm text-[var(--danger)]">{error}</p>}
         <button
           className="btn btn-primary sh-complaint-submit"
-          disabled={busy}
+          disabled={busy || linkedFlatMissing || (staffPicker && !flatId)}
           type="submit"
           data-testid="complaint-submit"
         >

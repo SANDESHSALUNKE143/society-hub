@@ -56,10 +56,19 @@ String complaintFlatLabel(String? flatNumber) {
   return number.isEmpty ? '' : 'Flat $number';
 }
 
+DateTime? parseApiDateTime(String iso) {
+  final raw = iso.trim();
+  if (raw.isEmpty) return null;
+  final hasZone =
+      raw.endsWith('Z') || raw.endsWith('z') || RegExp(r'[+-]\d{2}:\d{2}$').hasMatch(raw);
+  final normalized = raw.contains('T') ? raw : raw.replaceFirst(' ', 'T');
+  final parsed = DateTime.tryParse(hasZone ? normalized : '${normalized}Z');
+  return parsed?.toLocal();
+}
+
 String formatComplaintWhen(String iso) {
-  final date = DateTime.tryParse(iso);
-  if (date == null) return '';
-  final local = date.toLocal();
+  final local = parseApiDateTime(iso);
+  if (local == null) return '';
   final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
   final ampm = local.hour >= 12 ? 'PM' : 'AM';
   final minute = local.minute.toString().padLeft(2, '0');
@@ -67,9 +76,8 @@ String formatComplaintWhen(String iso) {
 }
 
 String formatComplaintRaised(String iso) {
-  final date = DateTime.tryParse(iso);
-  if (date == null) return '';
-  final local = date.toLocal();
+  final local = parseApiDateTime(iso);
+  if (local == null) return '';
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final day = DateTime(local.year, local.month, local.day);
@@ -79,9 +87,8 @@ String formatComplaintRaised(String iso) {
 }
 
 String formatComplaintTimelineWhen(String iso) {
-  final date = DateTime.tryParse(iso);
-  if (date == null) return '';
-  final local = date.toLocal();
+  final local = parseApiDateTime(iso);
+  if (local == null) return '';
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final day = DateTime(local.year, local.month, local.day);

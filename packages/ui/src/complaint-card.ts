@@ -2,7 +2,11 @@ import type { ComplaintType } from "@society-hub/types";
 
 function parsedDate(iso: string | null | undefined): Date | null {
   if (!iso) return null;
-  const date = new Date(iso);
+  const raw = iso.trim();
+  if (!raw) return null;
+  const hasZone = /[zZ]$/.test(raw) || /[+-]\d{2}:\d{2}$/.test(raw);
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const date = new Date(hasZone ? normalized : `${normalized}Z`);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 

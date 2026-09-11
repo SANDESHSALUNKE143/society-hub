@@ -24,6 +24,8 @@ export function isPlatformRole(role: Role | null | undefined) {
   return !!role && (PLATFORM_ROLES as string[]).includes(role);
 }
 
+export type AppMode = "admin" | "resident";
+
 export function canUseAdminMode(role: Role | null | undefined) {
   return (
     !!role &&
@@ -32,7 +34,13 @@ export function canUseAdminMode(role: Role | null | undefined) {
   );
 }
 
-export type AppMode = "admin" | "resident";
+/** Society-wide flat picker is Admin mode only (FR-CMP-1). */
+export function canPickComplaintFlat(
+  role: Role | null | undefined,
+  mode: AppMode,
+) {
+  return canUseAdminMode(role) && mode === "admin";
+}
 
 const MODE_KEY = "sh_app_mode";
 

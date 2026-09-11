@@ -33,7 +33,7 @@ describe("Manage sidebar navigation", () => {
     cy.get('[data-testid="roadmap-users"]').should("be.visible");
   });
 
-    it("lists societies and opens a society detail with the team and planned controls", () => {
+    it("lists societies and opens a society detail with structure, team and planned controls", () => {
     cy.intercept("GET", "**/v1/manage/societies/*/team", {
       statusCode: 200,
       body: [
@@ -46,10 +46,29 @@ describe("Manage sidebar navigation", () => {
         },
       ],
     }).as("societyTeam");
+    cy.intercept("GET", "**/v1/manage/societies/*/buildings", {
+      statusCode: 200,
+      body: [],
+    }).as("societyBuildings");
     cy.intercept("GET", "**/v1/manage/societies/*/flats", {
       statusCode: 200,
       body: [],
     }).as("societyFlats");
+    cy.intercept("GET", "**/v1/societies/*", {
+      statusCode: 200,
+      body: {
+        id: "22222222-2222-2222-2222-222222222222",
+        name: "Keshav Heights",
+        address: null,
+        city: "Pune",
+        pincode: "411001",
+        chairpersonName: "Rekha Iyer",
+        chairpersonEmail: "rekha@example.com",
+        chairpersonPhone: "9000000000",
+        timezone: "Asia/Kolkata",
+        createdAt: new Date().toISOString(),
+      },
+    }).as("societyDetail");
 
     cy.visit("/societies");
     cy.wait("@societies");
@@ -57,9 +76,20 @@ describe("Manage sidebar navigation", () => {
     cy.contains("Keshav Heights").click();
 
     cy.url().should("include", "/societies/22222222-2222-2222-2222-222222222222");
-    cy.wait("@societyTeam");
+    cy.wait("@societyDetail");
+    cy.wait("@societyBuildings");
     cy.get('[data-testid="society-tabs"]').should("be.visible");
-    cy.get('[data-testid="society-tab-team"]').should("have.attr", "aria-selected", "true");
+    cy.get('[data-testid="society-tab-structure"]').should(
+      "have.attr",
+      "aria-selected",
+      "true",
+    );
+    cy.get('[data-testid="society-structure"]').should("be.visible");
+    cy.contains("Structure setup").should("be.visible");
+    cy.get('[data-testid="structure-tower-name"]').should("be.visible");
+
+    cy.get('[data-testid="society-tab-team"]').click();
+    cy.wait("@societyTeam");
     cy.contains("h2", "Society team").should("be.visible");
     cy.get('[data-testid="team-table"]').should("be.visible");
     cy.get('[data-testid="team-table"]').contains("Rekha Iyer");
@@ -98,6 +128,10 @@ describe("Manage sidebar navigation", () => {
 
   it("adds a flat from the society detail form", () => {
     cy.intercept("GET", "**/v1/manage/societies/*/team", { statusCode: 200, body: [] });
+    cy.intercept("GET", "**/v1/manage/societies/*/buildings", {
+      statusCode: 200,
+      body: [],
+    }).as("societyBuildings");
     cy.intercept("GET", "**/v1/manage/societies/*/flats", {
       statusCode: 200,
       body: [],
@@ -108,15 +142,17 @@ describe("Manage sidebar navigation", () => {
         id: "flat-new",
         number: "101",
         wingName: "A",
+        buildingName: "Tower A",
         floor: 3,
       },
     }).as("addFlat");
 
-    cy.visit("/societies/22222222-2222-2222-2222-222222222222");
-    cy.get('[data-testid="society-tab-flats"]').click();
+    cy.visit("/societies/22222222-2222-2222-2222-222222222222?tab=flats");
     cy.wait("@societyFlats");
     cy.get('[data-testid="add-flat-open"]').click();
     cy.get('[data-testid="add-flat-dialog"]').should("be.visible");
+    cy.get('[data-testid="add-flat-tower"]').should("have.value", "__new__");
+    cy.get('[data-testid="add-flat-tower-name"]').type("Tower A");
     cy.get('[data-testid="add-flat-wing"]').type("A");
     cy.get('[data-testid="add-flat-floor"]').type("3");
     cy.get('[data-testid="add-flat-number"]').type("101");

@@ -2,9 +2,11 @@
 # Build from repo root:
 #   docker build -f devops/docker/api.Dockerfile -t societyhub-api:local .
 
-FROM oven/bun:1.2-alpine AS deps
+FROM oven/bun:1.3-alpine AS deps
 WORKDIR /app
 COPY package.json bun.lock turbo.json tsconfig.base.json ./
+# Every workspace manifest in bun.lock must be present, or --frozen-lockfile
+# sees a changed workspace set and fails — even for workspaces this image never builds.
 COPY apps/api/package.json apps/api/
 COPY apps/client-app/package.json apps/client-app/
 COPY apps/manage/package.json apps/manage/
@@ -15,7 +17,7 @@ COPY packages/sdk/package.json packages/sdk/
 COPY packages/ui/package.json packages/ui/
 RUN bun install --frozen-lockfile
 
-FROM oven/bun:1.2-alpine AS runtime
+FROM oven/bun:1.3-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=deps /app /app

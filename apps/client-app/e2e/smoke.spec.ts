@@ -15,7 +15,7 @@ test("login and raise complaint", async ({ page }) => {
     timeout: 15_000,
   });
 
-  await page.getByRole("link", { name: "My complaints" }).click();
+  await page.getByRole("link", { name: "Complaints" }).click();
   await expect(page.getByRole("heading", { name: "Complaints" })).toBeVisible();
 
   await page.getByRole("link", { name: "Raise complaint" }).click();

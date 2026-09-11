@@ -218,7 +218,7 @@ void main() {
 
     expect(find.byKey(AppKeys.loginError), findsOneWidget);
     expect(
-      find.textContaining('Google sign-in was cancelled'),
+      find.textContaining('Google Sign-In did not complete'),
       findsOneWidget,
     );
   });

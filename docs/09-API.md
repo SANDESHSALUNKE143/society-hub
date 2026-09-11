@@ -113,7 +113,7 @@ Use Swagger for live schemas. This Markdown guide is the **narrative + inventory
 
 **Rules**
 
-1. Platform users manage societies, **list/add/remove a society team**, and **add/edit/remove flats** (wing, floor, flat number) via Manage (`/v1/manage/societies/:id/team` and `/flats`).
+1. Platform users manage societies, **list/add/remove a society team**, and define **all society structure** (towers, flats, parking) via Manage (`/v1/manage/societies/:id/team`, `/buildings`, `/flats`, `/parkings`). Client App Admin lists flats/parking for onboard only.
 2. Manage platform employees (`superadmin`) may also sign in to the **Client App** and use **Admin mode** on any society by default (same Client Admin APIs as society staff).
 3. Society staff use **Client App Admin** for bills, notices, complaints triage, listing structure, etc.
 4. Residents use **Client App Resident** for their flat’s complaints, dues, notices, profile, visitors/bookings.
@@ -161,14 +161,45 @@ Save `id` as `societyId` / `tenantId`.
 
 ### C. Onboard a resident and raise a complaint
 
-1. Staff pick a flat, then `POST /v1/admin/residents` for the **owner** (`isOwner: true`) with `name`, `phone`, `flatId`, plus optional `email` and the same onboard fields as CSV. A flat has **one owner**; later people on that flat are family even if `isOwner: true` is sent. To change the current owner’s name, mobile, or email, send `editOwner: true` (keeps that person as the only owner; a new phone must not belong to someone else). `GET /v1/admin/residents` lists people (several rows may share a flat). Match by **phone** unless `editOwner` is set. Email must be unique if set.
+1. Staff pick a flat, then `POST /v1/admin/residents` for the **owner** (`isOwner: true`) with `name`, `phone`, `flatId`, plus optional `email`, optional `channels: ["email","whatsapp"]` for a welcome notify (no invitation token), and the same onboard fields as CSV. A flat has **one owner**; later people on that flat are family even if `isOwner: true` is sent. To change the current owner’s name, mobile, or email, send `editOwner: true` (keeps that person as the only owner; a new phone must not belong to someone else). `GET /v1/admin/residents` is the paginated directory; `GET /v1/admin/society-residents` is the simple household list for Add resident. Match by **phone** unless `editOwner` is set. Email must be unique if set.
 2. Owner resident: `POST /v1/household/members` with `name`, `phone`, optional `email` to add family members on that flat. `GET /v1/household/members` lists the household for anyone linked to that flat (including society staff with a resident row).
-3. Any household member: OTP verify with their phone, then `POST /v1/complaints` (resident uses linked flat; staff must pass `flatId`)
-4. Staff: `PATCH /v1/complaints/{id}/status`, `POST /v1/complaints/{id}/comments`
+3. Any household member: OTP verify with their phone, then `POST /v1/complaints` (resident uses linked flat only; staff must pass `flatId` when they have no linked flat, or to file for another lot)
+4. Staff: `PATCH /v1/complaints/{id}/status`, `POST /v1/complaints/{id}/comments`. Raiser: `PATCH /v1/complaints/{id}`, comments, and delete while open.
 5. Optional: `POST /v1/complaints/{id}/attachments` (`multipart/form-data`, field `file`)
 
 Complaint types: `electric`, `plumbing`, `housekeeping`, `security`, `lift`, `other`  
 Statuses: `open`, `assigned`, `in_progress`, `resolved`, `closed`
+
+### C2. Invite → accept → verify (legacy / CSV tokens)
+
+Staff **Add resident** onboards immediately (OTP login). Invitation tokens remain for CSV
+“Invite new” / leftovers and public accept:
+
+1. Staff or CSV: `POST /v1/invitations` `{ "email": "…", "role": "resident", "flatId": "…", "residentType": "tenant" }`
+   → `pending`, expires in 14 days. In `DEV_AUTH` the response carries `devToken`.
+2. Invitee (unauthenticated): `GET /v1/invites/{token}` to preview, then
+   `POST /v1/invites/accept` `{ "token": "…", "name": "…", "phone": "…" }`
+3. The membership is created as **`pending_verification`** — accepting does not self-approve.
+4. Resident: `POST /v1/profile/documents` (`multipart`, `file` + `docType`) → membership moves to
+   `under_review`
+5. Staff: `GET /v1/admin/residents?verificationStatus=under_review`, then
+   `POST /v1/admin/residents/{id}/verify` (or `/reject` with a `reason`)
+6. Resident: `GET /v1/profile` shows `membership.verificationStatus: "approved"` — or the rejection
+   reason verbatim
+
+Resend / revoke: Residents **Pending invitations** tab → `POST /v1/invitations/{id}/resend|revoke`.
+
+### C3. Move a resident out (history is preserved)
+
+1. Staff: `POST /v1/admin/residents/{id}/move-out` `{ "moveOutDate": "2025-05-31", "reason": "…" }`
+2. The membership becomes `moved_out`; it disappears from `GET /v1/admin/flats/{flatId}/residents`
+   but remains in `GET /v1/admin/flats/{flatId}/history` and in
+   `GET /v1/admin/residents?status=moved_out`
+3. Re-onboarding the same person creates a **new** membership; both periods stay visible
+
+Resident types: `owner`, `tenant`, `family`  
+Membership statuses: `invited`, `pending_verification`, `active`, `suspended`, `moved_out`, `rejected`  
+Verification statuses: `pending`, `under_review`, `approved`, `rejected`
 
 ### D. Billing and payment
 
@@ -233,12 +264,14 @@ Auth required unless noted. **Staff** = society staff roles. **Platform** = `sup
 | POST | `/select-tenant` | Yes | `{ tenantId }` → new tokens |
 | PATCH | `/profile` | Yes | Alias of `PATCH /v1/profile` (SDK) |
 
-### 6.3 Profile — `/v1/profile`
+### 6.3 Profile (resident self-service) — `/v1/profile`
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/` | Yes | Profile + linked flat (PNG, family counts, household vehicle counts) + this user's vehicles |
-| PATCH | `/` | Yes | Partial upsert: emergency contact, vehicles, PNG, `adultCount` / `childCount` / `seniorCitizenCount`, allotted `parkingSlot` / `parkingSlotId`. Household fields need a linked flat (`400 no_flat` otherwise). |
+| GET | `/` | Yes | Full `ResidentProfileDto`: identity, society, flat (PNG, family counts, parking), **membership** (status, verification, rejection reason, move-in/out), family, documents, communication preferences, and this user's `vehicles` |
+| PATCH | `/` | Yes | Partial upsert. Accepts `name`, structured emergency contact, `vehicleNumber`, `communicationPreferences`, `vehicles`, PNG, `adultCount` / `childCount` / `seniorCitizenCount`, allotted `parkingSlot` / `parkingSlotId`. Household fields need a linked flat (`400 no_flat` otherwise). **Cannot** change resident type, membership status or verification — those require an Admin. |
+| POST | `/documents` | Yes | `multipart` field `file` + `docType`, `documentNumber?`, `expiresAt?`. Image or PDF, ≤10 MB. |
+| GET | `/documents/:id/file` | Yes | Streams the caller's **own** document. Another resident gets `403`; another society gets `404`. |
 
 ### 6.4 Manage (platform) — `/v1/manage/societies`
 
@@ -247,11 +280,19 @@ Auth required unless noted. **Staff** = society staff roles. **Platform** = `sup
 | GET | `/:id/team` | Platform | List society staff (`TeamMemberDto[]`). 404 if society missing |
 | POST | `/:id/team` | Platform | Add/update society staff membership |
 | DELETE | `/:id/team/:userId` | Platform | Soft-remove staff roles (cannot remove self) |
-| GET | `/:id/flats` | Platform | List flats (wing, floor, number) |
-| POST | `/:id/flats` | Platform | Add one flat `{ wing, floor, flatNumber }`. Creates a default building/wing if needed. Duplicate number in another wing → `409 flat_number_taken`. Same wing+number updates floor. Re-adding a deleted number restores that flat. |
-| PATCH | `/:id/flats/:flatId` | Platform | Update wing, floor, and number. `409 flat_number_taken` if the number belongs to another flat. |
+| GET | `/:id/buildings` | Platform | List towers with wing/flat counts |
+| POST | `/:id/buildings` | Platform | Create tower `{ name }` (reuses name case-insensitively) |
+| PATCH | `/:id/buildings/:buildingId` | Platform | Rename tower `{ name }` — `409 building_name_taken` |
+| DELETE | `/:id/buildings/:buildingId` | Platform | Soft-delete tower (and empty wings / unoccupied flats). `409 building_in_use` if occupied flats remain |
+| GET | `/:id/buildings/:buildingId/wings` | Platform | List wings in a tower |
+| POST | `/:id/buildings/:buildingId/wings` | Platform | Add wing `{ name }` under tower |
+| PATCH | `/:id/wings/:wingId` | Platform | Rename wing `{ name }` — `409 wing_name_taken` |
+| DELETE | `/:id/wings/:wingId` | Platform | Soft-delete wing (+ unoccupied flats). `409 wing_in_use` if occupied |
+| GET | `/:id/flats` | Platform | List flats (tower, wing, floor, number) |
+| POST | `/:id/flats` | Platform | Add one flat `{ buildingId? \| buildingName?, wing, floor, flatNumber }`. Prefer `buildingId` from the tower picker; `buildingName` creates/reuses a tower. Wings are created under that tower. Duplicate number in another wing → `409 flat_number_taken`. Same wing+number updates floor. Re-adding a deleted number restores that flat. |
+| PATCH | `/:id/flats/:flatId` | Platform | Update tower (optional), wing, floor, and number. `409 flat_number_taken` if the number belongs to another flat. |
 | DELETE | `/:id/flats/:flatId` | Platform | Soft-delete. `409 flat_in_use` if residents are still linked. |
-| POST | `/:id/flats/import` | Platform | Bulk `{ rows: [{ wing, floor, flatNumber }] }` (max 2000). Returns `{ created, updated, skipped, errors }` |
+| POST | `/:id/flats/import` | Platform | Bulk `{ buildingId? \| buildingName?, rows: [{ wing, floor, flatNumber }] }` (max 2000). Entire CSV lands under the selected/created tower. Returns `{ created, updated, skipped, errors }` |
 | GET | `/:id/parkings` | Platform | List parking slots (kind, wing, number, assigned flat) |
 | POST | `/:id/parkings` | Platform | Add one `{ kind, wing?, slotNumber }`. Puzzle needs wing. Parking number is the slot only (101, not A-101); a leading wing prefix is stripped. Duplicate puzzle identity (wing + number) or open number → `409 parking_number_taken`. Re-adding a deleted identity restores the row. |
 | PATCH | `/:id/parkings/:parkingId` | Platform | Update kind / wing / number. `409 parking_number_taken` if that identity belongs to another slot. |
@@ -265,7 +306,8 @@ Body (POST team): `{ email? , phone?, name?, role }` — email **or** phone requ
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
 | GET | `/v1/societies` | Platform | List societies |
-| POST | `/v1/societies` | Platform | Create society |
+| POST | `/v1/societies` | Platform | Create society (empty structure — add towers/wings/flats on Manage Structure) |
+| PATCH | `/v1/societies/:id` | Platform | Rename / update basics `{ name, address?, city?, pincode? }` |
 | GET | `/v1/societies/:id` | Staff/platform | Society DTO |
 | DELETE | `/v1/societies/:id` | Platform | Soft-delete |
 | GET | `/v1/societies/:id/buildings` | Staff | List buildings |
@@ -282,47 +324,110 @@ Body (POST team): `{ email? , phone?, name?, role }` — email **or** phone requ
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/v1/admin/flats` | Staff | Flat picker (includes household `twoWheelerCount` / `fourWheelerCount`) |
-| GET | `/v1/admin/parkings` | Staff | Parking inventory for onboard (puzzle / open) |
+| GET | `/v1/admin/flats` | Staff | Flat picker (floor, parking, PNG, household `twoWheelerCount` / `fourWheelerCount`) — read-only; inventory is Manage-only |
+| GET | `/v1/admin/parkings` | Staff | Parking inventory for onboard (puzzle / open) — read-only; inventory is Manage-only |
 | GET | `/v1/admin/structure` | Staff | Nested buildings→wings→flats |
 | GET | `/v1/admin/team` | Staff | Society team |
 | POST | `/v1/team` | Staff | Add team member `{ email?, phone?, name?, role }` — email or phone required |
 | PATCH | `/v1/team/:userId` | Staff | Update name / email / mobile / role |
 | DELETE | `/v1/team/:userId` | Staff | Soft-remove staff roles (cannot remove self) |
 | POST | `/v1/admin/invites` | Staff | Same as invitations create |
-| GET | `/v1/admin/flats` | Staff | Flats with floor, parking, PNG, household vehicle counts |
-| GET | `/v1/admin/residents` | Staff | List onboarded residents (name, phone, email, flat) |
-| POST | `/v1/admin/residents` | Staff | Onboard one resident (same fields as CSV row + `flatId`). First person on a flat is the owner; later people are family. `editOwner: true` updates the current owner. `editUserId` updates that person on the flat. |
-| DELETE | `/v1/admin/residents/:userId` | Staff | Soft-remove a family member from the society. `409 cannot_remove_owner` for the flat owner. |
+| POST | `/v1/admin/residents/import/preview` | Staff | **Dry run** — validates rows against the live structure and reports per-row `action` (`create`/`update`/`unchanged`/`skip`), errors and warnings. Writes nothing. |
+| POST | `/v1/admin/residents/import` | Staff | Applies the import. CSV rows include vehicles (`twoWheelers` / `fourWheelers` as a count or registration list), PNG, and family counts. Rejects the **whole file** when any row is invalid unless `allowPartial: true`. |
+| DELETE | `/v1/admin/residents/by-user/:userId` | Staff | Soft-remove a family member from the society. `409 cannot_remove_owner` for the flat owner. |
+| GET | `/v1/admin/society-residents` | Staff | Simple household list (`SocietyResidentDto[]`) for onboard. Paginated directory is `GET /v1/admin/residents`. |
 | GET | `/v1/household/members` | Linked flat (resident or staff) | People on the caller’s flat |
 | POST | `/v1/household/members` | Flat owner | Add a family member `{ name, phone, email? }`. They can OTP-login and raise complaints. |
 | PATCH | `/v1/household/members/:userId` | Flat owner | Update a family member’s name, mobile, or email. |
 | DELETE | `/v1/household/members/:userId` | Flat owner | Remove a family member. Cannot remove the owner. |
-| POST | `/v1/admin/residents/import` | Staff | Bulk CSV rows (`name,phone,email,flatNumber,wingName,floor,parkingSlot,isOwner,emergencyContact,vehicleNumber,twoWheelers,fourWheelers,pngGasConnection,adults,children,seniorCitizens`). `twoWheelers` / `fourWheelers` may be a **count** (`2`) or registration list (`MH12TW0001;MH12TW0002`). Plates optional. Family counts are per flat. |
-| POST | `/v1/invitations` | Staff | Invite via email and/or WhatsApp (Gupshup adapter; stub without keys) |
-| GET | `/v1/team` | Staff | Society team list |
 
-### 6.7 Invitations — `/v1/invitations`
+### 6.6a Residents — `/v1/admin/residents`
+
+All staff-only and tenant-scoped: a resident in another society returns `404`.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/` | **Server-side** directory. Query: `page`, `limit` (≤100), `search` (name/phone/email/flat), `buildingId`, `wingId`, `flatId`, `residentType`, `status`, `verificationStatus`, `sort` (`name`\|`flat`\|`createdAt`\|`status`), `order`. Returns `Paginated<ResidentSummaryDto>`. |
+| POST | `/` | Onboard/move a resident in. `{ name, phone, email?, flatId, residentType?, isPrimary?, moveInDate?, remarks?, channels? }` plus household fields (`vehicles`, parking, PNG, family counts). `channels` is optional `("email"|"whatsapp")[]` — welcome notify only when the call **creates** a person; does **not** insert an invitation. `editOwner: true` updates the current owner; `editUserId` updates that person. First person on a vacant flat is the owner. If the person already occupies a *different* flat, that period is closed first. |
+| GET | `/:id` | `ResidentDetailDto` — membership, flat, roles, emergency contact, family, documents, vehicles, other memberships |
+| PATCH | `/:id` | `{ name?, phone?, email?, residentType?, isPrimary?, moveInDate?, remarks? }` |
+| POST | `/:id/verify` | Approve verification → `active` |
+| POST | `/:id/reject` | `{ reason }` (required, ≥3 chars) → `rejected`; the reason is shown to the resident |
+| POST | `/:id/suspend` | `{ reason? }` |
+| POST | `/:id/reactivate` | Back to `active` |
+| POST | `/:id/move-out` | `{ moveOutDate?, reason?, remarks? }` — closes the period; **history is preserved** |
+| GET | `/:id/activity` | Audit trail for this membership |
+| GET/POST | `/:id/family` | List / add household members |
+| PATCH/DELETE | `/:id/family/:familyId` | Edit / soft-delete a household member |
+| GET/POST | `/:id/documents` | List / upload verification documents (`multipart` `file` + `docType`) |
+
+Illegal lifecycle moves (e.g. suspending an already-suspended resident, reviving a moved-out one)
+return **409 `invalid_transition`**.
+
+### 6.6b Documents — `/v1/admin/resident-documents`
+
+| Method | Path | Notes |
+|--------|------|-------|
+| POST | `/:id/verify` | Approve |
+| POST | `/:id/reject` | `{ reason }` — notifies the resident |
+| DELETE | `/:id` | Soft-delete |
+| GET | `/:id/file` | Streams the file. Staff only, tenant-checked, **audited**, `Cache-Control: private, no-store`. Accepts `?access_token=` for browser `<a>`/`<img>` (same pattern as `/v1/media`). |
+
+Blob paths are never returned to clients.
+
+### 6.6c Flats & occupancy — `/v1/admin/flats`, `/v1/admin/occupancy`
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/v1/admin/flats/:id` | `FlatDetailDto` — derived `occupancyStatus`, primary owner, co-owners, tenants, current occupants, vehicles, document count |
+| GET | `/v1/admin/flats/:id/residents` | Current occupants only |
+| GET | `/v1/admin/flats/:id/history` | Every occupancy period, newest first |
+| GET | `/v1/admin/occupancy/stats` | `OccupancyStatsDto` — flats total/occupied/vacant/owner/tenant, residents total/active/pending-verification/moved-out, pending invitations |
+| GET | `/v1/admin/occupancy/flats` | Paginated flat directory. Query: `page`, `limit`, `search`, `buildingId`, `wingId`, `occupancy` (`vacant`\|`owner_occupied`\|`tenant_occupied`) |
+
+Occupancy is **derived from live memberships**, never stored on the flat.
+
+### 6.6d Society team — `/v1/team`
+
+Society-scoped, distinct from the platform-only `/v1/manage/societies/:id/team`.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/` | Society staff list |
+| POST | `/members` | `{ userId? \| email? \| phone?, name?, role }` — reuses a matching account when one exists |
+| PATCH | `/members/:userId/role` | `{ fromRole, toRole }` |
+| DELETE | `/members/:userId/roles/:role` | Removes one staff role |
+
+Removing the last chairperson returns **409 `last_chairperson`**.
+
+### 6.7 Invitations — `/v1/invitations` (staff) and `/v1/invites` (public)
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/` | Staff | |
-| POST | `/` | Staff | `{ email? , phone?, role }` |
-| POST | `/:id/revoke` | Staff | Sets status `revoked` |
+| GET | `/v1/invitations` | Staff | `Paginated<InvitationDto>`. Query: `page`, `limit`, `search`, `status`, `role`. Expired pending rows are flipped lazily on read. |
+| POST | `/v1/invitations` | Staff | `{ name?, email?, phone?, role, flatId?, residentType?, expiresInDays?, channels? }`. Email **or** phone required. |
+| POST | `/v1/invitations/:id/resend` | Staff | Re-sends and extends the window; `pending`/`expired` only |
+| POST | `/v1/invitations/:id/revoke` | Staff | `revoked`; frees the slot so a replacement can be sent at once |
+| GET | `/v1/invites/:token` | **None** | Public preview: society, role, flat, expiry. The token is the credential. |
+| POST | `/v1/invites/accept` | **None** | `{ token, name?, phone?, email? }`. Single use. Creates/reuses the user, grants the role, and — when the invite names a flat — opens a `pending_verification` membership. |
 
-When `DEV_AUTH=true`, create responses may include `devToken`.
+A second **active** invitation for the same recipient and role returns **409 `invitation_exists`**;
+an expired token returns **410 `invite_expired`**.
+
+When `DEV_AUTH=true`, create responses include `devToken` so testers can accept without delivery.
 
 ### 6.8 Complaints & media
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/v1/complaints` | Yes | Staff: all; resident: own |
-| GET | `/v1/complaints/:id` | Yes | |
-| POST | `/v1/complaints` | Resident/staff | Staff needs `flatId` if no linked flat |
+| GET | `/v1/complaints` | Yes | Staff (no `mine`): all society tickets. Resident / `?mine=1`: complaints for the caller’s **active flat(s)** |
+| GET | `/v1/complaints/:id` | Yes | Staff or flat-mate of the ticket’s flat |
+| POST | `/v1/complaints` | Resident/staff | **FR-CMP-1:** resident uses the logged-in flat (body `flatId` for another lot is `403`). Staff may pass `flatId`; required if they have no linked flat |
+| PATCH | `/v1/complaints/:id` | Raiser | Edit title/type/description while not resolved/closed |
 | PATCH | `/v1/complaints/:id/status` | Staff | |
 | GET | `/v1/complaints/:id/comments` | Yes | |
-| POST | `/v1/complaints/:id/comments` | Yes | `{ body }` |
-| DELETE | `/v1/complaints/:id` | Staff | Soft-delete |
+| POST | `/v1/complaints/:id/comments` | Yes | `{ body, kind?: comment\|question }` |
+| DELETE | `/v1/complaints/:id` | Staff, or raiser while `open` | Soft-delete |
 | POST | `/v1/complaints/:id/attachments` | Yes | `multipart` field `file` (image≤10MB, video≤50MB) |
 | GET | `/v1/media/:id` | Yes | Bearer **or** `?access_token=` |
 
@@ -332,10 +437,11 @@ When `DEV_AUTH=true`, create responses may include `devToken`.
 |--------|------|------|-------|
 | GET | `/` | Staff | Paginated |
 | GET | `/mine` | Yes | Resident flat bills |
-| POST | `/generate` | Staff | `{ periodYm, amountPaise, notes?, flatIds? }` |
-| GET | `/:id` | Yes | Own flat or staff |
+| POST | `/generate` | Staff | `{ periodYm, amountPaise, reason, notes?, flatIds? }` — `flatIds` limits to selected flats; omit for all |
+| GET | `/:id` | Yes | Own flat or staff. Includes `lineItems`, linked `payments`, and `owner` / `occupants` with name, phone, and email. |
+| POST | `/:id/notify` | Staff | In-app notify current flat residents about this bill |
 | POST | `/:id/pay` | Yes | Dev instant Razorpay settlement + notification |
-| DELETE | `/:id` | Staff | Void / corrected |
+| DELETE | `/:id` | Staff | Void / corrected (`{ corrected?: boolean }`) |
 
 ### 6.10 Payments — `/v1/payments`
 
@@ -364,13 +470,19 @@ Payment methods: `upi` (resident screenshot), `cash`, `cheque`, `neft` (staff), 
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/` | Yes | Residents see published |
+| GET | `/` | Yes | Paginated `{ items, page, limit, total }`. Query: `page`, `limit`, `search` (title/body), `sort` (`createdAt`\|`publishedAt`\|`title`), `order` (`asc`\|`desc`). Staff may pass `status=published\|draft`. Residents only see published notices in their audience (+ attachments). |
+| GET | `/:id` | Yes | Staff, or published & in audience |
 | POST | `/` | Staff | |
 | PATCH | `/:id` | Staff | |
+| POST | `/:id/attachments` | Staff | `multipart` field `file` (image≤10MB, video≤50MB; max 5) |
+| DELETE | `/:id/attachments/:attachmentId` | Staff | Soft-delete media |
 | POST | `/:id/publish` | Staff | |
 | POST | `/:id/unpublish` | Staff | |
 | POST | `/:id/read` | Yes | Mark read for caller |
 | DELETE | `/:id` | Staff | Soft-delete |
+| GET | `/v1/notice-media/:id` | Yes | Bearer or `?access_token=` |
+
+WhatsApp share is **client-side** (`wa.me/?text=…` with title, body preview, and `/notices#id` link). Media opens in SocietyHub; WhatsApp message itself is text + link.
 
 ### 6.12 Notifications, dashboard, audit
 
@@ -378,7 +490,7 @@ Payment methods: `upi` (resident screenshot), `cash`, `cheque`, `neft` (staff), 
 |--------|------|------|-------|
 | GET | `/v1/notifications` | Yes | In-app inbox |
 | POST | `/v1/notifications/:id/read` | Yes | Idempotent |
-| GET | `/v1/dashboard/stats` | Yes | Counts scoped by role |
+| GET | `/v1/dashboard/stats` | Yes | Counts scoped by role. Staff (without `?mine=1`) additionally get `occupancy: OccupancyStatsDto`; in Resident mode `occupancy` is `null`. |
 | GET | `/v1/audit` | Staff | Alias |
 | GET | `/v1/audit-logs` | Staff | Same data |
 

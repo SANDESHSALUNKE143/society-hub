@@ -226,6 +226,35 @@ class ComplaintAttachmentDto {
   }
 }
 
+class ComplaintCommentDto {
+  const ComplaintCommentDto({
+    required this.id,
+    required this.userId,
+    required this.body,
+    required this.createdAt,
+    this.authorName,
+    this.kind = 'comment',
+  });
+
+  final String id;
+  final String userId;
+  final String? authorName;
+  final String body;
+  final String kind;
+  final String createdAt;
+
+  factory ComplaintCommentDto.fromJson(Map<String, dynamic> json) {
+    return ComplaintCommentDto(
+      id: json['id'] as String,
+      userId: json['userId'] as String? ?? '',
+      authorName: json['authorName'] as String?,
+      body: json['body'] as String? ?? '',
+      kind: json['kind'] as String? ?? 'comment',
+      createdAt: json['createdAt'] as String? ?? '',
+    );
+  }
+}
+
 class ComplaintStatusEventDto {
   const ComplaintStatusEventDto({
     required this.id,
@@ -273,6 +302,7 @@ class ComplaintDto {
     this.queueHint,
     this.attachments = const [],
     this.statusEvents = const [],
+    this.comments = const [],
     this.closingNote,
   });
 
@@ -292,11 +322,13 @@ class ComplaintDto {
   final String? queueHint;
   final List<ComplaintAttachmentDto> attachments;
   final List<ComplaintStatusEventDto> statusEvents;
+  final List<ComplaintCommentDto> comments;
   final String? closingNote;
 
   factory ComplaintDto.fromJson(Map<String, dynamic> json) {
     final attachmentsJson = json['attachments'] as List<dynamic>? ?? [];
     final eventsJson = json['statusEvents'] as List<dynamic>? ?? [];
+    final commentsJson = json['comments'] as List<dynamic>? ?? [];
     return ComplaintDto(
       id: json['id'] as String,
       ticketNumber: json['ticketNumber'] as String,
@@ -317,6 +349,9 @@ class ComplaintDto {
           .toList(),
       statusEvents: eventsJson
           .map((e) => ComplaintStatusEventDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      comments: commentsJson
+          .map((e) => ComplaintCommentDto.fromJson(e as Map<String, dynamic>))
           .toList(),
       closingNote: json['closingNote'] as String?,
     );
@@ -500,6 +535,138 @@ class SocietyResidentDto {
   }
 
   String get displayName => name ?? phone ?? userId;
+}
+
+class ResidentSummaryDto {
+  const ResidentSummaryDto({
+    required this.id,
+    required this.userId,
+    required this.name,
+    required this.phone,
+    required this.email,
+    required this.residentType,
+    required this.isPrimary,
+    required this.status,
+    required this.verificationStatus,
+    required this.moveInDate,
+    required this.flatNumber,
+    required this.wingName,
+    required this.buildingName,
+  });
+
+  final String id;
+  final String userId;
+  final String? name;
+  final String? phone;
+  final String? email;
+  final String residentType;
+  final bool isPrimary;
+  final String status;
+  final String verificationStatus;
+  final String? moveInDate;
+  final String? flatNumber;
+  final String? wingName;
+  final String? buildingName;
+
+  factory ResidentSummaryDto.fromJson(Map<String, dynamic> json) {
+    final flat = json['flat'] as Map<String, dynamic>?;
+    return ResidentSummaryDto(
+      id: json['id'] as String,
+      userId: json['userId'] as String,
+      name: json['name'] as String?,
+      phone: json['phone'] as String?,
+      email: json['email'] as String?,
+      residentType: json['residentType'] as String? ?? 'owner',
+      isPrimary: json['isPrimary'] as bool? ?? true,
+      status: json['status'] as String? ?? 'active',
+      verificationStatus: json['verificationStatus'] as String? ?? 'pending',
+      moveInDate: json['moveInDate'] as String?,
+      flatNumber: flat?['number'] as String?,
+      wingName: flat?['wingName'] as String?,
+      buildingName: flat?['buildingName'] as String?,
+    );
+  }
+
+  String get flatLabel {
+    final number = flatNumber?.trim() ?? '';
+    if (number.isEmpty) return '—';
+    final wing = wingName?.trim();
+    if (wing == null || wing.isEmpty) return number;
+    return '$wing-$number';
+  }
+
+  String get displayName => name ?? phone ?? email ?? id;
+}
+
+class InvitationDto {
+  const InvitationDto({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.phone,
+    required this.role,
+    required this.status,
+    required this.flatNumber,
+    required this.residentType,
+    required this.expiresAt,
+    required this.resendCount,
+  });
+
+  final String id;
+  final String? name;
+  final String? email;
+  final String? phone;
+  final String role;
+  final String status;
+  final String? flatNumber;
+  final String? residentType;
+  final String? expiresAt;
+  final int resendCount;
+
+  factory InvitationDto.fromJson(Map<String, dynamic> json) {
+    return InvitationDto(
+      id: json['id'] as String,
+      name: json['name'] as String?,
+      email: json['email'] as String?,
+      phone: json['phone'] as String?,
+      role: json['role'] as String? ?? 'resident',
+      status: json['status'] as String? ?? 'pending',
+      flatNumber: json['flatNumber'] as String?,
+      residentType: json['residentType'] as String?,
+      expiresAt: json['expiresAt'] as String?,
+      resendCount: (json['resendCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  String get displayName => name ?? email ?? phone ?? id;
+}
+
+class PaginatedDto<T> {
+  const PaginatedDto({
+    required this.items,
+    required this.page,
+    required this.limit,
+    required this.total,
+  });
+
+  final List<T> items;
+  final int page;
+  final int limit;
+  final int total;
+
+  factory PaginatedDto.fromJson(
+    Map<String, dynamic> json,
+    T Function(Map<String, dynamic>) parseItem,
+  ) {
+    return PaginatedDto(
+      items: (json['items'] as List<dynamic>? ?? [])
+          .map((e) => parseItem(e as Map<String, dynamic>))
+          .toList(),
+      page: (json['page'] as num?)?.toInt() ?? 1,
+      limit: (json['limit'] as num?)?.toInt() ?? 20,
+      total: (json['total'] as num?)?.toInt() ?? 0,
+    );
+  }
 }
 
 class TeamMemberDto {

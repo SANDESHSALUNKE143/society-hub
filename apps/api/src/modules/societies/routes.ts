@@ -5,6 +5,7 @@ import {
   createFlatSchema,
   createSocietySchema,
   createWingSchema,
+  updateSocietyBasicsSchema,
 } from "@society-hub/validation";
 import type { SocietyDto } from "@society-hub/types";
 import { hashPassword } from "@society-hub/auth";
@@ -117,33 +118,7 @@ export const societyRoutes = new Elysia({ prefix: "/v1/societies" })
       updatedBy: claims.sub,
     });
 
-    const buildingId = crypto.randomUUID();
-    const wingId = crypto.randomUUID();
-    const flatId = crypto.randomUUID();
-    await db.insert(buildings).values({
-      id: buildingId,
-      tenantId: societyId,
-      name: "Tower A",
-      createdBy: claims.sub,
-      updatedBy: claims.sub,
-    });
-    await db.insert(wings).values({
-      id: wingId,
-      tenantId: societyId,
-      buildingId,
-      name: "A",
-      createdBy: claims.sub,
-      updatedBy: claims.sub,
-    });
-    await db.insert(flats).values({
-      id: flatId,
-      tenantId: societyId,
-      wingId,
-      number: "101",
-      createdBy: claims.sub,
-      updatedBy: claims.sub,
-    });
-
+    // Structure (towers → wings → flats) is added next on Manage society detail.
     if (parsed.chairpersonEmail || parsed.chairpersonPhone) {
       const [existing] = parsed.chairpersonEmail
         ? await db
@@ -193,6 +168,30 @@ export const societyRoutes = new Elysia({ prefix: "/v1/societies" })
     });
 
     return buildSocietyDto(societyId);
+  })
+  .patch("/:id", async ({ auth, params, body }) => {
+    const claims = requireAuth(auth);
+    requirePlatform(claims);
+    const parsed = updateSocietyBasicsSchema.parse(body);
+    const [existing] = await db
+      .select({ id: societies.id })
+      .from(societies)
+      .where(and(eq(societies.id, params.id), eq(societies.isDeleted, false)))
+      .limit(1);
+    if (!existing) throw new AppError(404, "not_found", "Society not found");
+
+    await db
+      .update(societies)
+      .set({
+        name: parsed.name,
+        ...(parsed.address !== undefined ? { address: parsed.address } : {}),
+        ...(parsed.city !== undefined ? { city: parsed.city } : {}),
+        ...(parsed.pincode !== undefined ? { pincode: parsed.pincode } : {}),
+        updatedBy: claims.sub,
+      })
+      .where(eq(societies.id, params.id));
+
+    return buildSocietyDto(params.id);
   })
   .delete("/:id", async ({ auth, params }) => {
     const claims = requireAuth(auth);

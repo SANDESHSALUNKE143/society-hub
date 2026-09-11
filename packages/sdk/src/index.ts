@@ -27,10 +27,51 @@ import type {
   VendorDto,
   EventDto,
   ResidentImportResultDto,
+  ResidentImportPreviewDto,
   SocietyFlatImportResultDto,
   DashboardStatsDto,
   ResidentProfileDto,
+  ResidentSummaryDto,
+  ResidentDetailDto,
+  ResidentDocumentDto,
+  ResidentFamilyMemberDto,
+  ResidentType,
+  ResidentStatus,
+  VerificationStatus,
+  ResidentDocumentType,
+  FamilyRelationship,
+  FlatDetailDto,
+  FlatOccupancySummaryDto,
+  FlatOccupantDto,
+  FlatOccupancyHistoryEntryDto,
+  OccupancyStatsDto,
+  CommunicationPreferences,
 } from "@society-hub/types";
+
+export type ResidentListParams = {
+  page?: number;
+  limit?: number;
+  search?: string;
+  buildingId?: string;
+  wingId?: string;
+  flatId?: string;
+  residentType?: ResidentType;
+  status?: ResidentStatus;
+  verificationStatus?: VerificationStatus;
+  sort?: "name" | "flat" | "createdAt" | "status";
+  order?: "asc" | "desc";
+};
+
+function toQuery(params: Record<string, unknown> | undefined) {
+  if (!params) return "";
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  const qs = search.toString();
+  return qs ? `?${qs}` : "";
+}
 
 export class ApiClientError extends Error {
   constructor(
@@ -185,8 +226,13 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         body: JSON.stringify({ tenantId }),
       }),
     updateProfile: (body: {
+      name?: string;
       emergencyContact?: string | null;
+      emergencyContactName?: string | null;
+      emergencyContactRelation?: string | null;
+      emergencyContactPhone?: string | null;
       vehicleNumber?: string | null;
+      communicationPreferences?: Partial<CommunicationPreferences>;
       pngGasConnection?: boolean;
       adultCount?: number;
       childCount?: number;
@@ -200,13 +246,30 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         parkingSlot?: string | null;
       }>;
     }) =>
-      request<ResidentProfileDto>("/v1/auth/profile", {
+      request<ResidentProfileDto>("/v1/profile", {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
+    uploadMyDocument: (
+      file: File,
+      meta: {
+        docType: ResidentDocumentType;
+        documentNumber?: string | null;
+        expiresAt?: string | null;
+      },
+    ) => {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("docType", meta.docType);
+      if (meta.documentNumber) form.append("documentNumber", meta.documentNumber);
+      if (meta.expiresAt) form.append("expiresAt", meta.expiresAt);
+      return request<ResidentDocumentDto>("/v1/profile/documents", {
+        method: "POST",
+        body: form,
+      });
+    },
     listFlats: () => request<FlatDto[]>("/v1/admin/flats"),
     listParkings: () => request<ParkingSlotDto[]>("/v1/admin/parkings"),
-    listResidents: () => request<SocietyResidentDto[]>("/v1/admin/residents"),
     listHouseholdMembers: () =>
       request<SocietyResidentDto[]>("/v1/household/members"),
     addHouseholdMember: (body: {
@@ -231,7 +294,7 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         method: "DELETE",
       }),
     removeResident: (userId: string) =>
-      request<{ ok: true }>(`/v1/admin/residents/${userId}`, {
+      request<{ ok: true }>(`/v1/admin/residents/by-user/${userId}`, {
         method: "DELETE",
       }),
     onboardResident: (body: {
@@ -239,6 +302,10 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
       phone: string;
       flatId: string;
       email?: string | null;
+      residentType?: ResidentType;
+      isPrimary?: boolean;
+      moveInDate?: string | null;
+      remarks?: string | null;
       floor?: number | null;
       parkingSlot?: string | null;
       parkingSlotId?: string | null;
@@ -257,8 +324,195 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
       adultCount?: number;
       childCount?: number;
       seniorCitizenCount?: number;
+      /** Welcome notify only — does not create an invitation. */
+      channels?: Array<"email" | "whatsapp">;
     }) =>
-      request<{ user: UserDto }>("/v1/admin/residents", {
+      request<{
+        user: UserDto;
+        resident: ResidentDetailDto;
+        created?: boolean;
+        updated?: boolean;
+        delivery?: {
+          email?: { ok: boolean; error?: string };
+          whatsapp?: { ok: boolean; error?: string };
+        };
+      }>("/v1/admin/residents", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+
+    listSocietyResidents: () =>
+      request<SocietyResidentDto[]>("/v1/admin/society-residents"),
+
+    // ---- Resident directory & lifecycle -----------------------------------
+    listResidents: (params?: ResidentListParams) =>
+      request<Paginated<ResidentSummaryDto>>(
+        `/v1/admin/residents${toQuery(params)}`,
+      ),
+    getResident: (id: string) =>
+      request<ResidentDetailDto>(`/v1/admin/residents/${id}`),
+    updateResident: (
+      id: string,
+      body: {
+        name?: string;
+        phone?: string;
+        email?: string | null;
+        residentType?: ResidentType;
+        isPrimary?: boolean;
+        moveInDate?: string | null;
+        remarks?: string | null;
+      },
+    ) =>
+      request<ResidentDetailDto>(`/v1/admin/residents/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    verifyResident: (id: string) =>
+      request<ResidentDetailDto>(`/v1/admin/residents/${id}/verify`, {
+        method: "POST",
+      }),
+    rejectResident: (id: string, reason: string) =>
+      request<ResidentDetailDto>(`/v1/admin/residents/${id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      }),
+    suspendResident: (id: string, reason?: string | null) =>
+      request<ResidentDetailDto>(`/v1/admin/residents/${id}/suspend`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason ?? null }),
+      }),
+    reactivateResident: (id: string) =>
+      request<ResidentDetailDto>(`/v1/admin/residents/${id}/reactivate`, {
+        method: "POST",
+      }),
+    moveOutResident: (
+      id: string,
+      body?: {
+        moveOutDate?: string | null;
+        reason?: string | null;
+        remarks?: string | null;
+      },
+    ) =>
+      request<ResidentDetailDto>(`/v1/admin/residents/${id}/move-out`, {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+      }),
+    listResidentActivity: (id: string) =>
+      request<ActivityEventDto[]>(`/v1/admin/residents/${id}/activity`),
+
+    // ---- Family ------------------------------------------------------------
+    listFamilyMembers: (residentId: string) =>
+      request<ResidentFamilyMemberDto[]>(
+        `/v1/admin/residents/${residentId}/family`,
+      ),
+    addFamilyMember: (
+      residentId: string,
+      body: {
+        name: string;
+        relationship: FamilyRelationship;
+        phone?: string | null;
+        email?: string | null;
+      },
+    ) =>
+      request<ResidentFamilyMemberDto[]>(
+        `/v1/admin/residents/${residentId}/family`,
+        { method: "POST", body: JSON.stringify(body) },
+      ),
+    removeFamilyMember: (residentId: string, familyId: string) =>
+      request<ResidentFamilyMemberDto[]>(
+        `/v1/admin/residents/${residentId}/family/${familyId}`,
+        { method: "DELETE" },
+      ),
+
+    // ---- Documents ---------------------------------------------------------
+    listResidentDocuments: (residentId: string) =>
+      request<ResidentDocumentDto[]>(
+        `/v1/admin/residents/${residentId}/documents`,
+      ),
+    uploadResidentDocument: (
+      residentId: string,
+      file: File,
+      meta: {
+        docType: ResidentDocumentType;
+        documentNumber?: string | null;
+        expiresAt?: string | null;
+      },
+    ) => {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("docType", meta.docType);
+      if (meta.documentNumber) form.append("documentNumber", meta.documentNumber);
+      if (meta.expiresAt) form.append("expiresAt", meta.expiresAt);
+      return request<ResidentDocumentDto[]>(
+        `/v1/admin/residents/${residentId}/documents`,
+        { method: "POST", body: form },
+      );
+    },
+    verifyDocument: (documentId: string) =>
+      request<ResidentDocumentDto>(
+        `/v1/admin/resident-documents/${documentId}/verify`,
+        { method: "POST" },
+      ),
+    rejectDocument: (documentId: string, reason: string) =>
+      request<ResidentDocumentDto>(
+        `/v1/admin/resident-documents/${documentId}/reject`,
+        { method: "POST", body: JSON.stringify({ reason }) },
+      ),
+    deleteDocument: (documentId: string) =>
+      request<{ ok: true }>(`/v1/admin/resident-documents/${documentId}`, {
+        method: "DELETE",
+      }),
+
+    // ---- Flat occupancy ----------------------------------------------------
+    getFlatDetail: (flatId: string) =>
+      request<FlatDetailDto>(`/v1/admin/flats/${flatId}`),
+    listFlatResidents: (flatId: string) =>
+      request<FlatOccupantDto[]>(`/v1/admin/flats/${flatId}/residents`),
+    listFlatHistory: (flatId: string) =>
+      request<FlatOccupancyHistoryEntryDto[]>(
+        `/v1/admin/flats/${flatId}/history`,
+      ),
+    getOccupancyStats: () =>
+      request<OccupancyStatsDto>("/v1/admin/occupancy/stats"),
+    listFlatsWithOccupancy: (params?: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      buildingId?: string;
+      wingId?: string;
+      occupancy?: "vacant" | "owner_occupied" | "tenant_occupied";
+    }) =>
+      request<Paginated<FlatOccupancySummaryDto>>(
+        `/v1/admin/occupancy/flats${toQuery(params)}`,
+      ),
+
+    previewResidentImport: (body: {
+      rows: Array<{
+        name: string;
+        phone: string;
+        email?: string | null;
+        flatNumber: string;
+        wingName?: string | null;
+        floor?: number | null;
+        parkingSlot?: string | null;
+        isOwner?: boolean;
+        residentType?: ResidentType;
+        emergencyContact?: string | null;
+        vehicleNumber?: string | null;
+        vehicles?: Array<{
+          kind: "two_wheeler" | "four_wheeler";
+          registrationNumber?: string | null;
+          parkingPurchased?: boolean;
+          parkingSlot?: string | null;
+        }>;
+        pngGasConnection?: boolean;
+        adultCount?: number;
+        childCount?: number;
+        seniorCitizenCount?: number;
+      }>;
+      createMissingFlats?: boolean;
+    }) =>
+      request<ResidentImportPreviewDto>("/v1/admin/residents/import/preview", {
         method: "POST",
         body: JSON.stringify(body),
       }),
@@ -272,6 +526,7 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         floor?: number | null;
         parkingSlot?: string | null;
         isOwner?: boolean;
+        residentType?: ResidentType;
         emergencyContact?: string | null;
         vehicleNumber?: string | null;
         vehicles?: Array<{
@@ -290,6 +545,7 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
       forceInvite?: boolean;
       updateFlats?: boolean;
       createMissingFlats?: boolean;
+      allowPartial?: boolean;
     }) =>
       request<ResidentImportResultDto>("/v1/admin/residents/import", {
         method: "POST",
@@ -325,6 +581,30 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
           assignedToUserId: opts?.assignedToUserId ?? null,
         }),
       }),
+    updateComplaint: (
+      id: string,
+      body: {
+        title?: string;
+        type?: string;
+        typeOtherText?: string | null;
+        description?: string;
+      },
+    ) =>
+      request<ComplaintDto>(`/v1/complaints/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    addComplaintComment: (
+      id: string,
+      body: string,
+      kind: "comment" | "question" = "comment",
+    ) =>
+      request<ComplaintDto>(`/v1/complaints/${id}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ body, kind }),
+      }),
+    deleteComplaint: (id: string) =>
+      request<{ ok: true }>(`/v1/complaints/${id}`, { method: "DELETE" }),
     uploadAttachment: async (complaintId: string, file: File) => {
       const form = new FormData();
       form.append("file", file);
@@ -346,6 +626,19 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
     }) =>
       request<SocietyDto>("/v1/societies", {
         method: "POST",
+        body: JSON.stringify(body),
+      }),
+    updateSociety: (
+      societyId: string,
+      body: {
+        name: string;
+        address?: string | null;
+        city?: string | null;
+        pincode?: string | null;
+      },
+    ) =>
+      request<SocietyDto>(`/v1/societies/${societyId}`, {
+        method: "PATCH",
         body: JSON.stringify(body),
       }),
     getSociety: (id: string) => request<SocietyDto>(`/v1/societies/${id}`),
@@ -382,9 +675,86 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
       }),
     listManageSocietyFlats: (societyId: string) =>
       request<FlatDto[]>(`/v1/manage/societies/${societyId}/flats`),
+    listManageSocietyBuildings: (societyId: string) =>
+      request<
+        Array<{ id: string; name: string; wingCount: number; flatCount: number }>
+      >(`/v1/manage/societies/${societyId}/buildings`),
+    addManageSocietyBuilding: (societyId: string, body: { name: string }) =>
+      request<{ id: string; name: string }>(
+        `/v1/manage/societies/${societyId}/buildings`,
+        {
+          method: "POST",
+          body: JSON.stringify(body),
+        },
+      ),
+    renameManageSocietyBuilding: (
+      societyId: string,
+      buildingId: string,
+      body: { name: string },
+    ) =>
+      request<{ id: string; name: string }>(
+        `/v1/manage/societies/${societyId}/buildings/${buildingId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        },
+      ),
+    deleteManageSocietyBuilding: (societyId: string, buildingId: string) =>
+      request<{ ok: true }>(
+        `/v1/manage/societies/${societyId}/buildings/${buildingId}`,
+        { method: "DELETE" },
+      ),
+    listManageSocietyWings: (societyId: string, buildingId: string) =>
+      request<
+        Array<{
+          id: string;
+          name: string;
+          buildingId: string;
+          flatCount: number;
+        }>
+      >(`/v1/manage/societies/${societyId}/buildings/${buildingId}/wings`),
+    addManageSocietyWing: (
+      societyId: string,
+      buildingId: string,
+      body: { name: string },
+    ) =>
+      request<{
+        id: string;
+        name: string;
+        buildingId: string;
+        flatCount: number;
+      }>(`/v1/manage/societies/${societyId}/buildings/${buildingId}/wings`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    renameManageSocietyWing: (
+      societyId: string,
+      wingId: string,
+      body: { name: string },
+    ) =>
+      request<{
+        id: string;
+        name: string;
+        buildingId: string;
+        flatCount: number;
+      }>(`/v1/manage/societies/${societyId}/wings/${wingId}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    deleteManageSocietyWing: (societyId: string, wingId: string) =>
+      request<{ ok: true }>(
+        `/v1/manage/societies/${societyId}/wings/${wingId}`,
+        { method: "DELETE" },
+      ),
     addManageSocietyFlat: (
       societyId: string,
-      body: { wing: string; floor: number; flatNumber: string },
+      body: {
+        wing: string;
+        floor: number;
+        flatNumber: string;
+        buildingId?: string | null;
+        buildingName?: string | null;
+      },
     ) =>
       request<FlatDto>(`/v1/manage/societies/${societyId}/flats`, {
         method: "POST",
@@ -392,19 +762,29 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
       }),
     importManageSocietyFlats: (
       societyId: string,
-      rows: Array<{ wing: string; floor: number; flatNumber: string }>,
+      body: {
+        rows: Array<{ wing: string; floor: number; flatNumber: string }>;
+        buildingId?: string | null;
+        buildingName?: string | null;
+      },
     ) =>
       request<SocietyFlatImportResultDto>(
         `/v1/manage/societies/${societyId}/flats/import`,
         {
           method: "POST",
-          body: JSON.stringify({ rows }),
+          body: JSON.stringify(body),
         },
       ),
     updateManageSocietyFlat: (
       societyId: string,
       flatId: string,
-      body: { wing: string; floor: number; flatNumber: string },
+      body: {
+        wing: string;
+        floor: number;
+        flatNumber: string;
+        buildingId?: string | null;
+        buildingName?: string | null;
+      },
     ) =>
       request<FlatDto>(`/v1/manage/societies/${societyId}/flats/${flatId}`, {
         method: "PATCH",
@@ -512,31 +892,85 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         ),
       }),
 
-    listInvitations: () => request<InvitationDto[]>("/v1/invitations"),
+    listInvitations: (params?: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      status?: "pending" | "accepted" | "revoked" | "expired";
+      role?: string;
+    }) =>
+      request<Paginated<InvitationDto>>(`/v1/invitations${toQuery(params)}`),
     createInvitation: (body: {
+      name?: string | null;
       email?: string | null;
       phone?: string | null;
       role: string;
+      flatId?: string | null;
+      residentType?: ResidentType | null;
+      expiresInDays?: number;
       channels?: Array<"email" | "whatsapp">;
     }) =>
       request<InvitationDto>("/v1/invitations", {
         method: "POST",
         body: JSON.stringify(body),
       }),
+    resendInvitation: (id: string) =>
+      request<InvitationDto>(`/v1/invitations/${id}/resend`, { method: "POST" }),
     revokeInvitation: (id: string) =>
-      request<{ ok: true }>(`/v1/invitations/${id}/revoke`, {
+      request<InvitationDto>(`/v1/invitations/${id}/revoke`, {
         method: "POST",
       }),
+    /** Public: inspect an invite before signing in. */
+    getInvitation: (token: string) =>
+      request<{
+        societyName: string | null;
+        name: string | null;
+        email: string | null;
+        phone: string | null;
+        role: string;
+        residentType: ResidentType | null;
+        flatNumber: string | null;
+        expiresAt: string | null;
+      }>(`/v1/invites/${encodeURIComponent(token)}`, {}, false),
+    acceptInvitation: (body: {
+      token: string;
+      name?: string;
+      phone?: string;
+      email?: string | null;
+    }) =>
+      request<{
+        ok: true;
+        userId: string;
+        residentId: string | null;
+        tenantId: string;
+        role: string;
+      }>("/v1/invites/accept", { method: "POST", body: JSON.stringify(body) }, false),
 
     listBills: (page = 1, limit = 20) =>
       request<Paginated<BillDto>>(`/v1/bills?page=${page}&limit=${limit}`),
     myBills: () => request<BillDto[]>("/v1/bills/mine"),
-    generateBills: (body: { periodYm: string; amountPaise: number; notes?: string | null }) =>
+    generateBills: (body: {
+      periodYm: string;
+      amountPaise: number;
+      reason: string;
+      notes?: string | null;
+      flatIds?: string[];
+    }) =>
       request<{ created: number }>("/v1/bills/generate", {
         method: "POST",
         body: JSON.stringify(body),
       }),
     getBill: (id: string) => request<BillDto>(`/v1/bills/${id}`),
+    deleteBill: (id: string, body?: { corrected?: boolean }) =>
+      request<{ ok: true; status: string }>(`/v1/bills/${id}`, {
+        method: "DELETE",
+        body: JSON.stringify(body ?? {}),
+      }),
+    notifyBill: (id: string) =>
+      request<{ ok: true; notified: number }>(`/v1/bills/${id}/notify`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
 
     listPayments: (page = 1, limit = 20) =>
       request<Paginated<PaymentDto>>(`/v1/payments?page=${page}&limit=${limit}`),
@@ -596,7 +1030,16 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         body: JSON.stringify({ note: note ?? null }),
       }),
 
-    listNotices: () => request<NoticeDto[]>("/v1/notices"),
+    listNotices: (params?: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      status?: "published" | "draft";
+      sort?: "createdAt" | "publishedAt" | "title";
+      order?: "asc" | "desc";
+    }) =>
+      request<Paginated<NoticeDto>>(`/v1/notices${toQuery(params)}`),
+    getNotice: (id: string) => request<NoticeDto>(`/v1/notices/${id}`),
     createNotice: (body: {
       title: string;
       body: string;
@@ -616,10 +1059,24 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
+    uploadNoticeAttachment: (id: string, file: File) => {
+      const data = new FormData();
+      data.append("file", file);
+      return request<NoticeDto>(`/v1/notices/${id}/attachments`, {
+        method: "POST",
+        body: data,
+      });
+    },
+    deleteNoticeAttachment: (noticeId: string, attachmentId: string) =>
+      request<NoticeDto>(`/v1/notices/${noticeId}/attachments/${attachmentId}`, {
+        method: "DELETE",
+      }),
     publishNotice: (id: string) =>
       request<NoticeDto>(`/v1/notices/${id}/publish`, { method: "POST" }),
     unpublishNotice: (id: string) =>
       request<NoticeDto>(`/v1/notices/${id}/unpublish`, { method: "POST" }),
+    markNoticeRead: (id: string) =>
+      request<{ ok: true }>(`/v1/notices/${id}/read`, { method: "POST" }),
 
     listNotifications: () => request<NotificationDto[]>("/v1/notifications"),
     markNotificationRead: (id: string) =>
@@ -639,10 +1096,11 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
 
     listTeam: () => request<TeamMemberDto[]>("/v1/team"),
     addTeamMember: (body: {
-      email?: string;
-      phone?: string;
+      userId?: string;
       name?: string;
-      role?:
+      email?: string | null;
+      phone?: string | null;
+      role:
         | "chairperson"
         | "admin"
         | "secretary"
@@ -650,15 +1108,18 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         | "cashier"
         | "committee";
     }) =>
-      request<{
-        ok: true;
-        userId: string;
-        tenantId: string;
-        role: string;
-        societyName: string;
-      }>("/v1/team", {
+      request<TeamMemberDto[]>("/v1/team/members", {
         method: "POST",
         body: JSON.stringify(body),
+      }),
+    changeTeamRole: (userId: string, fromRole: string, toRole: string) =>
+      request<TeamMemberDto[]>(`/v1/team/members/${userId}/role`, {
+        method: "PATCH",
+        body: JSON.stringify({ fromRole, toRole }),
+      }),
+    removeTeamRole: (userId: string, role: string) =>
+      request<TeamMemberDto[]>(`/v1/team/members/${userId}/roles/${role}`, {
+        method: "DELETE",
       }),
     updateTeamMember: (
       userId: string,

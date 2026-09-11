@@ -14,14 +14,15 @@ const adminSections: NavSection[] = [
     items: [{ to: "/dashboard", label: "Dashboard", icon: "dashboard" }],
   },
   {
-    title: "Operations",
+    title: "People",
     items: [
-      { to: "/complaints", label: "Complaints", icon: "complaints" },
       { to: "/residents", label: "Residents", icon: "team" },
-      { to: "/onboard", label: "Onboard resident", icon: "onboard" },
-      { to: "/invites", label: "Invites", icon: "invites" },
       { to: "/team", label: "Team", icon: "team" },
     ],
+  },
+  {
+    title: "Operations",
+    items: [{ to: "/complaints", label: "Complaints", icon: "complaints" }],
   },
   {
     title: "Finance",
@@ -40,7 +41,6 @@ const adminSections: NavSection[] = [
   {
     title: "Society",
     items: [
-      { to: "/structure", label: "Structure", icon: "structure" },
       { to: "/visitors", label: "Visitors", icon: "visitors" },
       { to: "/parking", label: "Parking", icon: "parking" },
       { to: "/bookings", label: "Bookings", icon: "bookings" },
@@ -62,7 +62,7 @@ const residentSections: NavSection[] = [
   },
   {
     title: "Complaints",
-    items: [{ to: "/complaints", label: "My complaints", icon: "complaints" }],
+    items: [{ to: "/complaints", label: "Complaints", icon: "complaints" }],
   },
   {
     title: "Finance",

@@ -18,8 +18,41 @@ export const ActivityType = {
   BILL_GENERATED: "bill.generated",
   BILL_VOIDED: "bill.voided",
   BILL_CORRECTED: "bill.corrected",
+  BILL_NOTIFIED: "bill.notified",
   PAYMENT_RECORDED: "payment.recorded",
   NOTICE_PUBLISHED: "notice.published",
+
+  // Society & Resident Management 2.0 (Phase 1)
+  RESIDENT_CREATED: "resident.created",
+  RESIDENT_UPDATED: "resident.updated",
+  RESIDENT_VERIFIED: "resident.verified",
+  RESIDENT_REJECTED: "resident.rejected",
+  RESIDENT_SUSPENDED: "resident.suspended",
+  RESIDENT_REACTIVATED: "resident.reactivated",
+  RESIDENT_MOVED_IN: "resident.moved_in",
+  RESIDENT_MOVED_OUT: "resident.moved_out",
+  RESIDENT_FAMILY_ADDED: "resident.family_added",
+  RESIDENT_FAMILY_REMOVED: "resident.family_removed",
+  DOCUMENT_UPLOADED: "document.uploaded",
+  DOCUMENT_VIEWED: "document.viewed",
+  DOCUMENT_VERIFIED: "document.verified",
+  DOCUMENT_REJECTED: "document.rejected",
+  INVITATION_CREATED: "invitation.created",
+  INVITATION_RESENT: "invitation.resent",
+  INVITATION_REVOKED: "invitation.revoked",
+  INVITATION_ACCEPTED: "invitation.accepted",
+  TEAM_MEMBER_ADDED: "team.member_added",
+  TEAM_MEMBER_REMOVED: "team.member_removed",
+  ROLE_CHANGED: "role.changed",
+} as const;
+
+/** Entity types used by resident-management audit rows. */
+export const AuditEntity = {
+  RESIDENT: "resident",
+  DOCUMENT: "resident_document",
+  FAMILY_MEMBER: "resident_family_member",
+  INVITATION: "invitation",
+  USER: "user",
 } as const;
 
 export type ActivityTypeValue = (typeof ActivityType)[keyof typeof ActivityType];
@@ -108,6 +141,46 @@ export async function listUserActivity(
     .orderBy(desc(auditLogs.createdAt))
     .limit(limit);
   return rows;
+}
+
+/**
+ * Activity for one entity within one society — powers the resident detail
+ * Activity/Audit tab. Tenant-scoped: a caller can never read another society's
+ * trail even if they guess an entity id.
+ */
+export async function listEntityActivity(
+  tenantId: string,
+  entityType: string,
+  entityId: string,
+  limit = 50,
+): Promise<ActivityRow[]> {
+  return db
+    .select({
+      id: auditLogs.id,
+      tenantId: auditLogs.tenantId,
+      societyName: societies.name,
+      actorUserId: auditLogs.actorUserId,
+      actorName: users.name,
+      action: auditLogs.action,
+      message: auditLogs.message,
+      entityType: auditLogs.entityType,
+      entityId: auditLogs.entityId,
+      meta: auditLogs.meta,
+      createdAt: auditLogs.createdAt,
+    })
+    .from(auditLogs)
+    .leftJoin(users, eq(users.id, auditLogs.actorUserId))
+    .leftJoin(societies, eq(societies.id, auditLogs.tenantId))
+    .where(
+      and(
+        eq(auditLogs.isDeleted, false),
+        eq(auditLogs.tenantId, tenantId),
+        eq(auditLogs.entityType, entityType),
+        eq(auditLogs.entityId, entityId),
+      ),
+    )
+    .orderBy(desc(auditLogs.createdAt))
+    .limit(limit);
 }
 
 /** Platform-wide recent activity (Manage Audit / Dashboard). */
