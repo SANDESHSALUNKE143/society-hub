@@ -108,6 +108,9 @@ describe("sdk client", () => {
     await client.updateComplaintStatus("c1", "resolved", {
       note: "Fixed",
     });
+    await client.updateComplaint("c1", { title: "Leak in kitchen" });
+    await client.addComplaintComment("c1", "When will this be fixed?", "question");
+    await client.deleteComplaint("c1");
     expect(paths.length).toBeGreaterThan(8);
   });
 

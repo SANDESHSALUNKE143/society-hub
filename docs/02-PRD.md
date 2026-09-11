@@ -190,7 +190,9 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 - FR-CMP-4: Attach **photos and videos** to Azure Blob; show on detail; enforce size/type limits (Architecture).
 - FR-CMP-5: Resident **lists own complaints** with status.
 - FR-CMP-6: Admin **lists all society complaints** with status; can change status along: `Open` → `In Progress` → `Resolved` → `Closed` (assignment/SLA optional in MVP).
-- FR-CMP-7: Complaint detail shows title, type, flat, description, media, status, timestamps.
+- FR-CMP-7: Complaint detail shows title, type, flat, description, media, status, timestamps in the **viewer's local timezone** (API stores UTC).
+- FR-CMP-8: The raiser can **edit** title/type/description until the ticket is resolved or closed, and **delete** an `Open` ticket they raised. Staff can still soft-delete any ticket.
+- FR-CMP-9: Residents and staff can **add comments**, **ask questions**, and see the thread plus status-update notes on the ticket.
 
 ### 7.3a App shell — Coming soon (Phase 1)
 

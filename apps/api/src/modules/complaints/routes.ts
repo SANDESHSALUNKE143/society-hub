@@ -5,6 +5,7 @@ import {
   createComplaintCommentSchema,
   createComplaintSchema,
   listQuerySchema,
+  updateComplaintSchema,
   updateComplaintStatusSchema,
 } from "@society-hub/validation";
 import { mkdir } from "node:fs/promises";
@@ -32,6 +33,11 @@ import {
   requireRole,
   requireSocietyStaff,
 } from "../../lib/auth-context";
+import { toApiIsoDateTime } from "../../lib/api-datetime";
+import {
+  canDeleteComplaint,
+  canResidentEditComplaint,
+} from "./complaint-access";
 import { resolveComplaintFlatId } from "./resolve-complaint-flat";
 
 function slaDueAt(days: number) {
@@ -115,6 +121,7 @@ async function toComplaintDto(complaintId: string, tenantId: string): Promise<Co
       userId: complaintComments.userId,
       authorName: users.name,
       body: complaintComments.body,
+      kind: complaintComments.kind,
       createdAt: complaintComments.createdAt,
     })
     .from(complaintComments)
@@ -168,9 +175,11 @@ async function toComplaintDto(complaintId: string, tenantId: string): Promise<Co
     flatNumber: row.flatNumber,
     residentName: row.residentName,
     assignedToUserId: row.complaint.assignedToUserId,
-    slaDueAt: row.complaint.slaDueAt,
-    createdAt: row.complaint.createdAt,
-    updatedAt: row.complaint.updatedAt,
+    slaDueAt: row.complaint.slaDueAt
+      ? toApiIsoDateTime(row.complaint.slaDueAt)
+      : null,
+    createdAt: toApiIsoDateTime(row.complaint.createdAt),
+    updatedAt: toApiIsoDateTime(row.complaint.updatedAt),
     ...queue,
     attachments: attachments.map((a) => ({
       id: a.id,
@@ -179,14 +188,18 @@ async function toComplaintDto(complaintId: string, tenantId: string): Promise<Co
       url: `${env.publicApiUrl}/v1/media/${a.id}`,
       byteSize: a.byteSize,
     })),
-    comments,
+    comments: comments.map((c) => ({
+      ...c,
+      kind: c.kind === "question" ? "question" : "comment",
+      createdAt: toApiIsoDateTime(c.createdAt),
+    })),
     statusEvents: events.map((e) => ({
       id: e.id,
       fromStatus: (e.fromStatus as ComplaintStatus | null) ?? null,
       toStatus: e.toStatus as ComplaintStatus,
       note: e.note,
       actorName: e.actorName,
-      createdAt: e.createdAt,
+      createdAt: toApiIsoDateTime(e.createdAt),
     })),
     closingNote: closing?.note ?? null,
   };
@@ -390,6 +403,58 @@ export const complaintRoutes = new Elysia({ prefix: "/v1/complaints" })
 
     return toComplaintDto(params.id, claims.tenantId);
   })
+  .patch("/:id", async ({ auth, params, body }) => {
+    const claims = requireAuth(auth);
+    const parsed = updateComplaintSchema.parse(body);
+    const [existing] = await db
+      .select()
+      .from(complaints)
+      .where(
+        and(
+          eq(complaints.id, params.id),
+          eq(complaints.tenantId, claims.tenantId),
+          eq(complaints.isDeleted, false),
+        ),
+      )
+      .limit(1);
+    if (!existing) throw new AppError(404, "not_found", "Complaint not found");
+    if (
+      !canResidentEditComplaint({
+        role: claims.role,
+        userId: claims.sub,
+        raisedByUserId: existing.raisedByUserId,
+        status: existing.status as ComplaintStatus,
+      })
+    ) {
+      throw new AppError(403, "forbidden", "You cannot edit this complaint");
+    }
+
+    const nextType = parsed.type ?? existing.type;
+    await db
+      .update(complaints)
+      .set({
+        title: parsed.title ?? existing.title,
+        type: nextType,
+        typeOtherText:
+          nextType === "other"
+            ? (parsed.typeOtherText ?? existing.typeOtherText)
+            : null,
+        description: parsed.description ?? existing.description,
+        updatedBy: claims.sub,
+      })
+      .where(eq(complaints.id, params.id));
+
+    await recordAudit({
+      tenantId: claims.tenantId,
+      actorUserId: claims.sub,
+      action: "complaint.updated",
+      entityType: "complaint",
+      entityId: params.id,
+      meta: { ticketNumber: existing.ticketNumber },
+    });
+
+    return toComplaintDto(params.id, claims.tenantId);
+  })
   .get("/:id/comments", async ({ auth, params }) => {
     const claims = requireAuth(auth);
     const dto = await toComplaintDto(params.id, claims.tenantId);
@@ -430,15 +495,26 @@ export const complaintRoutes = new Elysia({ prefix: "/v1/complaints" })
       complaintId: params.id,
       userId: claims.sub,
       body: parsed.body,
+      kind: parsed.kind,
       createdBy: claims.sub,
       updatedBy: claims.sub,
     });
 
+    const label = parsed.kind === "question" ? "New question" : "New comment";
     if (claims.sub !== existing.raisedByUserId) {
       await notifyUser({
         tenantId: claims.tenantId,
         userId: existing.raisedByUserId,
-        title: `New comment on ${existing.ticketNumber}`,
+        title: `${label} on ${existing.ticketNumber}`,
+        body: parsed.body,
+        kind: "complaint",
+        linkPath: `/complaints/${params.id}`,
+      });
+    } else if (existing.assignedToUserId && existing.assignedToUserId !== claims.sub) {
+      await notifyUser({
+        tenantId: claims.tenantId,
+        userId: existing.assignedToUserId,
+        title: `${label} on ${existing.ticketNumber}`,
         body: parsed.body,
         kind: "complaint",
         linkPath: `/complaints/${params.id}`,
@@ -449,7 +525,6 @@ export const complaintRoutes = new Elysia({ prefix: "/v1/complaints" })
   })
   .delete("/:id", async ({ auth, params }) => {
     const claims = requireAuth(auth);
-    requireSocietyStaff(claims);
     const [existing] = await db
       .select()
       .from(complaints)
@@ -462,6 +537,16 @@ export const complaintRoutes = new Elysia({ prefix: "/v1/complaints" })
       )
       .limit(1);
     if (!existing) throw new AppError(404, "not_found", "Complaint not found");
+    if (
+      !canDeleteComplaint({
+        role: claims.role,
+        userId: claims.sub,
+        raisedByUserId: existing.raisedByUserId,
+        status: existing.status as ComplaintStatus,
+      })
+    ) {
+      throw new AppError(403, "forbidden", "You cannot delete this complaint");
+    }
 
     await softDelete(complaints, params.id, claims.sub);
     await recordAudit({

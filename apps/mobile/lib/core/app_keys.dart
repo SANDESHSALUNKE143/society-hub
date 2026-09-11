@@ -39,6 +39,15 @@ abstract final class AppKeys {
   static const complaintStart = Key('complaint-start');
   static const complaintResolve = Key('complaint-resolve');
   static const complaintClose = Key('complaint-close');
+  static const complaintComments = Key('complaint-comments');
+  static const complaintThreadBody = Key('complaint-thread-body');
+  static const complaintAddComment = Key('complaint-add-comment');
+  static const complaintAskQuestion = Key('complaint-ask-question');
+  static const complaintEdit = Key('complaint-edit');
+  static const complaintDelete = Key('complaint-delete');
+  static const complaintEditTitle = Key('complaint-edit-title');
+  static const complaintEditDescription = Key('complaint-edit-description');
+  static const complaintEditSave = Key('complaint-edit-save');
 
   static const accountFlatDetails = Key('account-flat-details');
   static const accountFlatEmpty = Key('account-flat-empty');

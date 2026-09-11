@@ -15,6 +15,9 @@ describe("complaint-card", () => {
     expect(formatComplaintWhen("2025-05-20T10:15:00.000Z")).toMatch(
       /20 May 2025, \d{1,2}:\d{2} [AP]M/,
     );
+    expect(formatComplaintWhen("2025-05-20 10:15:00.000")).toBe(
+      formatComplaintWhen("2025-05-20T10:15:00.000Z"),
+    );
     expect(formatComplaintWhen("not-a-date")).toBe("");
   });
 

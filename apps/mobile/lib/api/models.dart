@@ -226,6 +226,35 @@ class ComplaintAttachmentDto {
   }
 }
 
+class ComplaintCommentDto {
+  const ComplaintCommentDto({
+    required this.id,
+    required this.userId,
+    required this.body,
+    required this.createdAt,
+    this.authorName,
+    this.kind = 'comment',
+  });
+
+  final String id;
+  final String userId;
+  final String? authorName;
+  final String body;
+  final String kind;
+  final String createdAt;
+
+  factory ComplaintCommentDto.fromJson(Map<String, dynamic> json) {
+    return ComplaintCommentDto(
+      id: json['id'] as String,
+      userId: json['userId'] as String? ?? '',
+      authorName: json['authorName'] as String?,
+      body: json['body'] as String? ?? '',
+      kind: json['kind'] as String? ?? 'comment',
+      createdAt: json['createdAt'] as String? ?? '',
+    );
+  }
+}
+
 class ComplaintStatusEventDto {
   const ComplaintStatusEventDto({
     required this.id,
@@ -273,6 +302,7 @@ class ComplaintDto {
     this.queueHint,
     this.attachments = const [],
     this.statusEvents = const [],
+    this.comments = const [],
     this.closingNote,
   });
 
@@ -292,11 +322,13 @@ class ComplaintDto {
   final String? queueHint;
   final List<ComplaintAttachmentDto> attachments;
   final List<ComplaintStatusEventDto> statusEvents;
+  final List<ComplaintCommentDto> comments;
   final String? closingNote;
 
   factory ComplaintDto.fromJson(Map<String, dynamic> json) {
     final attachmentsJson = json['attachments'] as List<dynamic>? ?? [];
     final eventsJson = json['statusEvents'] as List<dynamic>? ?? [];
+    final commentsJson = json['comments'] as List<dynamic>? ?? [];
     return ComplaintDto(
       id: json['id'] as String,
       ticketNumber: json['ticketNumber'] as String,
@@ -317,6 +349,9 @@ class ComplaintDto {
           .toList(),
       statusEvents: eventsJson
           .map((e) => ComplaintStatusEventDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      comments: commentsJson
+          .map((e) => ComplaintCommentDto.fromJson(e as Map<String, dynamic>))
           .toList(),
       closingNote: json['closingNote'] as String?,
     );

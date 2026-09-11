@@ -50,12 +50,15 @@ export type UserDto = {
   hasPin: boolean;
 };
 
+export type ComplaintCommentKind = "comment" | "question";
+
 export type ComplaintCommentDto = {
   id: string;
   complaintId: string;
   userId: string;
   authorName: string | null;
   body: string;
+  kind: ComplaintCommentKind;
   createdAt: string;
 };
 

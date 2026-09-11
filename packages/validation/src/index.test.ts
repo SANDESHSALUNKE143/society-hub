@@ -19,6 +19,7 @@ import {
   createBuildingSchema,
   createComplaintCommentSchema,
   createComplaintSchema,
+  updateComplaintSchema,
   createEventSchema,
   createFlatSchema,
   createSocietyFlatSchema,
@@ -250,6 +251,10 @@ describe("validation schemas", () => {
     expect(() =>
       updateComplaintStatusSchema.parse({ status: "closed" }),
     ).toThrow();
+    expect(updateComplaintSchema.parse({ title: "Updated leak" }).title).toBe(
+      "Updated leak",
+    );
+    expect(() => updateComplaintSchema.parse({})).toThrow();
   });
 
   test("listQuerySchema coerces page/limit", () => {
@@ -266,9 +271,13 @@ describe("validation schemas", () => {
     const tenantId = "11111111-1111-1111-1111-111111111111";
     expect(selectTenantSchema.parse({ tenantId }).tenantId).toBe(tenantId);
     expect(() => selectTenantSchema.parse({ tenantId: "bad" })).toThrow();
-    expect(createComplaintCommentSchema.parse({ body: "Update please" }).body).toBe(
-      "Update please",
-    );
+    expect(createComplaintCommentSchema.parse({ body: "Update please" })).toEqual({
+      body: "Update please",
+      kind: "comment",
+    });
+    expect(
+      createComplaintCommentSchema.parse({ body: "Need a photo?", kind: "question" }).kind,
+    ).toBe("question");
     expect(() => createComplaintCommentSchema.parse({ body: "" })).toThrow();
   });
 

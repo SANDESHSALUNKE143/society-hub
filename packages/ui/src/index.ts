@@ -58,6 +58,7 @@ export { ComplaintTypeIcon } from "./complaint-type-icon";
 export { ComplaintListCard } from "./complaint-list-card";
 export {
   CommitteeNoteCard,
+  ComplaintComments,
   ComplaintMetaRow,
   ComplaintQueueBanner,
   ComplaintStatusPill,

@@ -62,7 +62,7 @@
 | Table | Purpose |
 |-------|---------|
 | `complaints` | Ticket, status, assignee, SLA due |
-| `complaint_comments` | Thread |
+| `complaint_comments` | Thread (`kind` = `comment` or `question`) |
 | `complaint_attachments` | Blob references |
 
 ### Billing and payments

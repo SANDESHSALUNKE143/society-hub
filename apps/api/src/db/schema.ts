@@ -336,6 +336,7 @@ export const complaintComments = mysqlTable(
     complaintId: char("complaint_id", { length: 36 }).notNull(),
     userId: char("user_id", { length: 36 }).notNull(),
     body: text("body").notNull(),
+    kind: mysqlEnum("kind", ["comment", "question"]).notNull().default("comment"),
     ...timestamps,
   },
   (t) => [index("complaint_comments_complaint_idx").on(t.complaintId)],

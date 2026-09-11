@@ -1923,11 +1923,74 @@ describe("api integration", () => {
     );
     expect(comment.ok).toBe(true);
     const withComment = (await comment.json()) as {
-      comments: { body: string }[];
+      comments: { body: string; createdAt?: string }[];
     };
     expect(withComment.comments.some((c) => c.body === "Technician dispatched")).toBe(
       true,
     );
+    expect(withComment.comments[0]?.createdAt ?? "").toMatch(/Z$/);
+  });
+
+  test("resident can comment, ask, edit, and delete an open complaint", async () => {
+    const resident = await otpLogin("8888888888");
+    const rAuth = {
+      Authorization: `Bearer ${resident.tokens.accessToken}`,
+      "Content-Type": "application/json",
+    };
+    const created = await fetch(`${base}/v1/complaints`, {
+      method: "POST",
+      headers: rAuth,
+      body: JSON.stringify({
+        title: "Tap dripping",
+        type: "plumbing",
+        description: "Kitchen tap will not close",
+      }),
+    });
+    expect(created.ok).toBe(true);
+    const complaint = (await created.json()) as {
+      id: string;
+      createdAt: string;
+    };
+    expect(complaint.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
+
+    const edited = await fetch(`${base}/v1/complaints/${complaint.id}`, {
+      method: "PATCH",
+      headers: rAuth,
+      body: JSON.stringify({ title: "Kitchen tap dripping" }),
+    });
+    expect(edited.ok).toBe(true);
+    expect(((await edited.json()) as { title: string }).title).toBe(
+      "Kitchen tap dripping",
+    );
+
+    const question = await fetch(`${base}/v1/complaints/${complaint.id}/comments`, {
+      method: "POST",
+      headers: rAuth,
+      body: JSON.stringify({ body: "Can someone visit today?", kind: "question" }),
+    });
+    expect(question.ok).toBe(true);
+    const withQ = (await question.json()) as {
+      comments: { body: string; kind: string }[];
+    };
+    expect(withQ.comments.some((c) => c.kind === "question")).toBe(true);
+
+    const comment = await fetch(`${base}/v1/complaints/${complaint.id}/comments`, {
+      method: "POST",
+      headers: rAuth,
+      body: JSON.stringify({ body: "Still leaking this evening." }),
+    });
+    expect(comment.ok).toBe(true);
+
+    const removed = await fetch(`${base}/v1/complaints/${complaint.id}`, {
+      method: "DELETE",
+      headers: rAuth,
+    });
+    expect(removed.ok).toBe(true);
+
+    const gone = await fetch(`${base}/v1/complaints/${complaint.id}`, {
+      headers: rAuth,
+    });
+    expect(gone.status).toBe(404);
   });
 
   test("chairperson can raise complaint by selecting a flat", async () => {

@@ -164,7 +164,7 @@ Save `id` as `societyId` / `tenantId`.
 1. Staff pick a flat, then `POST /v1/admin/residents` for the **owner** (`isOwner: true`) with `name`, `phone`, `flatId`, plus optional `email` and the same onboard fields as CSV. A flat has **one owner**; later people on that flat are family even if `isOwner: true` is sent. To change the current owner’s name, mobile, or email, send `editOwner: true` (keeps that person as the only owner; a new phone must not belong to someone else). `GET /v1/admin/residents` lists people (several rows may share a flat). Match by **phone** unless `editOwner` is set. Email must be unique if set.
 2. Owner resident: `POST /v1/household/members` with `name`, `phone`, optional `email` to add family members on that flat. `GET /v1/household/members` lists the household for anyone linked to that flat (including society staff with a resident row).
 3. Any household member: OTP verify with their phone, then `POST /v1/complaints` (resident uses linked flat only; staff must pass `flatId` when they have no linked flat, or to file for another lot)
-4. Staff: `PATCH /v1/complaints/{id}/status`, `POST /v1/complaints/{id}/comments`
+4. Staff: `PATCH /v1/complaints/{id}/status`, `POST /v1/complaints/{id}/comments`. Raiser: `PATCH /v1/complaints/{id}`, comments, and delete while open.
 5. Optional: `POST /v1/complaints/{id}/attachments` (`multipart/form-data`, field `file`)
 
 Complaint types: `electric`, `plumbing`, `housekeeping`, `security`, `lift`, `other`  
@@ -409,10 +409,11 @@ When `DEV_AUTH=true`, create responses include `devToken` so testers can accept 
 | GET | `/v1/complaints` | Yes | Staff: all; resident: own |
 | GET | `/v1/complaints/:id` | Yes | |
 | POST | `/v1/complaints` | Resident/staff | **FR-CMP-1:** resident uses the logged-in flat (body `flatId` for another lot is `403`). Staff may pass `flatId`; required if they have no linked flat |
+| PATCH | `/v1/complaints/:id` | Raiser | Edit title/type/description while not resolved/closed |
 | PATCH | `/v1/complaints/:id/status` | Staff | |
 | GET | `/v1/complaints/:id/comments` | Yes | |
-| POST | `/v1/complaints/:id/comments` | Yes | `{ body }` |
-| DELETE | `/v1/complaints/:id` | Staff | Soft-delete |
+| POST | `/v1/complaints/:id/comments` | Yes | `{ body, kind?: comment\|question }` |
+| DELETE | `/v1/complaints/:id` | Staff, or raiser while `open` | Soft-delete |
 | POST | `/v1/complaints/:id/attachments` | Yes | `multipart` field `file` (image≤10MB, video≤50MB) |
 | GET | `/v1/media/:id` | Yes | Bearer **or** `?access_token=` |
 

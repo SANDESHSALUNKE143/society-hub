@@ -98,6 +98,7 @@ Map<String, dynamic> complaintJson({
   String? closingNote,
   List<Map<String, dynamic>> attachments = const [],
   List<Map<String, dynamic>> statusEvents = const [],
+  List<Map<String, dynamic>> comments = const [],
 }) {
   return {
     'id': id,
@@ -116,6 +117,7 @@ Map<String, dynamic> complaintJson({
     'queueHint': queueHint,
     'attachments': attachments,
     'statusEvents': statusEvents,
+    'comments': comments,
     'closingNote': closingNote,
   };
 }

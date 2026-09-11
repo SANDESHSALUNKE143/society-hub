@@ -301,6 +301,47 @@ class SocietyHubApi {
     );
   }
 
+  Future<ComplaintDto> updateComplaint(
+    String id, {
+    String? title,
+    String? type,
+    String? typeOtherText,
+    String? description,
+  }) {
+    return _request(
+      '/v1/complaints/$id',
+      method: 'PATCH',
+      data: {
+        if (title != null) 'title': title,
+        if (type != null) 'type': type,
+        if (typeOtherText != null) 'typeOtherText': typeOtherText,
+        if (description != null) 'description': description,
+      },
+      parse: (json) => ComplaintDto.fromJson(json as Map<String, dynamic>),
+    );
+  }
+
+  Future<ComplaintDto> addComplaintComment(
+    String id,
+    String body, {
+    String kind = 'comment',
+  }) {
+    return _request(
+      '/v1/complaints/$id/comments',
+      method: 'POST',
+      data: {'body': body, 'kind': kind},
+      parse: (json) => ComplaintDto.fromJson(json as Map<String, dynamic>),
+    );
+  }
+
+  Future<void> deleteComplaint(String id) async {
+    await _request<Object?>(
+      '/v1/complaints/$id',
+      method: 'DELETE',
+      parse: (_) => null,
+    );
+  }
+
   Future<ComplaintDto> updateComplaintStatus(
     String id,
     String status, {

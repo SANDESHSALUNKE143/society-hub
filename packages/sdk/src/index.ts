@@ -570,6 +570,30 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
           assignedToUserId: opts?.assignedToUserId ?? null,
         }),
       }),
+    updateComplaint: (
+      id: string,
+      body: {
+        title?: string;
+        type?: string;
+        typeOtherText?: string | null;
+        description?: string;
+      },
+    ) =>
+      request<ComplaintDto>(`/v1/complaints/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    addComplaintComment: (
+      id: string,
+      body: string,
+      kind: "comment" | "question" = "comment",
+    ) =>
+      request<ComplaintDto>(`/v1/complaints/${id}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ body, kind }),
+      }),
+    deleteComplaint: (id: string) =>
+      request<{ ok: true }>(`/v1/complaints/${id}`, { method: "DELETE" }),
     uploadAttachment: async (complaintId: string, file: File) => {
       const form = new FormData();
       form.append("file", file);

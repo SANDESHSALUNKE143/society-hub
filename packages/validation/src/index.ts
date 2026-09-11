@@ -258,8 +258,18 @@ export const updateComplaintStatusSchema = z
     }
   });
 
+export const updateComplaintSchema = createComplaintSchema.omit({ flatId: true }).partial().refine(
+  (val) =>
+    val.title !== undefined ||
+    val.type !== undefined ||
+    val.description !== undefined ||
+    val.typeOtherText !== undefined,
+  { message: "Provide at least one field to update" },
+);
+
 export const createComplaintCommentSchema = z.object({
   body: z.string().min(1).max(2000),
+  kind: z.enum(["comment", "question"]).optional().default("comment"),
 });
 
 export const listQuerySchema = z.object({

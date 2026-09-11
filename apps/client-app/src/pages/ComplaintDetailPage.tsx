@@ -7,6 +7,7 @@ import { canUseAdminMode, useAppMode } from "../app-mode";
 import { Icon } from "../components/icons";
 import {
   CommitteeNoteCard,
+  ComplaintComments,
   ComplaintMetaRow,
   ComplaintQueueBanner,
   ComplaintStatusPill,
@@ -41,6 +42,10 @@ export function ComplaintDetailPage() {
   const [complaint, setComplaint] = useState<ComplaintDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [threadBody, setThreadBody] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
   const [evidence, setEvidence] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
@@ -50,7 +55,11 @@ export function ComplaintDetailPage() {
     if (!id) return;
     client
       .getComplaint(id)
-      .then(setComplaint)
+      .then((row) => {
+        setComplaint(row);
+        setEditTitle(row.title);
+        setEditDescription(row.description);
+      })
       .catch((err) => setError(err.message));
   }, [client, id]);
 
@@ -121,6 +130,57 @@ export function ComplaintDetailPage() {
     }
   }
 
+  const canEdit =
+    Boolean(user && complaint && complaint.status !== "resolved" && complaint.status !== "closed") &&
+    !showStaffControls;
+  const canDelete = Boolean(user && complaint && complaint.status === "open") && !showStaffControls;
+
+  async function postThread(kind: "comment" | "question") {
+    if (!id || threadBody.trim().length < 1) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await client.addComplaintComment(id, threadBody.trim(), kind);
+      setComplaint(updated);
+      setThreadBody("");
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.body.message : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveEdits() {
+    if (!id) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await client.updateComplaint(id, {
+        title: editTitle.trim(),
+        description: editDescription.trim(),
+      });
+      setComplaint(updated);
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.body.message : "Failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeComplaint() {
+    if (!id || !window.confirm("Delete this complaint? This cannot be undone.")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await client.deleteComplaint(id);
+      window.location.assign("/complaints");
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.body.message : "Failed");
+      setBusy(false);
+    }
+  }
+
   async function onEvidenceChange(e: FormEvent<HTMLInputElement>) {
     const input = e.currentTarget;
     setEvidence(Array.from(input.files ?? []));
@@ -139,6 +199,8 @@ export function ComplaintDetailPage() {
       <Link to="/complaints" className="sh-complaint-back">
         ← Back to complaints
       </Link>
+
+      {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
 
       {justCreated && (
         <div
@@ -183,7 +245,93 @@ export function ComplaintDetailPage() {
         <ComplaintQueueBanner hint={complaint.queueHint} />
       ) : null}
 
-      <p className="sh-complaint-copy whitespace-pre-wrap">{complaint.description}</p>
+      {editing ? (
+        <div className="space-y-3" data-testid="complaint-edit-form">
+          <input
+            className="input"
+            data-testid="complaint-edit-title"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+          />
+          <textarea
+            className="input min-h-24"
+            data-testid="complaint-edit-description"
+            value={editDescription}
+            onChange={(e) => setEditDescription(e.target.value)}
+          />
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void saveEdits()}>
+              Save changes
+            </button>
+            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setEditing(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="sh-complaint-copy whitespace-pre-wrap">{complaint.description}</p>
+      )}
+
+      {(canEdit || canDelete) && !editing ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {canEdit ? (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              data-testid="complaint-edit"
+              onClick={() => setEditing(true)}
+            >
+              Edit complaint
+            </button>
+          ) : null}
+          {canDelete ? (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              data-testid="complaint-delete"
+              disabled={busy}
+              onClick={() => void removeComplaint()}
+            >
+              Delete
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <ComplaintComments comments={complaint.comments} currentUserId={user?.id} />
+
+      {complaint.status !== "closed" ? (
+        <section className="sh-complaint-block" data-testid="complaint-thread-form">
+          <h2 className="sh-complaint-block-title">Add an update</h2>
+          <textarea
+            className="input min-h-20"
+            data-testid="complaint-thread-body"
+            placeholder="Ask a question or add a comment"
+            value={threadBody}
+            onChange={(e) => setThreadBody(e.target.value)}
+          />
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn btn-primary"
+              data-testid="complaint-add-comment"
+              disabled={busy || threadBody.trim().length < 1}
+              onClick={() => void postThread("comment")}
+            >
+              Add comment
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              data-testid="complaint-ask-question"
+              disabled={busy || threadBody.trim().length < 1}
+              onClick={() => void postThread("question")}
+            >
+              Ask a question
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <ComplaintTimeline events={complaint.statusEvents} />
 
@@ -330,7 +478,6 @@ export function ComplaintDetailPage() {
               </button>
             )}
           </div>
-          {error && <p className="mt-2 text-sm text-[var(--danger)]">{error}</p>}
         </section>
       )}
     </div>
