@@ -324,11 +324,22 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
       adultCount?: number;
       childCount?: number;
       seniorCitizenCount?: number;
+      /** Welcome notify only — does not create an invitation. */
+      channels?: Array<"email" | "whatsapp">;
     }) =>
-      request<{ user: UserDto; resident: ResidentDetailDto }>(
-        "/v1/admin/residents",
-        { method: "POST", body: JSON.stringify(body) },
-      ),
+      request<{
+        user: UserDto;
+        resident: ResidentDetailDto;
+        created?: boolean;
+        updated?: boolean;
+        delivery?: {
+          email?: { ok: boolean; error?: string };
+          whatsapp?: { ok: boolean; error?: string };
+        };
+      }>("/v1/admin/residents", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
 
     listSocietyResidents: () =>
       request<SocietyResidentDto[]>("/v1/admin/society-residents"),

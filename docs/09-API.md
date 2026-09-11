@@ -161,7 +161,7 @@ Save `id` as `societyId` / `tenantId`.
 
 ### C. Onboard a resident and raise a complaint
 
-1. Staff pick a flat, then `POST /v1/admin/residents` for the **owner** (`isOwner: true`) with `name`, `phone`, `flatId`, plus optional `email` and the same onboard fields as CSV. A flat has **one owner**; later people on that flat are family even if `isOwner: true` is sent. To change the current owner’s name, mobile, or email, send `editOwner: true` (keeps that person as the only owner; a new phone must not belong to someone else). `GET /v1/admin/residents` lists people (several rows may share a flat). Match by **phone** unless `editOwner` is set. Email must be unique if set.
+1. Staff pick a flat, then `POST /v1/admin/residents` for the **owner** (`isOwner: true`) with `name`, `phone`, `flatId`, plus optional `email`, optional `channels: ["email","whatsapp"]` for a welcome notify (no invitation token), and the same onboard fields as CSV. A flat has **one owner**; later people on that flat are family even if `isOwner: true` is sent. To change the current owner’s name, mobile, or email, send `editOwner: true` (keeps that person as the only owner; a new phone must not belong to someone else). `GET /v1/admin/residents` is the paginated directory; `GET /v1/admin/society-residents` is the simple household list for Add resident. Match by **phone** unless `editOwner` is set. Email must be unique if set.
 2. Owner resident: `POST /v1/household/members` with `name`, `phone`, optional `email` to add family members on that flat. `GET /v1/household/members` lists the household for anyone linked to that flat (including society staff with a resident row).
 3. Any household member: OTP verify with their phone, then `POST /v1/complaints` (resident uses linked flat only; staff must pass `flatId` when they have no linked flat, or to file for another lot)
 4. Staff: `PATCH /v1/complaints/{id}/status`, `POST /v1/complaints/{id}/comments`. Raiser: `PATCH /v1/complaints/{id}`, comments, and delete while open.
@@ -170,9 +170,12 @@ Save `id` as `societyId` / `tenantId`.
 Complaint types: `electric`, `plumbing`, `housekeeping`, `security`, `lift`, `other`  
 Statuses: `open`, `assigned`, `in_progress`, `resolved`, `closed`
 
-### C2. Invite → accept → verify (resident lifecycle)
+### C2. Invite → accept → verify (legacy / CSV tokens)
 
-1. Staff: `POST /v1/invitations` `{ "email": "…", "role": "resident", "flatId": "…", "residentType": "tenant" }`
+Staff **Add resident** onboards immediately (OTP login). Invitation tokens remain for CSV
+“Invite new” / leftovers and public accept:
+
+1. Staff or CSV: `POST /v1/invitations` `{ "email": "…", "role": "resident", "flatId": "…", "residentType": "tenant" }`
    → `pending`, expires in 14 days. In `DEV_AUTH` the response carries `devToken`.
 2. Invitee (unauthenticated): `GET /v1/invites/{token}` to preview, then
    `POST /v1/invites/accept` `{ "token": "…", "name": "…", "phone": "…" }`
@@ -183,6 +186,8 @@ Statuses: `open`, `assigned`, `in_progress`, `resolved`, `closed`
    `POST /v1/admin/residents/{id}/verify` (or `/reject` with a `reason`)
 6. Resident: `GET /v1/profile` shows `membership.verificationStatus: "approved"` — or the rejection
    reason verbatim
+
+Resend / revoke: Residents **Pending invitations** tab → `POST /v1/invitations/{id}/resend|revoke`.
 
 ### C3. Move a resident out (history is preserved)
 
@@ -334,7 +339,7 @@ All staff-only and tenant-scoped: a resident in another society returns `404`.
 | Method | Path | Notes |
 |--------|------|-------|
 | GET | `/` | **Server-side** directory. Query: `page`, `limit` (≤100), `search` (name/phone/email/flat), `buildingId`, `wingId`, `flatId`, `residentType`, `status`, `verificationStatus`, `sort` (`name`\|`flat`\|`createdAt`\|`status`), `order`. Returns `Paginated<ResidentSummaryDto>`. |
-| POST | `/` | Onboard/move a resident in. `{ name, phone, email?, flatId, residentType?, isPrimary?, moveInDate?, remarks? }` plus household fields (`vehicles`, parking, PNG, family counts). `editOwner: true` updates the current owner; `editUserId` updates that person. First person on a vacant flat is the owner. If the person already occupies a *different* flat, that period is closed first. |
+| POST | `/` | Onboard/move a resident in. `{ name, phone, email?, flatId, residentType?, isPrimary?, moveInDate?, remarks?, channels? }` plus household fields (`vehicles`, parking, PNG, family counts). `channels` is optional `("email"|"whatsapp")[]` — welcome notify only when the call **creates** a person; does **not** insert an invitation. `editOwner: true` updates the current owner; `editUserId` updates that person. First person on a vacant flat is the owner. If the person already occupies a *different* flat, that period is closed first. |
 | GET | `/:id` | `ResidentDetailDto` — membership, flat, roles, emergency contact, family, documents, vehicles, other memberships |
 | PATCH | `/:id` | `{ name?, phone?, email?, residentType?, isPrimary?, moveInDate?, remarks? }` |
 | POST | `/:id/verify` | Approve verification → `active` |

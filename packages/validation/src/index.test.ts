@@ -224,6 +224,21 @@ describe("validation schemas", () => {
         ],
       }),
     ).toThrow();
+    expect(
+      onboardResidentSchema.parse({
+        name: "Ravi",
+        phone: "7777777777",
+        flatId,
+        channels: ["email", "whatsapp"],
+      }).channels,
+    ).toEqual(["email", "whatsapp"]);
+    expect(
+      onboardResidentSchema.parse({
+        name: "Ravi",
+        phone: "7777777777",
+        flatId,
+      }).channels,
+    ).toBeUndefined();
   });
 
   test("createComplaintSchema and status update", () => {

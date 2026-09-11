@@ -20,10 +20,18 @@ describe("Client App staff onboard resident (Admin mode)", () => {
         },
       ],
     }).as("flats");
-    cy.intercept("GET", "**/v1/admin/residents", {
+    cy.intercept("GET", "**/v1/admin/society-residents", {
       statusCode: 200,
       body: [],
-    }).as("residents");
+    }).as("societyResidents");
+    cy.intercept("GET", "**/v1/admin/residents*", {
+      statusCode: 200,
+      body: { items: [], page: 1, limit: 20, total: 0 },
+    }).as("residentsDirectory");
+    cy.intercept("GET", "**/v1/invitations*", {
+      statusCode: 200,
+      body: { items: [], page: 1, limit: 20, total: 0 },
+    });
     cy.intercept("GET", "**/v1/admin/parkings", {
       statusCode: 200,
       body: [
@@ -47,13 +55,18 @@ describe("Client App staff onboard resident (Admin mode)", () => {
     }).as("parkings");
   });
 
-  it("onboards a resident from the Client App Admin mode", () => {
-    cy.visit("/onboard");
+  function openAddDialog() {
+    cy.visit("/residents?add=1");
     cy.wait("@flats");
+    cy.get('[data-testid="residents-add-dialog"]').should("be.visible");
+    cy.contains("Add resident").should("be.visible");
+  }
 
-    cy.contains("h1", "Onboard resident").should("be.visible");
+  it("onboards a resident from the Add resident dialog", () => {
+    openAddDialog();
     cy.contains("Pick a flat to see Owner").should("be.visible");
     cy.get('[data-testid="onboard-society-name"]').should("be.disabled");
+    cy.get('[data-testid="onboard-notify"]').should("be.visible");
 
     cy.get('[data-testid="onboard-wing"]').should("have.value", "A");
     cy.get('[data-testid="onboard-flat"] option').should("have.length", 1);
@@ -106,11 +119,12 @@ describe("Client App staff onboard resident (Admin mode)", () => {
       body: {
         user: { name: "Test Resident", phone: "9999999999" },
         resident: { id: "res-1" },
+        created: true,
       },
     }).as("onboard");
 
     cy.get('[data-testid="onboard-name"]').type("Test Resident");
-    cy.get("#phone").type("9999999999");
+    cy.get('[data-testid="onboard-phone"]').type("9999999999");
     cy.get('[data-testid="onboard-submit"]').click();
 
     cy.wait("@onboard");
@@ -118,7 +132,7 @@ describe("Client App staff onboard resident (Admin mode)", () => {
   });
 
   it("lets staff edit the existing owner on the Owner tab", () => {
-    cy.intercept("GET", "**/v1/admin/residents", {
+    cy.intercept("GET", "**/v1/admin/society-residents", {
       statusCode: 200,
       body: [
         {
@@ -133,8 +147,7 @@ describe("Client App staff onboard resident (Admin mode)", () => {
         },
       ],
     }).as("residentsWithOwner");
-    cy.visit("/onboard");
-    cy.wait("@flats");
+    openAddDialog();
     cy.wait("@residentsWithOwner");
 
     cy.get('[data-testid="onboard-tabs"]').should("be.visible");
@@ -166,7 +179,7 @@ describe("Client App staff onboard resident (Admin mode)", () => {
   });
 
   it("lists family in a table and adds one from a dialog", () => {
-    cy.intercept("GET", "**/v1/admin/residents", {
+    cy.intercept("GET", "**/v1/admin/society-residents", {
       statusCode: 200,
       body: [
         {
@@ -191,8 +204,7 @@ describe("Client App staff onboard resident (Admin mode)", () => {
         },
       ],
     }).as("household");
-    cy.visit("/onboard");
-    cy.wait("@flats");
+    openAddDialog();
     cy.wait("@household");
     cy.get('[data-testid="onboard-tab-family"]').should(
       "have.attr",
@@ -213,7 +225,7 @@ describe("Client App staff onboard resident (Admin mode)", () => {
     cy.get('[data-testid="onboard-family-dialog"]').should("be.visible");
     cy.get('[data-testid="onboard-family-name"]').type("New Member");
     cy.get('[data-testid="onboard-family-phone"]').type("9000000099");
-    cy.intercept("GET", "**/v1/admin/residents", {
+    cy.intercept("GET", "**/v1/admin/society-residents", {
       statusCode: 200,
       body: [
         {

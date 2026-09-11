@@ -8,7 +8,7 @@ import 'features/auth/presentation/login_page.dart';
 import 'features/auth/presentation/select_society_page.dart';
 import 'features/complaints/presentation/complaints_pages.dart';
 import 'features/dashboard/presentation/dashboard_page.dart';
-import 'features/onboard/presentation/onboard_page.dart';
+import 'features/residents/presentation/residents_page.dart';
 import 'features/shell/presentation/app_shell.dart';
 import 'features/team/presentation/team_page.dart';
 
@@ -63,8 +63,16 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
+            path: '/home/residents',
+            builder: (context, state) => ResidentsPage(
+              initialTab: state.uri.queryParameters['tab'] ?? 'directory',
+              openAdd: state.uri.queryParameters['add'] == '1',
+            ),
+          ),
+          GoRoute(
             path: '/home/onboard',
-            builder: (context, state) => const OnboardPage(),
+            builder: (context, state) =>
+                const ResidentsRedirectPage(add: true),
           ),
           GoRoute(
             path: '/home/account',
@@ -93,7 +101,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/home/invites',
             builder: (context, state) =>
-                const ComingSoonPage(title: 'Invites'),
+                const ResidentsRedirectPage(tab: 'invites'),
           ),
           GoRoute(
             path: '/home/team',

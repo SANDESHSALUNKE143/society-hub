@@ -55,6 +55,8 @@ class _OnboardPageState extends ConsumerState<OnboardPage> {
   bool _busy = false;
   String? _message;
   String? _error;
+  bool _notifyEmail = true;
+  bool _notifyWhatsapp = true;
 
   @override
   void initState() {
@@ -128,7 +130,7 @@ class _OnboardPageState extends ConsumerState<OnboardPage> {
       } catch (_) {}
       var residents = <SocietyResidentDto>[];
       try {
-        residents = await api.listResidents();
+        residents = await api.listSocietyResidents();
       } catch (_) {}
       if (mounted) {
         setState(() {
@@ -326,6 +328,13 @@ class _OnboardPageState extends ConsumerState<OnboardPage> {
       collect(_fourWheelers, 'four_wheeler', remainingFw);
 
       final savingParking = _tab == 'parking';
+      final editingOwner = savingParking
+          ? owner != null
+          : _isOwner && owner != null;
+      final channels = <String>[
+        if (_notifyEmail) 'email',
+        if (_notifyWhatsapp) 'whatsapp',
+      ];
       final user = await ref.read(apiProvider).onboardResident(
             name: savingParking
                 ? (owner?.name ?? _name.text).trim()
@@ -341,9 +350,7 @@ class _OnboardPageState extends ConsumerState<OnboardPage> {
             parkingSlot: _parking.text.trim().isEmpty ? null : _parking.text.trim(),
             parkingSlotId: _parkingId,
             isOwner: savingParking ? true : _isOwner,
-            editOwner: savingParking
-                ? owner != null
-                : _isOwner && owner != null,
+            editOwner: editingOwner,
             emergencyContact:
                 _emergency.text.trim().isEmpty ? null : _emergency.text.trim(),
             pngGasConnection: _pngGas,
@@ -351,6 +358,9 @@ class _OnboardPageState extends ConsumerState<OnboardPage> {
             childCount: int.tryParse(_children.text.trim()) ?? 0,
             seniorCitizenCount: int.tryParse(_seniors.text.trim()) ?? 0,
             vehicles: vehicles,
+            channels: editingOwner || savingParking || _tab == 'family'
+                ? null
+                : (channels.isEmpty ? null : channels),
           );
       var flats = _flats;
       var parkings = _parkings;
@@ -362,7 +372,7 @@ class _OnboardPageState extends ConsumerState<OnboardPage> {
         parkings = await ref.read(apiProvider).listParkings();
       } catch (_) {}
       try {
-        residents = await ref.read(apiProvider).listResidents();
+        residents = await ref.read(apiProvider).listSocietyResidents();
       } catch (_) {}
       setState(() {
         _message = 'Onboarded ${user.name ?? user.phone}';
@@ -721,6 +731,27 @@ class _OnboardPageState extends ConsumerState<OnboardPage> {
                       ),
                     ],
                   ),
+                ),
+              ],
+              if (_flatId != null && (_tab == 'owner' || _tab == 'family')) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'Notify after add (welcome — no invite link)',
+                  style: TextStyle(fontSize: 13, color: Colors.black54),
+                ),
+                CheckboxListTile(
+                  key: AppKeys.onboardNotifyEmail,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Email'),
+                  value: _notifyEmail,
+                  onChanged: (v) => setState(() => _notifyEmail = v ?? false),
+                ),
+                CheckboxListTile(
+                  key: AppKeys.onboardNotifyWhatsapp,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('WhatsApp'),
+                  value: _notifyWhatsapp,
+                  onChanged: (v) => setState(() => _notifyWhatsapp = v ?? false),
                 ),
               ],
               if (_flatId != null) ...[

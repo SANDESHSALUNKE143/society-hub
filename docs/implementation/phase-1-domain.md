@@ -168,6 +168,16 @@ detail page and the dashboard can never disagree.
 `accepted_by_user_id`, `revoked_at`, `last_sent_at`, `resend_count` and `active_key`, plus an
 `expired` status.
 
+**Staff create path for residents is onboard** (`POST /v1/admin/residents`), not a separate
+Invite form. Optional `channels: ["email","whatsapp"]` on onboard sends a **welcome** message
+(sign in with OTP) without inserting an `invitations` row. Invitation tokens remain for:
+
+- Bulk CSV import when “Invite new” / “Re-invite” is checked
+- Public accept (`/v1/invites/:token`, `/accept-invite`) for links already in the wild
+- Resend / revoke on the Residents **Pending invitations** tab
+
+Invitation rules:
+
 - `active_key` = `lower(email|phone|role)` while **pending**, `NULL` otherwise, with
   `UNIQUE (tenant_id, active_key)` — one live invitation per recipient and role, while revoked and
   accepted history stays unconstrained.
@@ -176,6 +186,8 @@ detail page and the dashboard can never disagree.
   pending rows to `expired` and frees their key.
 - Accepting is single-use, creates or reuses the `users` row, grants the role, and — when the invite
   names a flat — opens a `pending_verification` membership.
+
+Committee / staff continue to be added on **Team** (immediate OTP login), not via Residents.
 
 ---
 

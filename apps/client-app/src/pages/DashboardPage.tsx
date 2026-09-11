@@ -131,7 +131,7 @@ export function DashboardPage() {
               testId="occupancy-pending-verification"
             />
             <OccupancyTile
-              to="/invites"
+              to="/residents?tab=invites"
               label="Pending invitations"
               value={stats.occupancy.pendingInvitations}
               testId="occupancy-pending-invitations"
@@ -182,8 +182,12 @@ export function DashboardPage() {
           <div className="grid grid-cols-2 gap-2">
             {staffView ? (
               <>
-                <Link to="/onboard" className="btn btn-ghost text-sm">Onboard resident</Link>
-                <Link to="/invites" className="btn btn-ghost text-sm">Send invite</Link>
+                <Link to="/residents?add=1" className="btn btn-ghost text-sm">
+                  Add resident
+                </Link>
+                <Link to="/residents?tab=invites" className="btn btn-ghost text-sm">
+                  Pending invitations
+                </Link>
                 <Link to="/bills" className="btn btn-ghost text-sm">Generate bills</Link>
                 <Link to="/notices" className="btn btn-ghost text-sm">New notice</Link>
               </>

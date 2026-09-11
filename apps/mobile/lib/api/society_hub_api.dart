@@ -104,6 +104,7 @@ class SocietyHubApi {
     String path, {
     String method = 'GET',
     Object? data,
+    Map<String, dynamic>? query,
     bool auth = true,
     required T Function(dynamic json) parse,
   }) async {
@@ -111,6 +112,7 @@ class SocietyHubApi {
       final res = await _dio.request<dynamic>(
         path,
         data: data,
+        queryParameters: query,
         options: Options(
           method: method,
           extra: {'auth': auth},
@@ -520,12 +522,73 @@ class SocietyHubApi {
     );
   }
 
-  Future<List<SocietyResidentDto>> listResidents() {
+  Future<PaginatedDto<ResidentSummaryDto>> listResidents({
+    int page = 1,
+    int limit = 20,
+    String? search,
+    String? residentType,
+    String? status,
+  }) {
     return _request(
       '/v1/admin/residents',
+      query: {
+        'page': page,
+        'limit': limit,
+        if (search != null && search.isNotEmpty) 'search': search,
+        if (residentType != null && residentType.isNotEmpty)
+          'residentType': residentType,
+        if (status != null && status.isNotEmpty) 'status': status,
+      },
+      parse: (json) => PaginatedDto.fromJson(
+        json as Map<String, dynamic>,
+        ResidentSummaryDto.fromJson,
+      ),
+    );
+  }
+
+  Future<List<SocietyResidentDto>> listSocietyResidents() {
+    return _request(
+      '/v1/admin/society-residents',
       parse: (json) => (json as List<dynamic>)
           .map((e) => SocietyResidentDto.fromJson(e as Map<String, dynamic>))
           .toList(),
+    );
+  }
+
+  Future<PaginatedDto<InvitationDto>> listInvitations({
+    int page = 1,
+    int limit = 20,
+    String? search,
+    String? status,
+  }) {
+    return _request(
+      '/v1/invitations',
+      query: {
+        'page': page,
+        'limit': limit,
+        if (search != null && search.isNotEmpty) 'search': search,
+        if (status != null && status.isNotEmpty) 'status': status,
+      },
+      parse: (json) => PaginatedDto.fromJson(
+        json as Map<String, dynamic>,
+        InvitationDto.fromJson,
+      ),
+    );
+  }
+
+  Future<InvitationDto> resendInvitation(String id) {
+    return _request(
+      '/v1/invitations/$id/resend',
+      method: 'POST',
+      parse: (json) => InvitationDto.fromJson(json as Map<String, dynamic>),
+    );
+  }
+
+  Future<InvitationDto> revokeInvitation(String id) {
+    return _request(
+      '/v1/invitations/$id/revoke',
+      method: 'POST',
+      parse: (json) => InvitationDto.fromJson(json as Map<String, dynamic>),
     );
   }
 
@@ -599,12 +662,14 @@ class SocietyHubApi {
     String? parkingSlotId,
     bool isOwner = true,
     bool editOwner = false,
+    String? editUserId,
     String? emergencyContact,
     bool? pngGasConnection,
     int? adultCount,
     int? childCount,
     int? seniorCitizenCount,
     List<Map<String, Object?>>? vehicles,
+    List<String>? channels,
   }) {
     return _request(
       '/v1/admin/residents',
@@ -620,6 +685,7 @@ class SocietyHubApi {
           'parkingSlotId': parkingSlotId,
         'isOwner': isOwner,
         if (editOwner) 'editOwner': true,
+        if (editUserId != null && editUserId.isNotEmpty) 'editUserId': editUserId,
         if (emergencyContact != null && emergencyContact.isNotEmpty)
           'emergencyContact': emergencyContact,
         if (pngGasConnection != null) 'pngGasConnection': pngGasConnection,
@@ -627,6 +693,7 @@ class SocietyHubApi {
         if (childCount != null) 'childCount': childCount,
         if (seniorCitizenCount != null) 'seniorCitizenCount': seniorCitizenCount,
         if (vehicles != null) 'vehicles': vehicles,
+        if (channels != null && channels.isNotEmpty) 'channels': channels,
       },
       parse: (json) {
         final map = json as Map<String, dynamic>;

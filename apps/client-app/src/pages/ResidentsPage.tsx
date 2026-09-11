@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import type {
   BuildingDto,
@@ -16,6 +17,7 @@ import {
   ShPageHeader,
   ShPagination,
   ShSelect,
+  ShTabs,
   VERIFICATION_STATUS_LABELS,
   flatLabel,
   residentStatusBadgeClass,
@@ -24,6 +26,8 @@ import {
 } from "@society-hub/ui";
 import { useAuth } from "../auth";
 import { canUseAdminMode } from "../app-mode";
+import { OnboardHouseholdForm } from "../components/OnboardHouseholdForm";
+import { PendingInvitationsPanel } from "../components/PendingInvitationsPanel";
 
 const PAGE_SIZE = 20;
 
@@ -50,15 +54,24 @@ const VERIFICATION_OPTIONS = [
   })),
 ];
 
+const PAGE_TABS = [
+  { id: "directory", label: "Directory" },
+  { id: "invites", label: "Pending invitations" },
+] as const;
+
+type PageTab = (typeof PAGE_TABS)[number]["id"];
+
 /**
- * Admin resident directory. Search, filters, sorting and paging are all
- * round-tripped to the API — the browser never holds the full resident list.
+ * Admin resident hub: directory + leftover invitations, with Add resident dialog.
  */
 export function ResidentsPage() {
   const { client, user } = useAuth();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const allowed = canUseAdminMode(user?.role);
+
+  const tab: PageTab = params.get("tab") === "invites" ? "invites" : "directory";
+  const addOpen = params.get("add") === "1";
 
   const [data, setData] = useState<Paginated<ResidentSummaryDto> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -104,9 +117,9 @@ export function ResidentsPage() {
   }, [client, query]);
 
   useEffect(() => {
-    if (!allowed) return;
+    if (!allowed || tab !== "directory") return;
     load();
-  }, [allowed, load]);
+  }, [allowed, load, tab]);
 
   useEffect(() => {
     if (!allowed || !user?.tenantId) return;
@@ -130,7 +143,6 @@ export function ResidentsPage() {
 
   if (!allowed) return <Navigate to="/dashboard" replace />;
 
-  /** Filter changes always reset to page 1 so results cannot land out of range. */
   function setParam(key: string, value: string) {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
@@ -138,6 +150,26 @@ export function ResidentsPage() {
     if (key !== "page") next.delete("page");
     if (key === "buildingId") next.delete("wingId");
     setParams(next, { replace: true });
+  }
+
+  function setTab(next: PageTab) {
+    const p = new URLSearchParams(params);
+    if (next === "invites") p.set("tab", "invites");
+    else p.delete("tab");
+    p.delete("page");
+    setParams(p, { replace: true });
+  }
+
+  function openAdd() {
+    const p = new URLSearchParams(params);
+    p.set("add", "1");
+    setParams(p, { replace: true });
+  }
+
+  function closeAdd() {
+    const p = new URLSearchParams(params);
+    p.delete("add");
+    setParams(p, { replace: true });
   }
 
   const columns: ShColumn<ResidentSummaryDto>[] = [
@@ -214,116 +246,184 @@ export function ResidentsPage() {
 
   return (
     <div data-testid="residents-page">
-    <ShPage wide>
-      <ShPageHeader
-        title="Residents"
-        description="Everyone linked to a flat in this society, including past occupants."
-        actions={
-          <Link to="/onboard" className="btn btn-primary btn-sm" data-testid="residents-add">
-            Add resident
-          </Link>
-        }
-      />
+      <ShPage wide>
+        <ShPageHeader
+          title="Residents"
+          description="Everyone linked to a flat in this society, including past occupants."
+          actions={
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              data-testid="residents-add"
+              onClick={openAdd}
+            >
+              Add resident
+            </button>
+          }
+        />
 
-      <ShFilterBar testId="residents-filters">
-        <div className="sh-field min-w-[14rem] flex-1">
-          <label className="label" htmlFor="resident-search">
-            Search
-          </label>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setParam("search", searchDraft.trim());
-            }}
-          >
-            <input
-              id="resident-search"
-              className="input"
-              placeholder="Name, phone, email or flat"
-              value={searchDraft}
-              data-testid="residents-search"
-              onChange={(e) => setSearchDraft(e.target.value)}
+        <ShTabs
+          items={[...PAGE_TABS]}
+          value={tab}
+          onChange={(id) => setTab(id as PageTab)}
+          ariaLabel="Residents sections"
+          testId="residents-tabs"
+          idPrefix="residents-tab"
+        />
+
+        {tab === "directory" ? (
+          <>
+            <ShFilterBar testId="residents-filters">
+              <div className="sh-field min-w-[14rem] flex-1">
+                <label className="label" htmlFor="resident-search">
+                  Search
+                </label>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setParam("search", searchDraft.trim());
+                  }}
+                >
+                  <input
+                    id="resident-search"
+                    className="input"
+                    placeholder="Name, phone, email or flat"
+                    value={searchDraft}
+                    data-testid="residents-search"
+                    onChange={(e) => setSearchDraft(e.target.value)}
+                  />
+                </form>
+              </div>
+              <ShSelect
+                label="Building"
+                id="resident-building"
+                testId="residents-filter-building"
+                value={query.buildingId ?? ""}
+                onChange={(v) => setParam("buildingId", v)}
+                options={[
+                  { value: "", label: "All buildings" },
+                  ...buildings.map((b) => ({ value: b.id, label: b.name })),
+                ]}
+              />
+              <ShSelect
+                label="Wing"
+                id="resident-wing"
+                testId="residents-filter-wing"
+                value={query.wingId ?? ""}
+                onChange={(v) => setParam("wingId", v)}
+                options={[
+                  { value: "", label: "All wings" },
+                  ...wings.map((w) => ({ value: w.id, label: w.name })),
+                ]}
+              />
+              <ShSelect
+                label="Type"
+                id="resident-type"
+                testId="residents-filter-type"
+                value={query.residentType ?? ""}
+                onChange={(v) => setParam("residentType", v)}
+                options={TYPE_OPTIONS}
+              />
+              <ShSelect
+                label="Status"
+                id="resident-status"
+                testId="residents-filter-status"
+                value={query.status ?? ""}
+                onChange={(v) => setParam("status", v)}
+                options={STATUS_OPTIONS}
+              />
+              <ShSelect
+                label="Verification"
+                id="resident-verification"
+                testId="residents-filter-verification"
+                value={query.verificationStatus ?? ""}
+                onChange={(v) => setParam("verificationStatus", v)}
+                options={VERIFICATION_OPTIONS}
+              />
+            </ShFilterBar>
+
+            <ShDataTable
+              testId="residents-table"
+              columns={columns}
+              rows={data?.items ?? null}
+              rowKey={(row) => row.id}
+              loading={loading}
+              error={error}
+              onRetry={load}
+              onRowClick={(row) => navigate(`/residents/${row.id}`)}
+              emptyMessage="No residents match these filters."
+              sort={{ sort: query.sort, order: query.order }}
+              onSortChange={(next) => {
+                const params2 = new URLSearchParams(params);
+                params2.set("sort", next.sort);
+                params2.set("order", next.order);
+                params2.delete("page");
+                setParams(params2, { replace: true });
+              }}
             />
-          </form>
-        </div>
-        <ShSelect
-          label="Building"
-          id="resident-building"
-          testId="residents-filter-building"
-          value={query.buildingId ?? ""}
-          onChange={(v) => setParam("buildingId", v)}
-          options={[
-            { value: "", label: "All buildings" },
-            ...buildings.map((b) => ({ value: b.id, label: b.name })),
-          ]}
-        />
-        <ShSelect
-          label="Wing"
-          id="resident-wing"
-          testId="residents-filter-wing"
-          value={query.wingId ?? ""}
-          onChange={(v) => setParam("wingId", v)}
-          options={[
-            { value: "", label: "All wings" },
-            ...wings.map((w) => ({ value: w.id, label: w.name })),
-          ]}
-        />
-        <ShSelect
-          label="Type"
-          id="resident-type"
-          testId="residents-filter-type"
-          value={query.residentType ?? ""}
-          onChange={(v) => setParam("residentType", v)}
-          options={TYPE_OPTIONS}
-        />
-        <ShSelect
-          label="Status"
-          id="resident-status"
-          testId="residents-filter-status"
-          value={query.status ?? ""}
-          onChange={(v) => setParam("status", v)}
-          options={STATUS_OPTIONS}
-        />
-        <ShSelect
-          label="Verification"
-          id="resident-verification"
-          testId="residents-filter-verification"
-          value={query.verificationStatus ?? ""}
-          onChange={(v) => setParam("verificationStatus", v)}
-          options={VERIFICATION_OPTIONS}
-        />
-      </ShFilterBar>
 
-      <ShDataTable
-        testId="residents-table"
-        columns={columns}
-        rows={data?.items ?? null}
-        rowKey={(row) => row.id}
-        loading={loading}
-        error={error}
-        onRetry={load}
-        onRowClick={(row) => navigate(`/residents/${row.id}`)}
-        emptyMessage="No residents match these filters."
-        sort={{ sort: query.sort, order: query.order }}
-        onSortChange={(next) => {
-          const params2 = new URLSearchParams(params);
-          params2.set("sort", next.sort);
-          params2.set("order", next.order);
-          params2.delete("page");
-          setParams(params2, { replace: true });
-        }}
-      />
+            {data && (
+              <ShPagination
+                testId="residents-pagination"
+                page={data.page}
+                limit={data.limit}
+                total={data.total}
+                onPageChange={(p) => setParam("page", String(p))}
+              />
+            )}
+          </>
+        ) : (
+          <PendingInvitationsPanel />
+        )}
+      </ShPage>
 
-      {data && (
-        <ShPagination
-          testId="residents-pagination"
-          page={data.page}
-          limit={data.limit}
-          total={data.total}
-          onPageChange={(p) => setParam("page", String(p))}
-        />
-      )}
-    </ShPage>
+      {addOpen
+        ? createPortal(
+            <div
+              className="sh-dialog-backdrop"
+              role="presentation"
+              data-testid="residents-add-dialog-backdrop"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) closeAdd();
+              }}
+            >
+              <div
+                className="sh-dialog sh-dialog-lg"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="residents-add-title"
+                data-testid="residents-add-dialog"
+              >
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <h2 id="residents-add-title" className="font-display text-xl">
+                      Add resident
+                    </h2>
+                    <p className="mt-1 text-sm text-black/55">
+                      Save the household now. Optional Email / WhatsApp welcome — no invite
+                      link.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    data-testid="residents-add-close"
+                    onClick={closeAdd}
+                  >
+                    Close
+                  </button>
+                </div>
+                <OnboardHouseholdForm
+                  showCsv
+                  onSaved={() => {
+                    if (tab === "directory") load();
+                  }}
+                />
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

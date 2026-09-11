@@ -148,6 +148,12 @@
   width: min(100%, 26rem);
 }
 
+.sh-dialog-lg {
+  width: min(100%, 56rem);
+  max-height: min(90vh, 56rem);
+  overflow-y: auto;
+}
+
 .sh-complaint-list {
   overflow: hidden;
   border: 1px solid var(--sand);

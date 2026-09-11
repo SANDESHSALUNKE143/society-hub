@@ -142,6 +142,8 @@ export const onboardResidentSchema = z
     adultCount: optionalFamilyCountSchema,
     childCount: optionalFamilyCountSchema,
     seniorCitizenCount: optionalFamilyCountSchema,
+    /** Welcome notify only — does not create an invitation row. */
+    channels: z.array(z.enum(["email", "whatsapp"])).optional(),
   })
   .superRefine((val, ctx) => refineVehicleQuota(val.vehicles, ctx));
 

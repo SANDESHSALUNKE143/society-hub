@@ -31,6 +31,7 @@ import {
   requireSocietyStaff,
 } from "../../lib/auth-context";
 import { onboardResidentIntoTenant } from "../admin/onboard-resident";
+import { deliverOnboardWelcome } from "../../lib/messaging/onboard-welcome";
 import {
   countDocumentsForFlat,
   getFlatWithStructure,
@@ -205,8 +206,26 @@ export const adminResidentRoutes = new Elysia({ prefix: "/v1/admin/residents" })
       childCount: parsed.childCount,
       seniorCitizenCount: parsed.seniorCitizenCount,
     });
+
+    let delivery: Awaited<ReturnType<typeof deliverOnboardWelcome>> | undefined;
+    if (result.created && parsed.channels && parsed.channels.length > 0) {
+      const [society] = await db
+        .select({ name: societies.name })
+        .from(societies)
+        .where(eq(societies.id, claims.tenantId))
+        .limit(1);
+      delivery = await deliverOnboardWelcome({
+        societyName: society?.name ?? "your society",
+        residentName: parsed.name,
+        email: parsed.email ?? result.user.email,
+        phone: parsed.phone ?? result.user.phone,
+        channels: parsed.channels,
+      });
+    }
+
     return {
       ...result,
+      delivery,
       resident: await buildResidentDetail(claims.tenantId, result.residentId),
     };
   })

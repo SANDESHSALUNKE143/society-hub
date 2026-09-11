@@ -75,6 +75,13 @@ abstract final class AppKeys {
   static const onboardTabFourWheeler = Key('onboard-tab-four_wheeler');
   static const onboardTabGas = Key('onboard-tab-gas');
   static const onboardSubmit = Key('onboard-submit');
+  static const onboardNotifyEmail = Key('onboard-notify-email');
+  static const onboardNotifyWhatsapp = Key('onboard-notify-whatsapp');
+  static const residentsAdd = Key('residents-add');
+  static const residentsTabs = Key('residents-tabs');
+  static const residentsSearch = Key('residents-search');
+  static const residentsList = Key('residents-list');
+  static const residentsInvites = Key('residents-invites');
   static const accountFamilyMembers = Key('account-family-members');
   static const accountFamilyName = Key('account-family-name');
   static const accountFamilyPhone = Key('account-family-phone');
