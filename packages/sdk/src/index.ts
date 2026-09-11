@@ -849,12 +849,28 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
     listBills: (page = 1, limit = 20) =>
       request<Paginated<BillDto>>(`/v1/bills?page=${page}&limit=${limit}`),
     myBills: () => request<BillDto[]>("/v1/bills/mine"),
-    generateBills: (body: { periodYm: string; amountPaise: number; notes?: string | null }) =>
+    generateBills: (body: {
+      periodYm: string;
+      amountPaise: number;
+      reason: string;
+      notes?: string | null;
+      flatIds?: string[];
+    }) =>
       request<{ created: number }>("/v1/bills/generate", {
         method: "POST",
         body: JSON.stringify(body),
       }),
     getBill: (id: string) => request<BillDto>(`/v1/bills/${id}`),
+    deleteBill: (id: string, body?: { corrected?: boolean }) =>
+      request<{ ok: true; status: string }>(`/v1/bills/${id}`, {
+        method: "DELETE",
+        body: JSON.stringify(body ?? {}),
+      }),
+    notifyBill: (id: string) =>
+      request<{ ok: true; notified: number }>(`/v1/bills/${id}/notify`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
 
     listPayments: (page = 1, limit = 20) =>
       request<Paginated<PaymentDto>>(`/v1/payments?page=${page}&limit=${limit}`),
@@ -914,7 +930,16 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         body: JSON.stringify({ note: note ?? null }),
       }),
 
-    listNotices: () => request<NoticeDto[]>("/v1/notices"),
+    listNotices: (params?: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      status?: "published" | "draft";
+      sort?: "createdAt" | "publishedAt" | "title";
+      order?: "asc" | "desc";
+    }) =>
+      request<Paginated<NoticeDto>>(`/v1/notices${toQuery(params)}`),
+    getNotice: (id: string) => request<NoticeDto>(`/v1/notices/${id}`),
     createNotice: (body: {
       title: string;
       body: string;
@@ -934,10 +959,24 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
+    uploadNoticeAttachment: (id: string, file: File) => {
+      const data = new FormData();
+      data.append("file", file);
+      return request<NoticeDto>(`/v1/notices/${id}/attachments`, {
+        method: "POST",
+        body: data,
+      });
+    },
+    deleteNoticeAttachment: (noticeId: string, attachmentId: string) =>
+      request<NoticeDto>(`/v1/notices/${noticeId}/attachments/${attachmentId}`, {
+        method: "DELETE",
+      }),
     publishNotice: (id: string) =>
       request<NoticeDto>(`/v1/notices/${id}/publish`, { method: "POST" }),
     unpublishNotice: (id: string) =>
       request<NoticeDto>(`/v1/notices/${id}/unpublish`, { method: "POST" }),
+    markNoticeRead: (id: string) =>
+      request<{ ok: true }>(`/v1/notices/${id}/read`, { method: "POST" }),
 
     listNotifications: () => request<NotificationDto[]>("/v1/notifications"),
     markNotificationRead: (id: string) =>

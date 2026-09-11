@@ -370,6 +370,7 @@ export type FlatOccupantDto = {
   userId: string;
   name: string | null;
   phone: string | null;
+  email: string | null;
   residentType: ResidentType;
   isPrimary: boolean;
   status: ResidentStatus;
@@ -482,19 +483,6 @@ export type ResidentProfileDto = {
   } | null;
 };
 
-export type BillStatus = "draft" | "issued" | "paid" | "void" | "corrected";
-
-export type BillDto = {
-  id: string;
-  flatId: string;
-  flatNumber: string;
-  periodYm: string;
-  amountPaise: number;
-  status: BillStatus;
-  notes: string | null;
-  createdAt: string;
-};
-
 export type PaymentMethod = "razorpay" | "cash" | "cheque" | "neft" | "upi";
 export type PaymentStatus = "pending" | "success" | "failed";
 
@@ -520,6 +508,43 @@ export type PaymentDto = {
   createdAt: string;
 };
 
+export type BillStatus = "draft" | "issued" | "paid" | "void" | "corrected";
+
+export type BillLineItemDto = {
+  id: string;
+  label: string;
+  amountPaise: number;
+};
+
+/** Current flat resident shown on bill detail (owner / occupants). */
+export type BillResidentDto = {
+  userId: string;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  residentType: ResidentType;
+  isPrimary: boolean;
+};
+
+export type BillDto = {
+  id: string;
+  flatId: string;
+  flatNumber: string;
+  periodYm: string;
+  amountPaise: number;
+  status: BillStatus;
+  notes: string | null;
+  createdAt: string;
+  /** Present on `GET /v1/bills/:id` — charge breakdown for this bill. */
+  lineItems?: BillLineItemDto[];
+  /** Present on `GET /v1/bills/:id` — payments linked to this bill. */
+  payments?: PaymentDto[];
+  /** Present on `GET /v1/bills/:id` — primary owner of the flat, if any. */
+  owner?: BillResidentDto | null;
+  /** Present on `GET /v1/bills/:id` — other current occupants (excludes owner). */
+  occupants?: BillResidentDto[];
+};
+
 export type ReceiptDto = {
   receiptNumber: string;
   paymentId: string;
@@ -531,6 +556,14 @@ export type ReceiptDto = {
 
 export type NoticeAudience = "all" | "wing" | "flat";
 
+export type NoticeAttachmentDto = {
+  id: string;
+  contentKind: "image" | "video";
+  contentType: string;
+  url: string;
+  byteSize: number;
+};
+
 export type NoticeDto = {
   id: string;
   title: string;
@@ -541,6 +574,7 @@ export type NoticeDto = {
   publishedAt: string | null;
   unpublishedAt: string | null;
   createdAt: string;
+  attachments: NoticeAttachmentDto[];
 };
 
 export type NotificationDto = {

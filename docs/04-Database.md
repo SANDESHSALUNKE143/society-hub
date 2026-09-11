@@ -78,6 +78,8 @@
 | Table | Purpose |
 |-------|---------|
 | `notices` | Published content + targeting |
+| `notice_attachments` | Image/video blob refs for notices |
+| `notice_reads` | Read receipts |
 | `notice_reads` | User/notice read receipts |
 | `notifications` | In-app notification inbox |
 
@@ -110,6 +112,7 @@ erDiagram
   bills ||--o{ bill_line_items : contains
   bills ||--o{ payments : settled_by
   societies ||--o{ notices : publishes
+  notices ||--o{ notice_attachments : has
   notices ||--o{ notice_reads : tracked
   users ||--o{ notifications : receives
   societies ||--o{ audit_logs : tracks
@@ -257,7 +260,13 @@ Per-society profile for a user: structured emergency contact
 ### notices
 
 - `audience`: all | wing | flat (+ `wing_id` / `flat_id` as needed)
-- `published_at`, `is_published`
+- `published_at`, `unpublished_at`
+
+### notice_attachments
+
+- `content_kind`: `image` | `video`
+- `content_type` MIME
+- `blob_path`, `byte_size`
 
 ### audit_logs
 

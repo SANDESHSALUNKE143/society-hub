@@ -1,21 +1,63 @@
 import { Elysia } from "elysia";
 import { and, count, desc, eq } from "drizzle-orm";
-import type { BillDto, PaymentDto } from "@society-hub/types";
+import type { BillDto, BillLineItemDto, BillResidentDto, PaymentDto } from "@society-hub/types";
 import { generateBillsSchema, listQuerySchema } from "@society-hub/validation";
 import { db } from "../../db/client";
 import { billLineItems, bills, flats, payments } from "../../db/schema";
+import { toApiIsoDateTime } from "../../lib/api-datetime";
 import { AppError } from "../../lib/errors";
-import { recordAudit } from "../../lib/audit";
+import { ActivityType, recordAudit } from "../../lib/audit";
 import { notifyUser } from "../../lib/notify";
 import {
   authPlugin,
   isStaffRole,
   requireAuth,
-    requireSocietyStaff,
+  requireSocietyStaff,
 } from "../../lib/auth-context";
 import { generateReceiptNumber, toPaymentDto } from "../payments/routes";
+import { listFlatOccupants } from "../residents/repository";
 
-function toBillDto(row: typeof bills.$inferSelect, flatNumber: string): BillDto {
+function toBillResident(o: {
+  userId: string;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  residentType: BillResidentDto["residentType"];
+  isPrimary: boolean;
+}): BillResidentDto {
+  return {
+    userId: o.userId,
+    name: o.name,
+    phone: o.phone,
+    email: o.email,
+    residentType: o.residentType,
+    isPrimary: o.isPrimary,
+  };
+}
+
+function pickOwnerAndOccupants(occupants: Awaited<ReturnType<typeof listFlatOccupants>>): {
+  owner: BillResidentDto | null;
+  occupants: BillResidentDto[];
+} {
+  const owners = occupants.filter((o) => o.residentType === "owner");
+  const ownerRow = owners.find((o) => o.isPrimary) ?? owners[0] ?? null;
+  const owner = ownerRow ? toBillResident(ownerRow) : null;
+  const others = occupants
+    .filter((o) => !ownerRow || o.residentId !== ownerRow.residentId)
+    .map(toBillResident);
+  return { owner, occupants: others };
+}
+
+function toBillDto(
+  row: typeof bills.$inferSelect,
+  flatNumber: string,
+  detail?: {
+    lineItems: BillLineItemDto[];
+    payments: PaymentDto[];
+    owner: BillResidentDto | null;
+    occupants: BillResidentDto[];
+  },
+): BillDto {
   return {
     id: row.id,
     flatId: row.flatId,
@@ -24,7 +66,15 @@ function toBillDto(row: typeof bills.$inferSelect, flatNumber: string): BillDto 
     amountPaise: row.amountPaise,
     status: row.status,
     notes: row.notes,
-    createdAt: row.createdAt,
+    createdAt: toApiIsoDateTime(row.createdAt),
+    ...(detail
+      ? {
+          lineItems: detail.lineItems,
+          payments: detail.payments,
+          owner: detail.owner,
+          occupants: detail.occupants,
+        }
+      : {}),
   };
 }
 
@@ -39,6 +89,46 @@ async function loadBillWithFlat(billId: string, tenantId: string) {
     .limit(1);
   if (!row) throw new AppError(404, "not_found", "Bill not found");
   return row;
+}
+
+async function loadBillDetail(billId: string, tenantId: string): Promise<BillDto> {
+  const { bill, flatNumber } = await loadBillWithFlat(billId, tenantId);
+  const [lineRows, paymentRows, flatOccupants] = await Promise.all([
+    db
+      .select()
+      .from(billLineItems)
+      .where(
+        and(
+          eq(billLineItems.billId, billId),
+          eq(billLineItems.tenantId, tenantId),
+          eq(billLineItems.isDeleted, false),
+        ),
+      )
+      .orderBy(billLineItems.createdAt),
+    db
+      .select()
+      .from(payments)
+      .where(
+        and(
+          eq(payments.billId, billId),
+          eq(payments.tenantId, tenantId),
+          eq(payments.isDeleted, false),
+        ),
+      )
+      .orderBy(desc(payments.createdAt)),
+    listFlatOccupants(tenantId, bill.flatId),
+  ]);
+  const { owner, occupants } = pickOwnerAndOccupants(flatOccupants);
+  return toBillDto(bill, flatNumber, {
+    lineItems: lineRows.map((li) => ({
+      id: li.id,
+      label: li.label,
+      amountPaise: li.amountPaise,
+    })),
+    payments: paymentRows.map((p) => toPaymentDto(p, flatNumber)),
+    owner,
+    occupants,
+  });
 }
 
 export const billRoutes = new Elysia({ prefix: "/v1/bills" })
@@ -93,10 +183,18 @@ export const billRoutes = new Elysia({ prefix: "/v1/bills" })
     requireSocietyStaff(claims);
     const parsed = generateBillsSchema.parse(body);
 
-    const flatRows = await db
+    let flatRows = await db
       .select()
       .from(flats)
       .where(and(eq(flats.tenantId, claims.tenantId), eq(flats.isDeleted, false)));
+
+    if (parsed.flatIds && parsed.flatIds.length > 0) {
+      const want = new Set(parsed.flatIds);
+      flatRows = flatRows.filter((f) => want.has(f.id));
+      if (flatRows.length === 0) {
+        throw new AppError(400, "invalid_flats", "No matching flats found for this society");
+      }
+    }
 
     const existingRows = await db
       .select({ flatId: bills.flatId })
@@ -110,6 +208,9 @@ export const billRoutes = new Elysia({ prefix: "/v1/bills" })
       );
     const already = new Set(existingRows.map((r) => r.flatId));
 
+    const lineLabel = `${parsed.reason} · ${parsed.periodYm}`;
+    const notes = parsed.notes?.trim() ? parsed.notes.trim() : null;
+
     let created = 0;
     for (const flat of flatRows) {
       if (already.has(flat.id)) continue;
@@ -121,7 +222,7 @@ export const billRoutes = new Elysia({ prefix: "/v1/bills" })
         periodYm: parsed.periodYm,
         amountPaise: parsed.amountPaise,
         status: "issued",
-        notes: parsed.notes ?? null,
+        notes,
         createdBy: claims.sub,
         updatedBy: claims.sub,
       });
@@ -129,7 +230,7 @@ export const billRoutes = new Elysia({ prefix: "/v1/bills" })
         id: crypto.randomUUID(),
         tenantId: claims.tenantId,
         billId,
-        label: `Maintenance ${parsed.periodYm}`,
+        label: lineLabel,
         amountPaise: parsed.amountPaise,
         createdBy: claims.sub,
         updatedBy: claims.sub,
@@ -143,18 +244,70 @@ export const billRoutes = new Elysia({ prefix: "/v1/bills" })
       action: "bill.generated",
       entityType: "bill",
       entityId: parsed.periodYm,
-      meta: { periodYm: parsed.periodYm, amountPaise: parsed.amountPaise, created },
+      meta: {
+        periodYm: parsed.periodYm,
+        amountPaise: parsed.amountPaise,
+        reason: parsed.reason,
+        created,
+        flatCount: flatRows.length,
+      },
     });
 
     return { created };
   })
   .get("/:id", async ({ auth, params }) => {
     const claims = requireAuth(auth);
-    const { bill, flatNumber } = await loadBillWithFlat(params.id, claims.tenantId);
-    if (!isStaffRole(claims.role) && bill.flatId !== claims.flatId) {
+    const detail = await loadBillDetail(params.id, claims.tenantId);
+    if (!isStaffRole(claims.role) && detail.flatId !== claims.flatId) {
       throw new AppError(404, "not_found", "Bill not found");
     }
-    return toBillDto(bill, flatNumber);
+    return detail;
+  })
+  .post("/:id/notify", async ({ auth, params }) => {
+    const claims = requireAuth(auth);
+    requireSocietyStaff(claims);
+    const { bill, flatNumber } = await loadBillWithFlat(params.id, claims.tenantId);
+    if (bill.status === "void" || bill.status === "corrected") {
+      throw new AppError(400, "invalid_status", "Cannot notify for a void or corrected bill");
+    }
+    const flatOccupants = await listFlatOccupants(claims.tenantId, bill.flatId);
+    if (flatOccupants.length === 0) {
+      throw new AppError(400, "no_recipients", "No current residents on this flat to notify");
+    }
+    const amount = `₹${(bill.amountPaise / 100).toFixed(2)}`;
+    const title =
+      bill.status === "paid"
+        ? `Bill paid · ${bill.periodYm}`
+        : `Maintenance due · ${bill.periodYm}`;
+    const body =
+      bill.status === "paid"
+        ? `Flat ${flatNumber}: ${amount} for ${bill.periodYm} is marked paid.`
+        : `Flat ${flatNumber}: ${amount} is due for ${bill.periodYm}. Open Bills to pay offline.`;
+
+    const notifiedUserIds = new Set<string>();
+    for (const occ of flatOccupants) {
+      if (notifiedUserIds.has(occ.userId)) continue;
+      notifiedUserIds.add(occ.userId);
+      await notifyUser({
+        tenantId: claims.tenantId,
+        userId: occ.userId,
+        title,
+        body,
+        kind: "payment",
+        linkPath: "/bills",
+      });
+    }
+
+    await recordAudit({
+      tenantId: claims.tenantId,
+      actorUserId: claims.sub,
+      action: ActivityType.BILL_NOTIFIED,
+      entityType: "bill",
+      entityId: bill.id,
+      meta: { notified: notifiedUserIds.size, periodYm: bill.periodYm },
+    });
+
+    return { ok: true as const, notified: notifiedUserIds.size };
   })
   .post("/:id/pay", async ({ auth, params }) => {
     const claims = requireAuth(auth);

@@ -594,6 +594,21 @@ export const notices = mysqlTable(
   (t) => [index("notices_tenant_idx").on(t.tenantId)],
 );
 
+export const noticeAttachments = mysqlTable(
+  "notice_attachments",
+  {
+    id: id(),
+    tenantId: tenantId(),
+    noticeId: char("notice_id", { length: 36 }).notNull(),
+    contentKind: mysqlEnum("content_kind", ["image", "video"]).notNull(),
+    contentType: varchar("content_type", { length: 120 }).notNull(),
+    blobPath: varchar("blob_path", { length: 500 }).notNull(),
+    byteSize: int("byte_size").notNull(),
+    ...timestamps,
+  },
+  (t) => [index("notice_attachments_notice_idx").on(t.noticeId)],
+);
+
 export const noticeReads = mysqlTable(
   "notice_reads",
   {

@@ -871,6 +871,49 @@ describe("api integration", () => {
       }),
     });
     expect(complaint.ok).toBe(true);
+    const familyTicket = (await complaint.json()) as { id: string; title: string };
+
+    const ownerList = await fetch(`${base}/v1/complaints`, {
+      headers: ownerAuth,
+    });
+    expect(ownerList.ok).toBe(true);
+    const ownerItems = (await ownerList.json()) as { items: { id: string }[] };
+    expect(ownerItems.items.some((c) => c.id === familyTicket.id)).toBe(true);
+
+    const ownerDetail = await fetch(`${base}/v1/complaints/${familyTicket.id}`, {
+      headers: ownerAuth,
+    });
+    expect(ownerDetail.ok).toBe(true);
+
+    const ownerComplaint = await fetch(`${base}/v1/complaints`, {
+      method: "POST",
+      headers: { ...ownerAuth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Water leakage",
+        type: "plumbing",
+        description: "Kitchen sink drip since yesterday.",
+      }),
+    });
+    expect(ownerComplaint.ok).toBe(true);
+    const ownerTicket = (await ownerComplaint.json()) as { id: string };
+
+    const familyList = await fetch(`${base}/v1/complaints`, {
+      headers: { Authorization: `Bearer ${family.tokens.accessToken}` },
+    });
+    expect(familyList.ok).toBe(true);
+    const familyItems = (await familyList.json()) as { items: { id: string }[] };
+    expect(familyItems.items.some((c) => c.id === ownerTicket.id)).toBe(true);
+    expect(familyItems.items.some((c) => c.id === familyTicket.id)).toBe(true);
+
+    const familyEditOwner = await fetch(`${base}/v1/complaints/${ownerTicket.id}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${family.tokens.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ title: "Hijacked title" }),
+    });
+    expect(familyEditOwner.status).toBe(403);
 
     const forbidden = await fetch(`${base}/v1/household/members`, {
       method: "POST",
@@ -1768,7 +1811,7 @@ describe("api integration", () => {
         "Content-Type": "application/json",
         Authorization: `Bearer ${admin.tokens.accessToken}`,
       },
-      body: JSON.stringify({ periodYm, amountPaise: 500000 }),
+      body: JSON.stringify({ periodYm, amountPaise: 500000, reason: "Monthly maintenance" }),
     });
     expect(generate.ok).toBe(true);
     const generated = (await generate.json()) as { created: number };
@@ -1788,6 +1831,54 @@ describe("api integration", () => {
       (b) => b.periodYm === periodYm && b.status !== "paid",
     );
     expect(bill).toBeTruthy();
+
+    const detail = await fetch(`${base}/v1/bills/${bill!.id}`, {
+      headers: { Authorization: `Bearer ${resident.tokens.accessToken}` },
+    });
+    expect(detail.ok).toBe(true);
+    const detailBody = (await detail.json()) as {
+      id: string;
+      lineItems?: { label: string; amountPaise: number }[];
+      payments?: unknown[];
+      owner?: { name: string | null; phone: string | null } | null;
+      occupants?: unknown[];
+    };
+    expect(detailBody.lineItems?.length).toBeGreaterThan(0);
+    expect(detailBody.lineItems![0]!.label).toContain(periodYm);
+    expect(detailBody.lineItems![0]!.label).toContain("Monthly maintenance");
+    expect(detailBody.lineItems![0]!.amountPaise).toBe(500000);
+    expect(Array.isArray(detailBody.payments)).toBe(true);
+    expect(detailBody.owner === null || typeof detailBody.owner?.name === "string" || detailBody.owner?.name === null).toBe(
+      true,
+    );
+    if (detailBody.owner) {
+      expect("phone" in detailBody.owner).toBe(true);
+      expect("email" in detailBody.owner).toBe(true);
+    }
+    expect(Array.isArray(detailBody.occupants)).toBe(true);
+
+    const notify = await fetch(`${base}/v1/bills/${bill!.id}/notify`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${admin.tokens.accessToken}`,
+      },
+      body: JSON.stringify({}),
+    });
+    expect(notify.ok).toBe(true);
+    const notifyBody = (await notify.json()) as { ok: boolean; notified: number };
+    expect(notifyBody.ok).toBe(true);
+    expect(notifyBody.notified).toBeGreaterThan(0);
+
+    const residentNotify = await fetch(`${base}/v1/bills/${bill!.id}/notify`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${resident.tokens.accessToken}`,
+      },
+      body: JSON.stringify({}),
+    });
+    expect(residentNotify.status).toBe(403);
 
     const pay = await fetch(`${base}/v1/payments/mock`, {
       method: "POST",
@@ -1819,6 +1910,27 @@ describe("api integration", () => {
     expect(create.ok).toBe(true);
     const notice = (await create.json()) as { id: string };
 
+    const png = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+      0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+      0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00,
+      0x0c, 0x49, 0x44, 0x41, 0x54, 0x08, 0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0x00,
+      0x00, 0x00, 0x03, 0x00, 0x01, 0x00, 0x05, 0xfe, 0xd4, 0xef, 0x00, 0x00,
+      0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ]);
+    const form = new FormData();
+    form.append("file", new File([png], "notice.png", { type: "image/png" }));
+    const attach = await fetch(`${base}/v1/notices/${notice.id}/attachments`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${admin.tokens.accessToken}` },
+      body: form,
+    });
+    expect(attach.ok).toBe(true);
+    const withMedia = (await attach.json()) as {
+      attachments: { id: string; url: string }[];
+    };
+    expect(withMedia.attachments.length).toBe(1);
+
     const publish = await fetch(`${base}/v1/notices/${notice.id}/publish`, {
       method: "POST",
       headers: { Authorization: `Bearer ${admin.tokens.accessToken}` },
@@ -1830,8 +1942,47 @@ describe("api integration", () => {
       headers: { Authorization: `Bearer ${resident.tokens.accessToken}` },
     });
     expect(list.ok).toBe(true);
-    const notices = (await list.json()) as { id: string }[];
-    expect(notices.some((n) => n.id === notice.id)).toBe(true);
+    const noticesPage = (await list.json()) as {
+      items: { id: string; attachments?: { id: string }[] }[];
+      page: number;
+      limit: number;
+      total: number;
+    };
+    expect(Array.isArray(noticesPage.items)).toBe(true);
+    const listed = noticesPage.items.find((n) => n.id === notice.id);
+    expect(listed).toBeTruthy();
+    expect(listed!.attachments?.length).toBe(1);
+
+    const searched = await fetch(
+      `${base}/v1/notices?search=${encodeURIComponent("Water supply")}&sort=title&order=asc&limit=5`,
+      { headers: { Authorization: `Bearer ${resident.tokens.accessToken}` } },
+    );
+    expect(searched.ok).toBe(true);
+    const searchedPage = (await searched.json()) as {
+      items: { id: string; title: string }[];
+      total: number;
+      limit: number;
+    };
+    expect(searchedPage.limit).toBe(5);
+    expect(searchedPage.items.some((n) => n.id === notice.id)).toBe(true);
+
+    const staffList = await fetch(`${base}/v1/notices?status=published&page=1&limit=10`, {
+      headers: { Authorization: `Bearer ${admin.tokens.accessToken}` },
+    });
+    expect(staffList.ok).toBe(true);
+    const staffPage = (await staffList.json()) as {
+      items: { id: string }[];
+      page: number;
+      total: number;
+    };
+    expect(staffPage.page).toBe(1);
+    expect(staffPage.items.some((n) => n.id === notice.id)).toBe(true);
+
+    const media = await fetch(
+      `${base}/v1/notice-media/${withMedia.attachments[0]!.id}`,
+      { headers: { Authorization: `Bearer ${resident.tokens.accessToken}` } },
+    );
+    expect(media.ok).toBe(true);
 
     const read = await fetch(`${base}/v1/notices/${notice.id}/read`, {
       method: "POST",
@@ -2352,7 +2503,7 @@ describe("api integration", () => {
     await fetch(`${base}/v1/bills/generate`, {
       method: "POST",
       headers: sAuth,
-      body: JSON.stringify({ periodYm, amountPaise: 15000 }),
+      body: JSON.stringify({ periodYm, amountPaise: 15000, reason: "Monthly maintenance" }),
     });
     const bills = (await (
       await fetch(`${base}/v1/bills/mine`, { headers: rAuth })
@@ -2412,7 +2563,7 @@ describe("api integration", () => {
     await fetch(`${base}/v1/bills/generate`, {
       method: "POST",
       headers: sAuth,
-      body: JSON.stringify({ periodYm: rejectPeriod, amountPaise: 15000 }),
+      body: JSON.stringify({ periodYm: rejectPeriod, amountPaise: 15000, reason: "Monthly maintenance" }),
     });
     const laterBills = (await (
       await fetch(`${base}/v1/bills/mine`, { headers: rAuth })
@@ -2895,7 +3046,7 @@ describe("api integration", () => {
     await fetch(`${base}/v1/bills/generate`, {
       method: "POST",
       headers: sAuth,
-      body: JSON.stringify({ periodYm, amountPaise: 10000 }),
+      body: JSON.stringify({ periodYm, amountPaise: 10000, reason: "Monthly maintenance" }),
     });
 
     const bills = (await (
@@ -2928,7 +3079,7 @@ describe("api integration", () => {
     await fetch(`${base}/v1/bills/generate`, {
       method: "POST",
       headers: sAuth,
-      body: JSON.stringify({ periodYm: periodYm2, amountPaise: 20000 }),
+      body: JSON.stringify({ periodYm: periodYm2, amountPaise: 20000, reason: "Monthly maintenance" }),
     });
     const bills2 = (await (
       await fetch(`${base}/v1/bills`, {
@@ -3010,7 +3161,7 @@ describe("api integration", () => {
     const generated = await fetch(`${base}/v1/bills/generate`, {
       method: "POST",
       headers: sAuth,
-      body: JSON.stringify({ periodYm, amountPaise: 15000 }),
+      body: JSON.stringify({ periodYm, amountPaise: 15000, reason: "Monthly maintenance" }),
     });
     expect(generated.ok).toBe(true);
     expect(((await generated.json()) as { created: number }).created).toBeGreaterThan(0);
@@ -3054,7 +3205,7 @@ describe("api integration", () => {
     await fetch(`${base}/v1/bills/generate`, {
       method: "POST",
       headers: sAuth,
-      body: JSON.stringify({ periodYm: periodYm2, amountPaise: 18000 }),
+      body: JSON.stringify({ periodYm: periodYm2, amountPaise: 18000, reason: "Monthly maintenance" }),
     });
     const mine2 = (await (
       await fetch(`${base}/v1/bills/mine`, {
@@ -3645,6 +3796,7 @@ describe("api integration", () => {
           body: JSON.stringify({
             periodYm: uniquePeriodYm(),
             amountPaise: 1000,
+            reason: "Monthly maintenance",
           }),
         })
       ).status,
@@ -3804,7 +3956,7 @@ describe("api integration", () => {
     await fetch(`${base}/v1/bills/generate`, {
       method: "POST",
       headers: sAuth,
-      body: JSON.stringify({ periodYm, amountPaise: 7777 }),
+      body: JSON.stringify({ periodYm, amountPaise: 7777, reason: "Monthly maintenance" }),
     });
     const mine = (await (
       await fetch(`${base}/v1/bills/mine`, {
@@ -3889,7 +4041,7 @@ describe("api integration", () => {
     await fetch(`${base}/v1/bills/generate`, {
       method: "POST",
       headers: sAuth,
-      body: JSON.stringify({ periodYm: periodVoid, amountPaise: 3333 }),
+      body: JSON.stringify({ periodYm: periodVoid, amountPaise: 3333, reason: "Monthly maintenance" }),
     });
     const bills = (await (
       await fetch(`${base}/v1/bills?page=1&limit=50`, {

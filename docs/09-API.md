@@ -411,8 +411,8 @@ When `DEV_AUTH=true`, create responses include `devToken` so testers can accept 
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/v1/complaints` | Yes | Staff: all; resident: own |
-| GET | `/v1/complaints/:id` | Yes | |
+| GET | `/v1/complaints` | Yes | Staff (no `mine`): all society tickets. Resident / `?mine=1`: complaints for the caller’s **active flat(s)** |
+| GET | `/v1/complaints/:id` | Yes | Staff or flat-mate of the ticket’s flat |
 | POST | `/v1/complaints` | Resident/staff | **FR-CMP-1:** resident uses the logged-in flat (body `flatId` for another lot is `403`). Staff may pass `flatId`; required if they have no linked flat |
 | PATCH | `/v1/complaints/:id` | Raiser | Edit title/type/description while not resolved/closed |
 | PATCH | `/v1/complaints/:id/status` | Staff | |
@@ -428,10 +428,11 @@ When `DEV_AUTH=true`, create responses include `devToken` so testers can accept 
 |--------|------|------|-------|
 | GET | `/` | Staff | Paginated |
 | GET | `/mine` | Yes | Resident flat bills |
-| POST | `/generate` | Staff | `{ periodYm, amountPaise, notes?, flatIds? }` |
-| GET | `/:id` | Yes | Own flat or staff |
+| POST | `/generate` | Staff | `{ periodYm, amountPaise, reason, notes?, flatIds? }` — `flatIds` limits to selected flats; omit for all |
+| GET | `/:id` | Yes | Own flat or staff. Includes `lineItems`, linked `payments`, and `owner` / `occupants` with name, phone, and email. |
+| POST | `/:id/notify` | Staff | In-app notify current flat residents about this bill |
 | POST | `/:id/pay` | Yes | Dev instant Razorpay settlement + notification |
-| DELETE | `/:id` | Staff | Void / corrected |
+| DELETE | `/:id` | Staff | Void / corrected (`{ corrected?: boolean }`) |
 
 ### 6.10 Payments — `/v1/payments`
 
@@ -460,13 +461,19 @@ Payment methods: `upi` (resident screenshot), `cash`, `cheque`, `neft` (staff), 
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/` | Yes | Residents see published |
+| GET | `/` | Yes | Paginated `{ items, page, limit, total }`. Query: `page`, `limit`, `search` (title/body), `sort` (`createdAt`\|`publishedAt`\|`title`), `order` (`asc`\|`desc`). Staff may pass `status=published\|draft`. Residents only see published notices in their audience (+ attachments). |
+| GET | `/:id` | Yes | Staff, or published & in audience |
 | POST | `/` | Staff | |
 | PATCH | `/:id` | Staff | |
+| POST | `/:id/attachments` | Staff | `multipart` field `file` (image≤10MB, video≤50MB; max 5) |
+| DELETE | `/:id/attachments/:attachmentId` | Staff | Soft-delete media |
 | POST | `/:id/publish` | Staff | |
 | POST | `/:id/unpublish` | Staff | |
 | POST | `/:id/read` | Yes | Mark read for caller |
 | DELETE | `/:id` | Staff | Soft-delete |
+| GET | `/v1/notice-media/:id` | Yes | Bearer or `?access_token=` |
+
+WhatsApp share is **client-side** (`wa.me/?text=…` with title, body preview, and `/notices#id` link). Media opens in SocietyHub; WhatsApp message itself is text + link.
 
 ### 6.12 Notifications, dashboard, audit
 

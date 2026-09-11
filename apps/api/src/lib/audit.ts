@@ -18,6 +18,7 @@ export const ActivityType = {
   BILL_GENERATED: "bill.generated",
   BILL_VOIDED: "bill.voided",
   BILL_CORRECTED: "bill.corrected",
+  BILL_NOTIFIED: "bill.notified",
   PAYMENT_RECORDED: "payment.recorded",
   NOTICE_PUBLISHED: "notice.published",
 

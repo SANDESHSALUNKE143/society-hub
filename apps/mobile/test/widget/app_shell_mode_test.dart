@@ -75,7 +75,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Onboard resident'), findsNothing);
-    expect(find.text('My complaints'), findsOneWidget);
+    expect(find.text('Complaints'), findsOneWidget);
   });
 
   testWidgets('pure resident never sees mode toggle', (tester) async {
@@ -93,6 +93,6 @@ void main() {
 
     expect(find.byKey(AppKeys.modeToggle), findsNothing);
     expect(find.text('Onboard resident'), findsNothing);
-    expect(find.text('My complaints'), findsOneWidget);
+    expect(find.text('Complaints'), findsOneWidget);
   });
 }

@@ -50,7 +50,7 @@ Long-term platform metrics (payments, SLA %, etc.) remain in [BRD](01-BRD.md) fo
 | Role | Description |
 |------|-------------|
 | Society Admin (Admin) | Onboards society structure/residents; views all complaints; updates status |
-| Resident | Linked to a flat; raises and tracks own complaints |
+| Resident | Linked to a flat; raises complaints for the flat; tracks flat complaints |
 | Super Admin | Optional platform operator to create the society (pilot may seed one society) |
 
 Secretary / Treasurer / Committee / Tenant refinements and full RBAC matrix apply in **Phase 2**; for MVP, **Admin** and **Resident** are sufficient.
@@ -63,7 +63,7 @@ Secretary / Treasurer / Committee / Tenant refinements and full RBAC matrix appl
 | Login / logout | ✓ | ✓ |
 | Raise complaint | ✓ (optional) | ✓ |
 | Update Account household details (linked flat) | ✓ | ✓ |
-| View own complaints + status | ✓ | ✓ |
+| View flat complaints + status | ✓ | ✓ |
 | View all society complaints + status | ✓ | |
 | Update complaint status | ✓ | |
 
@@ -95,9 +95,9 @@ Navigation (simple list or bottom/side nav) includes **all planned product areas
 | Nav item | Phase 1 behavior |
 |----------|------------------|
 | Home / Complaints | **Live** — residents raise/track in `apps/client-app`; admins list all + status in `apps/manage` |
-| Bills / Maintenance | **Coming soon** — placeholder screen, no API |
-| Payments | **Coming soon** |
-| Notices | **Coming soon** |
+| Bills / Maintenance | **Early stub live** in Client App — generate, list, bill detail (owner/occupants, line items, payments), staff notify residents, offline UPI proof. Full FR-BIL-* (due dates, partial pay, defaulters) remains Phase 2 |
+| Payments | **Early stub live** in Client App — publish UPI/QR, review screenshots, credit/reject, record cash/cheque/NEFT. Full FR-PAY-* (Razorpay online) remains Phase 2 |
+| Notices | **Early stub live** — draft/publish, photos & videos, WhatsApp share link. Full FR-NOT-* (read receipts) remains Phase 2 |
 | Notifications | **Coming soon** (optional entry) |
 | Dashboard / Reports | **Coming soon** |
 | Residents / Directory | **Live** in Client App Admin and Flutter Admin — one **Residents** screen (directory + pending invitations); **Add resident** opens the household form (optional Email / WhatsApp welcome). Manage does not host day-to-day resident add |
@@ -115,7 +115,7 @@ Do **not** invent nav items outside the planned roadmap (PRD Phase 2 / Future).
 2. **Onboard Resident** (link resident to flat + mobile/SSO identity).
 3. **Login / logout** via SSO (Google), mobile OTP, or PIN (after verified identity).
 4. **Raise complaint** — title; flat auto-populated; description; type (Electric, Plumbing, …, Other); voice-to-text mic; photos and videos.
-5. **Resident** — list own complaints + status; **Admin** — list all + update status (`Open` → `In Progress` → `Resolved` → `Closed`).
+5. **Resident** — list **flat** complaints + status; **Admin** — list all + update status (`Open` → `In Progress` → `Resolved` → `Closed`).
 6. **App shell** — simple responsive nav that lists **all planned features**; non-live items open a **Coming soon** page (§5.2, §6.1a).
 
 Minimal society/flat data required so flat can auto-populate.
@@ -188,11 +188,11 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 - FR-CMP-2: **Types** include at least: `electric`, `plumbing`, plus other predefined society types, and `other` (optional free-text subtype when Other).
 - FR-CMP-3: **Voice-to-text**: UI mic control uses browser speech recognition (e.g. Web Speech API) to fill description; if unsupported, mic disabled with short message; typing still works.
 - FR-CMP-4: Attach **photos and videos** to Azure Blob; show on detail; enforce size/type limits (Architecture).
-- FR-CMP-5: Resident **lists own complaints** with status.
+- FR-CMP-5: Resident **lists complaints for their linked flat(s)** with status (all household tickets on that flat, not only tickets they personally raised).
 - FR-CMP-6: Admin **lists all society complaints** with status; can change status along: `Open` → `In Progress` → `Resolved` → `Closed` (assignment/SLA optional in MVP).
 - FR-CMP-7: Complaint detail shows title, type, flat, description, media, status, timestamps in the **viewer's local timezone** (API stores UTC).
-- FR-CMP-8: The raiser can **edit** title/type/description until the ticket is resolved or closed, and **delete** an `Open` ticket they raised. Staff can still soft-delete any ticket.
-- FR-CMP-9: Residents and staff can **add comments**, **ask questions**, and see the thread plus status-update notes on the ticket.
+- FR-CMP-8: The raiser can **edit** title/type/description until the ticket is resolved or closed, and **delete** an `Open` ticket they raised. Staff can still soft-delete any ticket. Flat-mates may view and comment but cannot edit/delete someone else’s ticket.
+- FR-CMP-9: Flat members and staff can **add comments**, **ask questions**, and see the thread plus status-update notes on tickets they can view.
 
 ### 7.3a App shell — Coming soon (Phase 1)
 
@@ -210,7 +210,7 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 | Society settings (SLA, billing defaults) | | ✓ | ✓ | ✓ (billing defaults) | | |
 | Assign committee roles | | ✓ | ✓ | | | |
 | Manage residents / tenants | | ✓ | ✓ | | | |
-| Raise / view own complaints | | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Raise / view flat complaints | | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Assign / transition all complaints | | ✓ | ✓ | | view | |
 | Generate / edit bills | | ✓ | | ✓ | | |
 | Pay own bills online | | | | | | ✓ |
@@ -255,8 +255,9 @@ Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendo
 - FR-PAY-5: Resident views payment history (pending / success / rejected) and receipt after acknowledgement.
 - FR-PAY-6 **(future):** Resident pays bill via Razorpay (UPI/card/netbanking); verified webhooks; do not treat client-reported success as paid.
 
-### 7.9 Phase 2 — notices
+### 7.9 Notices (early stub + Phase 2)
 
+- FR-NOT-0 (live stub): Staff create draft/publish notices; optional **image/video** attachments; staff and residents can **Share on WhatsApp** (pre-filled message + deep link). Not WhatsApp Business API delivery.
 - FR-NOT-1: Secretary publishes notice to all residents or wing/flat subset.
 - FR-NOT-2: Opening a notice records read; publisher sees read vs unread counts.
 - FR-NOT-3: Edit/unpublish; unpublished hidden from residents; audited.

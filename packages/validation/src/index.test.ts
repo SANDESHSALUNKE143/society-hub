@@ -423,11 +423,17 @@ describe("validation schemas", () => {
 
   test("billing and payment schemas", () => {
     expect(
-      generateBillsSchema.parse({ periodYm: "2026-07", amountPaise: 500000 })
-        .periodYm,
+      generateBillsSchema.parse({
+        periodYm: "2026-07",
+        amountPaise: 500000,
+        reason: "Monthly maintenance",
+      }).periodYm,
     ).toBe("2026-07");
     expect(() =>
       generateBillsSchema.parse({ periodYm: "bad", amountPaise: 100 }),
+    ).toThrow();
+    expect(() =>
+      generateBillsSchema.parse({ periodYm: "2026-07", amountPaise: 500000 }),
     ).toThrow();
     expect(voidBillSchema.parse({ reason: "duplicate" }).reason).toBe(
       "duplicate",

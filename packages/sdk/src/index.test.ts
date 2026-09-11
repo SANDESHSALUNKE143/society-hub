@@ -350,7 +350,7 @@ describe("sdk client", () => {
     await client.revokeInvitation("inv1");
     await client.listBills(1, 20);
     await client.myBills();
-    await client.generateBills({ periodYm: "2026-07", amountPaise: 500000 });
+    await client.generateBills({ periodYm: "2026-07", amountPaise: 500000, reason: "Monthly maintenance" });
     await client.getBill("bill1");
     await client.listPayments(1, 20);
     await client.myPayments();

@@ -519,7 +519,10 @@ export const generateBillsSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}$/, "Expected YYYY-MM"),
   amountPaise: z.number().int().min(1),
+  /** Short charge label shown on the bill (e.g. Monthly maintenance). */
+  reason: z.string().trim().min(1).max(200),
   notes: z.string().max(1000).optional().nullable(),
+  /** When omitted or empty, bills are generated for every flat in the society. */
   flatIds: z.array(z.string().uuid()).optional(),
 });
 
@@ -564,6 +567,18 @@ export const createNoticeSchema = z.object({
 export const updateNoticeSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   body: z.string().min(1).max(5000).optional(),
+});
+
+/** Notices list — server-side search / sort / page. */
+export const noticeListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  /** Matches title or body. */
+  search: z.string().max(120).optional(),
+  /** Staff only: filter by publish state. Residents always see published. */
+  status: z.enum(["published", "draft"]).optional(),
+  sort: z.enum(["createdAt", "publishedAt", "title"]).default("createdAt"),
+  order: z.enum(["asc", "desc"]).default("desc"),
 });
 
 export const createVisitorSchema = z.object({

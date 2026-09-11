@@ -6,6 +6,7 @@ import { db } from "../../db/client";
 import { bills, bookings, complaints, notices, notifications } from "../../db/schema";
 import { authPlugin, isStaffRole, requireAuth } from "../../lib/auth-context";
 import { occupancyStats } from "../residents/repository";
+import { listActiveFlatIdsForUser } from "../complaints/flat-access";
 
 export const dashboardRoutes = new Elysia({ prefix: "/v1/dashboard" })
   .use(authPlugin)
@@ -18,13 +19,27 @@ export const dashboardRoutes = new Elysia({ prefix: "/v1/dashboard" })
     /** Society-wide KPIs only in admin staff view; Resident mode uses mine=1. */
     const societyWide = staff && !mine;
 
-    const complaintWhere = societyWide
-      ? and(eq(complaints.tenantId, claims.tenantId), eq(complaints.isDeleted, false))
-      : and(
-          eq(complaints.tenantId, claims.tenantId),
-          eq(complaints.raisedByUserId, claims.sub),
-          eq(complaints.isDeleted, false),
-        );
+    let complaintWhere;
+    if (societyWide) {
+      complaintWhere = and(
+        eq(complaints.tenantId, claims.tenantId),
+        eq(complaints.isDeleted, false),
+      );
+    } else {
+      const flatIds = await listActiveFlatIdsForUser(claims.tenantId, claims.sub);
+      complaintWhere =
+        flatIds.length === 0
+          ? and(
+              eq(complaints.tenantId, claims.tenantId),
+              eq(complaints.id, "__none__"),
+              eq(complaints.isDeleted, false),
+            )
+          : and(
+              eq(complaints.tenantId, claims.tenantId),
+              inArray(complaints.flatId, flatIds),
+              eq(complaints.isDeleted, false),
+            );
+    }
 
     const [[openRow], [totalRow]] = await Promise.all([
       db

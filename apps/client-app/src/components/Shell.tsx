@@ -64,7 +64,7 @@ const residentSections: NavSection[] = [
   },
   {
     title: "Complaints",
-    items: [{ to: "/complaints", label: "My complaints", icon: "complaints" }],
+    items: [{ to: "/complaints", label: "Complaints", icon: "complaints" }],
   },
   {
     title: "Finance",

@@ -26,7 +26,7 @@ import {
 } from "./modules/invitations/routes";
 import { billRoutes } from "./modules/bills/routes";
 import { paymentRoutes } from "./modules/payments/routes";
-import { noticeRoutes } from "./modules/notices/routes";
+import { noticeRoutes, noticeMediaRoutes } from "./modules/notices/routes";
 import { notificationRoutes } from "./modules/notifications/routes";
 import { dashboardRoutes } from "./modules/dashboard/routes";
 import { auditAliasRoutes, auditRoutes } from "./modules/audit/routes";
@@ -132,6 +132,7 @@ export function createApp() {
     .use(billRoutes)
     .use(paymentRoutes)
     .use(noticeRoutes)
+    .use(noticeMediaRoutes)
     .use(notificationRoutes)
     .use(dashboardRoutes)
     .use(auditRoutes)
