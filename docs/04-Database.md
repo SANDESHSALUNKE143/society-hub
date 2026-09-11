@@ -79,9 +79,9 @@
 |-------|---------|
 | `notices` | Published content + targeting |
 | `notice_attachments` | Image/video blob refs for notices |
-| `notice_reads` | Read receipts |
 | `notice_reads` | User/notice read receipts |
 | `notifications` | In-app notification inbox |
+| `complaint_status_events` | Status transition history on a complaint |
 
 ### Audit
 
@@ -91,33 +91,89 @@
 
 ## 4. Relationships
 
-```mermaid
-erDiagram
-  societies ||--o{ buildings : has
-  buildings ||--o{ wings : has
-  wings ||--o{ flats : has
-  societies ||--o| society_settings : has
-  flats ||--o{ residents : occupied_by
-  users ||--o{ residents : linked
-  users ||--o{ resident_vehicles : registers
-  users ||--o{ user_roles : has
-  residents ||--o{ resident_family_members : household
-  residents ||--o{ verification_documents : submits
-  users ||--o| resident_profiles : profile
-  flats ||--o{ invitations : invites_to
-  residents ||--o{ complaints : raises
-  complaints ||--o{ complaint_comments : has
-  complaints ||--o{ complaint_attachments : has
-  flats ||--o{ bills : billed
-  bills ||--o{ bill_line_items : contains
-  bills ||--o{ payments : settled_by
-  societies ||--o{ notices : publishes
-  notices ||--o{ notice_attachments : has
-  notices ||--o{ notice_reads : tracked
-  users ||--o{ notifications : receives
-  societies ||--o{ audit_logs : tracks
+### 4.1 How relations build (setup order)
+
+Physical inventory is created **before** people attach to it. Occupancy is **derived** from `residents` rows (`active_key IS NOT NULL`); it is never stored on `flats`.
+
+```text
+1. societies                          tenant root (tenant_id ≈ society id)
+2. buildings → wings → flats          physical units (CSV / Setup)
+3. parking_slots                      lot inventory; optional flat_id when assigned
+4. users                              global login identity (no tenant_id)
+5. user_roles                         staff/resident role inside a society
+6. residents                          membership + occupancy period (user ↔ flat)
+7. invitations / onboard CSV          create or link people onto flats
+8. complaints, bills, notices…        day-to-day ops hang off flats / users / society
 ```
 
+**Mental model**
+
+| Layer | Tables | Meaning |
+|-------|--------|---------|
+| Tenancy | `societies` | One society = one `tenant_id` scope |
+| Structure | `buildings` → `wings` → `flats` | Where units sit |
+| Parking inventory | `parking_slots` | Puzzle/open lots; assign to a flat later |
+| Identity | `users`, `user_roles` | Who can sign in; role per society |
+| Occupancy | `residents` | Who lives where, for which period |
+| Household extras | `resident_family_members`, `resident_vehicles`, `verification_documents`, `resident_profiles` | Attached to membership / user |
+| Ops | `complaints`, `bills`/`payments`, `notices`, … | Scoped by tenant (+ flat or user) |
+
+### 4.2 ER diagram (core)
+
+```mermaid
+erDiagram
+  societies ||--o{ buildings : "has"
+  buildings ||--o{ wings : "has"
+  wings ||--o{ flats : "has"
+  societies ||--o{ parking_slots : "inventory"
+  flats ||--o{ parking_slots : "may_use"
+  societies ||--o| society_settings : "has"
+
+  users ||--o{ user_roles : "roles_in"
+  societies ||--o{ user_roles : "grants"
+  users ||--o{ residents : "member"
+  flats ||--o{ residents : "occupied_by"
+  users ||--o| resident_profiles : "profile_per_society"
+  users ||--o{ resident_vehicles : "registers"
+  residents ||--o{ resident_family_members : "household"
+  residents ||--o{ verification_documents : "submits"
+  flats ||--o{ invitations : "invites_to"
+  users ||--o{ invitations : "accepted_by"
+
+  flats ||--o{ complaints : "about"
+  users ||--o{ complaints : "raised_by"
+  complaints ||--o{ complaint_comments : "thread"
+  complaints ||--o{ complaint_attachments : "media"
+  complaints ||--o{ complaint_status_events : "history"
+
+  flats ||--o{ bills : "billed"
+  bills ||--o{ bill_line_items : "lines"
+  bills ||--o{ payments : "settled_by"
+
+  societies ||--o{ notices : "publishes"
+  notices ||--o{ notice_attachments : "media"
+  notices ||--o{ notice_reads : "tracked"
+  users ||--o{ notice_reads : "reader"
+  users ||--o{ notifications : "inbox"
+  societies ||--o{ audit_logs : "tracks"
+  users ||--o{ audit_logs : "actor"
+
+  flats ||--o{ visitors : "hosts"
+  flats ||--o{ bookings : "books"
+```
+
+### 4.3 Key join paths (how queries hang together)
+
+| Need | Join path |
+|------|-----------|
+| Flat label `A-101` | `flats` → `wings` → `buildings` (all same `tenant_id`) |
+| Who lives in a flat now | `residents` where `flat_id = ?` and `active_key IS NOT NULL` |
+| Occupancy status | Derived from active `residents` (`owner` / `tenant` / vacant) — not a column on `flats` |
+| Assign parking lot | `parking_slots.flat_id` → `flats.id` (inventory row owns the link) |
+| Raise complaint | `complaints.flat_id` + `raised_by` → `users`; household mates share flat scope |
+| Bill a flat | `bills.flat_id` → `flats`; `payments.bill_id` → `bills` |
+| Notice audience | `notices` + optional `wing_id` / `flat_id`; reads via `notice_reads` |
+| Staff vs resident | `user_roles` for `(tenant_id, user_id)` — not stored on `residents` |
 ## 5. Field-level notes (critical paths)
 
 ### residents — membership and occupancy

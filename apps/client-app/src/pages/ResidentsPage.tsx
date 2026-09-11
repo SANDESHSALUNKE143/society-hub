@@ -28,6 +28,7 @@ import { useAuth } from "../auth";
 import { canUseAdminMode } from "../app-mode";
 import { OnboardHouseholdForm } from "../components/OnboardHouseholdForm";
 import { PendingInvitationsPanel } from "../components/PendingInvitationsPanel";
+import { FlatsBladePanel } from "./FlatsBladePanel";
 
 const PAGE_SIZE = 20;
 
@@ -54,15 +55,23 @@ const VERIFICATION_OPTIONS = [
   })),
 ];
 
-const PAGE_TABS = [
+/** Top blade: Flats (units) | People (app users). */
+const BLADE_TABS = [
+  { id: "flats", label: "Flats" },
+  { id: "people", label: "People" },
+] as const;
+
+type BladeTab = (typeof BLADE_TABS)[number]["id"];
+
+const PEOPLE_TABS = [
   { id: "directory", label: "Directory" },
   { id: "invites", label: "Pending invitations" },
 ] as const;
 
-type PageTab = (typeof PAGE_TABS)[number]["id"];
+type PeopleTab = (typeof PEOPLE_TABS)[number]["id"];
 
 /**
- * Admin resident hub: directory + leftover invitations, with Add resident dialog.
+ * Admin Residents blade: Flats (all units) + People (who can access the app).
  */
 export function ResidentsPage() {
   const { client, user } = useAuth();
@@ -70,7 +79,11 @@ export function ResidentsPage() {
   const [params, setParams] = useSearchParams();
   const allowed = canUseAdminMode(user?.role);
 
-  const tab: PageTab = params.get("tab") === "invites" ? "invites" : "directory";
+  // Legacy: `?tab=invites` → People/invites; `?tab=flats` → Flats; else People/directory.
+  const rawTab = params.get("tab");
+  const effectiveBlade: BladeTab = rawTab === "flats" ? "flats" : "people";
+  const effectivePeople: PeopleTab = rawTab === "invites" ? "invites" : "directory";
+
   const addOpen = params.get("add") === "1";
 
   const [data, setData] = useState<Paginated<ResidentSummaryDto> | null>(null);
@@ -117,9 +130,9 @@ export function ResidentsPage() {
   }, [client, query]);
 
   useEffect(() => {
-    if (!allowed || tab !== "directory") return;
+    if (!allowed || effectiveBlade !== "people" || effectivePeople !== "directory") return;
     load();
-  }, [allowed, load, tab]);
+  }, [allowed, load, effectiveBlade, effectivePeople]);
 
   useEffect(() => {
     if (!allowed || !user?.tenantId) return;
@@ -152,11 +165,31 @@ export function ResidentsPage() {
     setParams(next, { replace: true });
   }
 
-  function setTab(next: PageTab) {
+  function setBlade(next: BladeTab) {
+    const p = new URLSearchParams(params);
+    if (next === "flats") {
+      p.set("tab", "flats");
+    } else {
+      p.delete("tab");
+      p.delete("view");
+      p.delete("occupancy");
+    }
+    p.delete("page");
+    p.delete("search");
+    p.delete("buildingId");
+    p.delete("wingId");
+    p.delete("residentType");
+    p.delete("status");
+    p.delete("verificationStatus");
+    setParams(p, { replace: true });
+  }
+
+  function setPeopleTab(next: PeopleTab) {
     const p = new URLSearchParams(params);
     if (next === "invites") p.set("tab", "invites");
     else p.delete("tab");
     p.delete("page");
+    p.delete("view");
     setParams(p, { replace: true });
   }
 
@@ -242,6 +275,27 @@ export function ResidentsPage() {
         </span>
       ),
     },
+    {
+      key: "actions",
+      header: "Actions",
+      render: (row) => {
+        const occupying = row.status !== "moved_out" && row.status !== "rejected";
+        if (!occupying) return <span className="text-xs text-black/35">—</span>;
+        return (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            data-testid={`resident-assign-team-${row.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/residents/${row.id}?assignTeam=1`);
+            }}
+          >
+            Team role
+          </button>
+        );
+      },
+    },
   ];
 
   return (
@@ -249,132 +303,153 @@ export function ResidentsPage() {
       <ShPage wide>
         <ShPageHeader
           title="Residents"
-          description="Everyone linked to a flat in this society, including past occupants."
+          description="Flats and the people who can sign in. Towers and parking inventory are set in Manage."
           actions={
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              data-testid="residents-add"
-              onClick={openAdd}
-            >
-              Add resident
-            </button>
+            effectiveBlade === "people" ? (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                data-testid="residents-add"
+                onClick={openAdd}
+              >
+                Add resident
+              </button>
+            ) : undefined
           }
         />
 
         <ShTabs
-          items={[...PAGE_TABS]}
-          value={tab}
-          onChange={(id) => setTab(id as PageTab)}
-          ariaLabel="Residents sections"
-          testId="residents-tabs"
-          idPrefix="residents-tab"
+          items={[...BLADE_TABS]}
+          value={effectiveBlade}
+          onChange={(id) => setBlade(id as BladeTab)}
+          ariaLabel="Residents blade"
+          testId="residents-blade-tabs"
+          idPrefix="residents-blade"
         />
 
-        {tab === "directory" ? (
-          <>
-            <ShFilterBar testId="residents-filters">
-              <div className="sh-field min-w-[14rem] flex-1">
-                <label className="label" htmlFor="resident-search">
-                  Search
-                </label>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setParam("search", searchDraft.trim());
-                  }}
-                >
-                  <input
-                    id="resident-search"
-                    className="input"
-                    placeholder="Name, phone, email or flat"
-                    value={searchDraft}
-                    data-testid="residents-search"
-                    onChange={(e) => setSearchDraft(e.target.value)}
+        <div className="mt-4">
+          {effectiveBlade === "flats" ? (
+            <FlatsBladePanel />
+          ) : (
+            <>
+              <ShTabs
+                items={[...PEOPLE_TABS]}
+                value={effectivePeople}
+                onChange={(id) => setPeopleTab(id as PeopleTab)}
+                ariaLabel="People sections"
+                testId="residents-tabs"
+                idPrefix="residents-tab"
+              />
+
+              {effectivePeople === "directory" ? (
+                <>
+                  <ShFilterBar testId="residents-filters">
+                    <div className="sh-field min-w-[14rem] flex-1">
+                      <label className="label" htmlFor="resident-search">
+                        Search
+                      </label>
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          setParam("search", searchDraft.trim());
+                        }}
+                      >
+                        <input
+                          id="resident-search"
+                          className="input"
+                          placeholder="Name, phone, email or flat"
+                          value={searchDraft}
+                          data-testid="residents-search"
+                          onChange={(e) => setSearchDraft(e.target.value)}
+                        />
+                      </form>
+                    </div>
+                    <ShSelect
+                      label="Building"
+                      id="resident-building"
+                      testId="residents-filter-building"
+                      value={query.buildingId ?? ""}
+                      onChange={(v) => setParam("buildingId", v)}
+                      options={[
+                        { value: "", label: "All buildings" },
+                        ...buildings.map((b) => ({ value: b.id, label: b.name })),
+                      ]}
+                    />
+                    <ShSelect
+                      label="Wing"
+                      id="resident-wing"
+                      testId="residents-filter-wing"
+                      value={query.wingId ?? ""}
+                      onChange={(v) => setParam("wingId", v)}
+                      options={[
+                        { value: "", label: "All wings" },
+                        ...wings.map((w) => ({ value: w.id, label: w.name })),
+                      ]}
+                    />
+                    <ShSelect
+                      label="Type"
+                      id="resident-type"
+                      testId="residents-filter-type"
+                      value={query.residentType ?? ""}
+                      onChange={(v) => setParam("residentType", v)}
+                      options={TYPE_OPTIONS}
+                    />
+                    <ShSelect
+                      label="Status"
+                      id="resident-status"
+                      testId="residents-filter-status"
+                      value={query.status ?? ""}
+                      onChange={(v) => setParam("status", v)}
+                      options={STATUS_OPTIONS}
+                    />
+                    <ShSelect
+                      label="Verification"
+                      id="resident-verification"
+                      testId="residents-filter-verification"
+                      value={query.verificationStatus ?? ""}
+                      onChange={(v) => setParam("verificationStatus", v)}
+                      options={VERIFICATION_OPTIONS}
+                    />
+                  </ShFilterBar>
+
+                  <ShDataTable
+                    testId="residents-table"
+                    columns={columns}
+                    rows={data?.items ?? null}
+                    rowKey={(row) => row.id}
+                    loading={loading}
+                    error={error}
+                    onRetry={load}
+                    onRowClick={(row) => navigate(`/residents/${row.id}`)}
+                    emptyMessage="No residents match these filters."
+                    sort={{ sort: query.sort, order: query.order }}
+                    onSortChange={(next) => {
+                      const params2 = new URLSearchParams(params);
+                      params2.set("sort", next.sort);
+                      params2.set("order", next.order);
+                      params2.delete("page");
+                      setParams(params2, { replace: true });
+                    }}
                   />
-                </form>
-              </div>
-              <ShSelect
-                label="Building"
-                id="resident-building"
-                testId="residents-filter-building"
-                value={query.buildingId ?? ""}
-                onChange={(v) => setParam("buildingId", v)}
-                options={[
-                  { value: "", label: "All buildings" },
-                  ...buildings.map((b) => ({ value: b.id, label: b.name })),
-                ]}
-              />
-              <ShSelect
-                label="Wing"
-                id="resident-wing"
-                testId="residents-filter-wing"
-                value={query.wingId ?? ""}
-                onChange={(v) => setParam("wingId", v)}
-                options={[
-                  { value: "", label: "All wings" },
-                  ...wings.map((w) => ({ value: w.id, label: w.name })),
-                ]}
-              />
-              <ShSelect
-                label="Type"
-                id="resident-type"
-                testId="residents-filter-type"
-                value={query.residentType ?? ""}
-                onChange={(v) => setParam("residentType", v)}
-                options={TYPE_OPTIONS}
-              />
-              <ShSelect
-                label="Status"
-                id="resident-status"
-                testId="residents-filter-status"
-                value={query.status ?? ""}
-                onChange={(v) => setParam("status", v)}
-                options={STATUS_OPTIONS}
-              />
-              <ShSelect
-                label="Verification"
-                id="resident-verification"
-                testId="residents-filter-verification"
-                value={query.verificationStatus ?? ""}
-                onChange={(v) => setParam("verificationStatus", v)}
-                options={VERIFICATION_OPTIONS}
-              />
-            </ShFilterBar>
 
-            <ShDataTable
-              testId="residents-table"
-              columns={columns}
-              rows={data?.items ?? null}
-              rowKey={(row) => row.id}
-              loading={loading}
-              error={error}
-              onRetry={load}
-              onRowClick={(row) => navigate(`/residents/${row.id}`)}
-              emptyMessage="No residents match these filters."
-              sort={{ sort: query.sort, order: query.order }}
-              onSortChange={(next) => {
-                const params2 = new URLSearchParams(params);
-                params2.set("sort", next.sort);
-                params2.set("order", next.order);
-                params2.delete("page");
-                setParams(params2, { replace: true });
-              }}
-            />
-
-            {data && (
-              <ShPagination
-                testId="residents-pagination"
-                page={data.page}
-                limit={data.limit}
-                total={data.total}
-                onPageChange={(p) => setParam("page", String(p))}
-              />
-            )}
-          </>
-        ) : (
-          <PendingInvitationsPanel />
-        )}
+                  {data && (
+                    <ShPagination
+                      testId="residents-pagination"
+                      page={data.page}
+                      limit={data.limit}
+                      total={data.total}
+                      onPageChange={(p) => setParam("page", String(p))}
+                    />
+                  )}
+                </>
+              ) : (
+                <div className="mt-4">
+                  <PendingInvitationsPanel />
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </ShPage>
 
       {addOpen
@@ -416,7 +491,7 @@ export function ResidentsPage() {
                 <OnboardHouseholdForm
                   showCsv
                   onSaved={() => {
-                    if (tab === "directory") load();
+                    if (effectivePeople === "directory") load();
                   }}
                 />
               </div>

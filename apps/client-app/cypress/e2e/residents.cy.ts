@@ -297,7 +297,7 @@ describe("Flat occupancy", () => {
 
     cy.contains("h1", "Flat A-1204").should("be.visible");
     cy.get('[data-testid="flat-occupancy-status"]').should("contain", "Tenant occupied");
-    cy.get('[data-testid="flat-primary-owner"]').should("contain", "Rohan Vichare");
+    cy.get('[data-testid="flat-owners-table"]').should("contain", "Rohan Vichare");
     cy.get('[data-testid="flat-tenants"]').should("contain", "Sayali Vichare");
 
     cy.intercept("GET", "**/v1/admin/flats/flat-1/history", {
@@ -443,5 +443,78 @@ describe("Occupancy dashboard", () => {
     cy.get('[data-testid="app-mode-resident"]').click();
     cy.wait("@stats");
     cy.get('[data-testid="dashboard-occupancy"]').should("not.exist");
+  });
+});
+
+describe("Assign team role from residents", () => {
+  beforeEach(() => {
+    cy.loginAsStaff();
+  });
+
+  it("assigns a team role from resident detail", () => {
+    let assigned = false;
+    cy.intercept("GET", "**/v1/admin/residents/res-1", (req) => {
+      req.reply({
+        statusCode: 200,
+        body: residentDetail({
+          status: "active",
+          verificationStatus: "approved",
+          roles: assigned ? ["resident", "committee"] : ["resident"],
+        }),
+      });
+    }).as("detail");
+
+    cy.intercept("POST", "**/v1/team/members", (req) => {
+      assigned = true;
+      req.reply({
+        statusCode: 200,
+        body: [
+          {
+            userId: "user-1",
+            role: "committee",
+            name: "Rohan Vichare",
+            email: "rohan@example.com",
+            phone: "9800000001",
+          },
+        ],
+      });
+    }).as("addTeam");
+
+    cy.visit("/residents/res-1");
+    cy.wait("@detail");
+
+    cy.get('[data-testid="resident-assign-team"]').click();
+    cy.get('[data-testid="assign-team-dialog"]').should("be.visible");
+    cy.get('[data-testid="assign-team-role"]').select("Committee member");
+    cy.get('[data-testid="assign-team-confirm"]').click();
+
+    cy.wait("@addTeam").its("request.body").should("deep.include", {
+      userId: "user-1",
+      role: "committee",
+    });
+    cy.wait("@detail");
+    cy.get('[data-testid="resident-message"]').should("contain", "committee");
+  });
+
+  it("opens assign dialog from directory Team role action", () => {
+    stubDirectory([
+      resident({
+        status: "active",
+        verificationStatus: "approved",
+      }),
+    ]);
+    cy.intercept("GET", "**/v1/admin/residents/res-1", {
+      statusCode: 200,
+      body: residentDetail({
+        status: "active",
+        verificationStatus: "approved",
+      }),
+    }).as("detail");
+
+    cy.visit("/residents");
+    cy.wait("@residents");
+    cy.get('[data-testid="resident-assign-team-res-1"]').click();
+    cy.wait("@detail");
+    cy.get('[data-testid="assign-team-dialog"]').should("be.visible");
   });
 });

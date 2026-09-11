@@ -144,7 +144,10 @@ async function buildFlatDetail(
     countDocumentsForFlat(tenantId, flatId),
   ]);
 
-  const owners = occupants.filter((o) => o.residentType === "owner");
+  // Ownership summary: active memberships only. Pending/suspended stay on Residents.
+  const isActive = (o: (typeof occupants)[number]) => o.status === "active";
+  const owners = occupants.filter((o) => o.residentType === "owner" && isActive(o));
+  const tenants = occupants.filter((o) => o.residentType === "tenant" && isActive(o));
   return {
     id: flat.id,
     number: flat.number,
@@ -158,7 +161,7 @@ async function buildFlatDetail(
     occupancyStatus: deriveOccupancy(occupants),
     primaryOwner: owners.find((o) => o.isPrimary) ?? owners[0] ?? null,
     coOwners: owners.filter((o) => !o.isPrimary),
-    tenants: occupants.filter((o) => o.residentType === "tenant"),
+    tenants,
     currentOccupants: occupants,
     vehicles,
     documentCount,

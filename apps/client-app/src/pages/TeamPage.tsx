@@ -14,16 +14,7 @@ import {
 } from "@society-hub/ui";
 import { useAuth } from "../auth";
 import { canUseAdminMode } from "../app-mode";
-
-const TEAM_ROLES = [
-  { value: "chairperson", label: "Chairperson" },
-  { value: "secretary", label: "Secretary" },
-  { value: "treasurer", label: "Treasurer" },
-  { value: "cashier", label: "Cashier" },
-  { value: "committee", label: "Committee member" },
-] as const;
-
-type StaffRole = (typeof TEAM_ROLES)[number]["value"];
+import { TEAM_ROLES, type StaffRole } from "../components/AssignTeamRoleDialog";
 
 function errMessage(err: unknown, fallback: string) {
   return err instanceof ApiClientError ? err.body.message : fallback;

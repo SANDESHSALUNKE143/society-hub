@@ -1,11 +1,12 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import type { SocietyDto } from "@society-hub/types";
 import { ApiClientError } from "@society-hub/sdk";
 import { useAuth } from "../auth";
 
 export function SocietiesPage() {
   const { client, user } = useAuth();
+  const navigate = useNavigate();
   const [items, setItems] = useState<SocietyDto[] | null>(null);
   const [notReady, setNotReady] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -41,7 +42,7 @@ export function SocietiesPage() {
     setBusy(true);
     setError(null);
     try {
-      await client.createSociety({
+      const created = await client.createSociety({
         name: form.name,
         address: form.address || null,
         city: form.city || null,
@@ -60,7 +61,7 @@ export function SocietiesPage() {
         chairpersonPhone: "",
       });
       setShowForm(false);
-      load();
+      navigate(`/societies/${created.id}`);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.body.message : "Failed to create society");
     } finally {
@@ -73,7 +74,10 @@ export function SocietiesPage() {
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl">Societies</h1>
-          <p className="mt-1 text-sm text-black/55">Every society on the SocietyHub platform.</p>
+          <p className="mt-1 text-sm text-black/55">
+            Every society on the SocietyHub platform. After create, set up Structure:
+            Society → Towers → Wings → Flats.
+          </p>
         </div>
         <button
           type="button"

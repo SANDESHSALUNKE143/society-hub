@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import type {
   ActivityEventDto,
   FamilyRelationship,
@@ -27,6 +27,11 @@ import {
 } from "@society-hub/ui";
 import { useAuth } from "../auth";
 import { canUseAdminMode } from "../app-mode";
+import {
+  AssignTeamRoleDialog,
+  staffRolesOf,
+  type StaffRole,
+} from "../components/AssignTeamRoleDialog";
 
 type ActionKind =
   | "verify"
@@ -94,6 +99,7 @@ const ACTION_COPY: Record<
 
 export function ResidentDetailPage() {
   const { id = "" } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { client, user } = useAuth();
   const allowed = canUseAdminMode(user?.role);
 
@@ -106,6 +112,16 @@ export function ResidentDetailPage() {
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [assignTeamOpen, setAssignTeamOpen] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("assignTeam") === "1") {
+      setAssignTeamOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("assignTeam");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -200,6 +216,14 @@ export function ResidentDetailPage() {
 
   const occupying = resident.status !== "moved_out" && resident.status !== "rejected";
   const copy = pending ? ACTION_COPY[pending.kind] : null;
+  const teamRoles = staffRolesOf(resident.roles);
+
+  function onTeamAssigned(role: StaffRole) {
+    setMessage(
+      `Assigned as ${role}. They can use Admin mode after OTP login. Manage further on Team.`,
+    );
+    load();
+  }
 
   return (
     <ShPage wide>
@@ -214,6 +238,16 @@ export function ResidentDetailPage() {
         }
         actions={
           <>
+            {occupying && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                data-testid="resident-assign-team"
+                onClick={() => setAssignTeamOpen(true)}
+              >
+                {teamRoles.length ? "Add team role" : "Assign team role"}
+              </button>
+            )}
             {resident.verificationStatus !== "approved" && (
               <button
                 type="button"
@@ -314,6 +348,14 @@ export function ResidentDetailPage() {
               </ShDetailItem>
               <ShDetailItem label="Roles">
                 {resident.roles.length ? resident.roles.join(", ") : "—"}
+                {teamRoles.length > 0 && (
+                  <p className="mt-1 text-xs text-black/55">
+                    On society team —{" "}
+                    <Link to="/team" className="text-[var(--leaf-dark)]">
+                      view Team
+                    </Link>
+                  </p>
+                )}
               </ShDetailItem>
             </ShDetailGrid>
             {resident.rejectionReason && (
@@ -498,6 +540,19 @@ export function ResidentDetailPage() {
           }}
         />
       )}
+
+      <AssignTeamRoleDialog
+        open={assignTeamOpen}
+        member={{
+          userId: resident.userId,
+          name: resident.name,
+          phone: resident.phone,
+          email: resident.email,
+        }}
+        existingRoles={resident.roles}
+        onClose={() => setAssignTeamOpen(false)}
+        onAssigned={onTeamAssigned}
+      />
     </ShPage>
   );
 }

@@ -24,6 +24,7 @@ import {
   createFlatSchema,
   createSocietyFlatSchema,
   importSocietyFlatsSchema,
+  createSocietyBuildingSchema,
   createSocietyParkingSchema,
   createInvitationSchema,
   createNoticeSchema,
@@ -308,9 +309,13 @@ describe("validation schemas", () => {
     ).toEqual({ wing: "A", floor: 3, flatNumber: "101" });
     expect(
       importSocietyFlatsSchema.parse({
+        buildingName: "Tower A",
         rows: [{ wing: "B", floor: 1, flatNumber: "201" }],
-      }).rows,
-    ).toHaveLength(1);
+      }).buildingName,
+    ).toBe("Tower A");
+    expect(
+      createSocietyBuildingSchema.parse({ name: " Tower B " }).name,
+    ).toBe("Tower B");
     expect(() =>
       createSocietyFlatSchema.parse({ wing: "", floor: 1, flatNumber: "101" }),
     ).toThrow();

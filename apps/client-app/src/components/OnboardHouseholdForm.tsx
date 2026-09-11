@@ -22,12 +22,17 @@ import {
 } from "@society-hub/ui";
 import { useAuth } from "../auth";
 import { AllottedParkingFields } from "./AllottedParkingFields";
+import { CsvImportPreviewDialog } from "./CsvImportPreviewDialog";
 import { FamilyMembersEditor } from "./FamilyMembersEditor";
 import { HouseholdAgeCounts } from "./HouseholdAgeCounts";
 import { HouseholdOwnerFields } from "./HouseholdOwnerFields";
 import { PngGasFields } from "./PngGasFields";
 import { VehicleFields } from "./VehicleFields";
-import { mapResidentCsvRows, parseCsv } from "../lib/resident-csv";
+import {
+  mapResidentCsvRows,
+  parseCsv,
+  type ResidentCsvRow,
+} from "../lib/resident-csv";
 import {
   emptyVehicleRows,
   householdVehiclesForQuota,
@@ -40,6 +45,42 @@ const CSV_TEMPLATE = `name,phone,email,flatNumber,wingName,floor,parkingSlot,isO
 Count Only,8888888888,,101,A,1,P-101,true,9999999999,,2,1,true,2,1,1
 With Plates,8888888889,resident@example.com,102,A,1,P-102,true,9999999998,MH12AB1234,MH12TW0001;MH12TW0002,MH12AB1234,true,2,0,0
 `;
+
+const RESIDENT_PREVIEW_COLUMNS = [
+  {
+    key: "name",
+    header: "Name",
+    render: (row: Record<string, unknown>) => String(row.name ?? ""),
+  },
+  {
+    key: "phone",
+    header: "Phone",
+    render: (row: Record<string, unknown>) => String(row.phone ?? ""),
+  },
+  {
+    key: "flat",
+    header: "Flat",
+    render: (row: Record<string, unknown>) => {
+      const wing = row.wingName ? `${row.wingName}-` : "";
+      return `${wing}${String(row.flatNumber ?? "")}`;
+    },
+  },
+  {
+    key: "owner",
+    header: "Owner",
+    render: (row: Record<string, unknown>) => (row.isOwner ? "Yes" : "—"),
+  },
+  {
+    key: "email",
+    header: "Email",
+    render: (row: Record<string, unknown>) => String(row.email ?? "—"),
+  },
+  {
+    key: "parking",
+    header: "Parking",
+    render: (row: Record<string, unknown>) => String(row.parkingSlot ?? "—"),
+  },
+];
 
 export type OnboardHouseholdFormProps = {
   /** Show bulk CSV import (web only). */
@@ -85,6 +126,13 @@ export function OnboardHouseholdForm({
   const [sendInvites, setSendInvites] = useState(true);
   const [forceInvite, setForceInvite] = useState(false);
   const [busyImport, setBusyImport] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFileName, setPreviewFileName] = useState<string | null>(null);
+  const [previewRows, setPreviewRows] = useState<ResidentCsvRow[]>([]);
+  const [previewParseErrors, setPreviewParseErrors] = useState<
+    Array<{ row: number; message: string }>
+  >([]);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [tab, setTab] = useState<HouseholdTabId>("owner");
   const [residents, setResidents] = useState<SocietyResidentDto[]>([]);
   const [familyBusy, setFamilyBusy] = useState(false);
@@ -304,31 +352,63 @@ export function OnboardHouseholdForm({
     setImportResult(null);
     setImportErrors([]);
     setError(null);
+    setPreviewError(null);
     if (!file) return;
-    setBusyImport(true);
     try {
       const text = await file.text();
       const raw = parseCsv(text);
       const mapped = mapResidentCsvRows(raw);
-      if (mapped.errors.length) {
-        setImportErrors(mapped.errors);
-      }
+      setPreviewParseErrors(mapped.errors);
+      setPreviewRows(mapped.rows);
+      setPreviewFileName(file.name);
+      setPreviewOpen(true);
       if (mapped.rows.length === 0) {
-        setError("No valid rows to import. Fix CSV errors and try again.");
-        return;
+        setPreviewError("No valid rows to import. Fix CSV errors and try again.");
       }
+    } catch {
+      setError("Could not read that CSV file");
+    }
+  }
+
+  function closeCsvPreview() {
+    if (busyImport) return;
+    setPreviewOpen(false);
+    setPreviewRows([]);
+    setPreviewFileName(null);
+    setPreviewError(null);
+  }
+
+  async function confirmCsvImport() {
+    if (previewRows.length === 0) return;
+    setBusyImport(true);
+    setPreviewError(null);
+    setImportResult(null);
+    setImportErrors([]);
+    setError(null);
+    try {
       const result = await client.importResidents({
-        rows: mapped.rows,
+        rows: previewRows,
         sendInvites,
         forceInvite,
         updateFlats: true,
         createMissingFlats: false,
       });
       setImportResult(result);
-      setImportErrors([...mapped.errors, ...result.errors]);
+      setImportErrors([...previewParseErrors, ...result.errors]);
       setMessage(
         `Import finished: ${result.created} created, ${result.updated} updated, ${result.unchanged} unchanged, ${result.invited} invited, ${result.skipped} skipped.`,
       );
+      if (result.errors.length > 0 && result.created === 0 && result.updated === 0) {
+        setPreviewError(
+          result.errors[0]
+            ? `Row ${result.errors[0].row}: ${result.errors[0].message}`
+            : "Import failed",
+        );
+      } else {
+        setPreviewOpen(false);
+        setPreviewRows([]);
+        setPreviewFileName(null);
+      }
       try {
         const [rows, people] = await Promise.all([
           client.listFlats(),
@@ -341,7 +421,9 @@ export function OnboardHouseholdForm({
       }
       onSaved?.();
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.body.message : "CSV import failed");
+      setPreviewError(
+        err instanceof ApiClientError ? err.body.message : "CSV import failed",
+      );
     } finally {
       setBusyImport(false);
     }
@@ -643,8 +725,7 @@ export function OnboardHouseholdForm({
           </summary>
           <p className="mt-2 mb-2 text-[11px] leading-snug text-black/50">
             Match by phone. First person on a flat is the owner; later rows are family.
-            Template headers include name, phone, flatNumber, wingName, isOwner, and
-            household fields.
+            Choose a CSV to review rows in a grid, then import.
           </p>
           <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <a
@@ -677,7 +758,11 @@ export function OnboardHouseholdForm({
             className="text-xs"
             data-testid="onboard-csv-input"
             disabled={busyImport}
-            onChange={(e) => void onCsvSelected(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              e.target.value = "";
+              void onCsvSelected(file);
+            }}
           />
           {importResult && (
             <p className="mt-2 text-xs text-[var(--leaf)]" data-testid="onboard-csv-result">
@@ -697,6 +782,21 @@ export function OnboardHouseholdForm({
           )}
         </details>
       ) : null}
+
+      <CsvImportPreviewDialog
+        open={previewOpen}
+        title="Review residents CSV"
+        fileName={previewFileName}
+        columns={RESIDENT_PREVIEW_COLUMNS}
+        rows={previewRows as unknown as Array<Record<string, unknown>>}
+        parseErrors={previewParseErrors}
+        busy={busyImport}
+        error={previewError}
+        confirmLabel={`Import ${previewRows.length} resident${previewRows.length === 1 ? "" : "s"}`}
+        onCancel={closeCsvPreview}
+        onConfirm={() => void confirmCsvImport()}
+        testId="resident-csv-preview"
+      />
     </div>
   );
 }

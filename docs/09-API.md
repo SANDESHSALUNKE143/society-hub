@@ -113,7 +113,7 @@ Use Swagger for live schemas. This Markdown guide is the **narrative + inventory
 
 **Rules**
 
-1. Platform users manage societies, **list/add/remove a society team**, and **add/edit/remove flats** (wing, floor, flat number) via Manage (`/v1/manage/societies/:id/team` and `/flats`).
+1. Platform users manage societies, **list/add/remove a society team**, and define **all society structure** (towers, flats, parking) via Manage (`/v1/manage/societies/:id/team`, `/buildings`, `/flats`, `/parkings`). Client App Admin lists flats/parking for onboard only.
 2. Manage platform employees (`superadmin`) may also sign in to the **Client App** and use **Admin mode** on any society by default (same Client Admin APIs as society staff).
 3. Society staff use **Client App Admin** for bills, notices, complaints triage, listing structure, etc.
 4. Residents use **Client App Resident** for their flat’s complaints, dues, notices, profile, visitors/bookings.
@@ -280,11 +280,19 @@ Auth required unless noted. **Staff** = society staff roles. **Platform** = `sup
 | GET | `/:id/team` | Platform | List society staff (`TeamMemberDto[]`). 404 if society missing |
 | POST | `/:id/team` | Platform | Add/update society staff membership |
 | DELETE | `/:id/team/:userId` | Platform | Soft-remove staff roles (cannot remove self) |
-| GET | `/:id/flats` | Platform | List flats (wing, floor, number) |
-| POST | `/:id/flats` | Platform | Add one flat `{ wing, floor, flatNumber }`. Creates a default building/wing if needed. Duplicate number in another wing → `409 flat_number_taken`. Same wing+number updates floor. Re-adding a deleted number restores that flat. |
-| PATCH | `/:id/flats/:flatId` | Platform | Update wing, floor, and number. `409 flat_number_taken` if the number belongs to another flat. |
+| GET | `/:id/buildings` | Platform | List towers with wing/flat counts |
+| POST | `/:id/buildings` | Platform | Create tower `{ name }` (reuses name case-insensitively) |
+| PATCH | `/:id/buildings/:buildingId` | Platform | Rename tower `{ name }` — `409 building_name_taken` |
+| DELETE | `/:id/buildings/:buildingId` | Platform | Soft-delete tower (and empty wings / unoccupied flats). `409 building_in_use` if occupied flats remain |
+| GET | `/:id/buildings/:buildingId/wings` | Platform | List wings in a tower |
+| POST | `/:id/buildings/:buildingId/wings` | Platform | Add wing `{ name }` under tower |
+| PATCH | `/:id/wings/:wingId` | Platform | Rename wing `{ name }` — `409 wing_name_taken` |
+| DELETE | `/:id/wings/:wingId` | Platform | Soft-delete wing (+ unoccupied flats). `409 wing_in_use` if occupied |
+| GET | `/:id/flats` | Platform | List flats (tower, wing, floor, number) |
+| POST | `/:id/flats` | Platform | Add one flat `{ buildingId? \| buildingName?, wing, floor, flatNumber }`. Prefer `buildingId` from the tower picker; `buildingName` creates/reuses a tower. Wings are created under that tower. Duplicate number in another wing → `409 flat_number_taken`. Same wing+number updates floor. Re-adding a deleted number restores that flat. |
+| PATCH | `/:id/flats/:flatId` | Platform | Update tower (optional), wing, floor, and number. `409 flat_number_taken` if the number belongs to another flat. |
 | DELETE | `/:id/flats/:flatId` | Platform | Soft-delete. `409 flat_in_use` if residents are still linked. |
-| POST | `/:id/flats/import` | Platform | Bulk `{ rows: [{ wing, floor, flatNumber }] }` (max 2000). Returns `{ created, updated, skipped, errors }` |
+| POST | `/:id/flats/import` | Platform | Bulk `{ buildingId? \| buildingName?, rows: [{ wing, floor, flatNumber }] }` (max 2000). Entire CSV lands under the selected/created tower. Returns `{ created, updated, skipped, errors }` |
 | GET | `/:id/parkings` | Platform | List parking slots (kind, wing, number, assigned flat) |
 | POST | `/:id/parkings` | Platform | Add one `{ kind, wing?, slotNumber }`. Puzzle needs wing. Parking number is the slot only (101, not A-101); a leading wing prefix is stripped. Duplicate puzzle identity (wing + number) or open number → `409 parking_number_taken`. Re-adding a deleted identity restores the row. |
 | PATCH | `/:id/parkings/:parkingId` | Platform | Update kind / wing / number. `409 parking_number_taken` if that identity belongs to another slot. |
@@ -298,7 +306,8 @@ Body (POST team): `{ email? , phone?, name?, role }` — email **or** phone requ
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
 | GET | `/v1/societies` | Platform | List societies |
-| POST | `/v1/societies` | Platform | Create society |
+| POST | `/v1/societies` | Platform | Create society (empty structure — add towers/wings/flats on Manage Structure) |
+| PATCH | `/v1/societies/:id` | Platform | Rename / update basics `{ name, address?, city?, pincode? }` |
 | GET | `/v1/societies/:id` | Staff/platform | Society DTO |
 | DELETE | `/v1/societies/:id` | Platform | Soft-delete |
 | GET | `/v1/societies/:id/buildings` | Staff | List buildings |
@@ -315,8 +324,8 @@ Body (POST team): `{ email? , phone?, name?, role }` — email **or** phone requ
 
 | Method | Path | Auth | Notes |
 |--------|------|------|-------|
-| GET | `/v1/admin/flats` | Staff | Flat picker (floor, parking, PNG, household `twoWheelerCount` / `fourWheelerCount`) |
-| GET | `/v1/admin/parkings` | Staff | Parking inventory for onboard (puzzle / open) |
+| GET | `/v1/admin/flats` | Staff | Flat picker (floor, parking, PNG, household `twoWheelerCount` / `fourWheelerCount`) — read-only; inventory is Manage-only |
+| GET | `/v1/admin/parkings` | Staff | Parking inventory for onboard (puzzle / open) — read-only; inventory is Manage-only |
 | GET | `/v1/admin/structure` | Staff | Nested buildings→wings→flats |
 | GET | `/v1/admin/team` | Staff | Society team |
 | POST | `/v1/team` | Staff | Add team member `{ email?, phone?, name?, role }` — email or phone required |

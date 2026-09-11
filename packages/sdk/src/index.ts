@@ -628,6 +628,19 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         method: "POST",
         body: JSON.stringify(body),
       }),
+    updateSociety: (
+      societyId: string,
+      body: {
+        name: string;
+        address?: string | null;
+        city?: string | null;
+        pincode?: string | null;
+      },
+    ) =>
+      request<SocietyDto>(`/v1/societies/${societyId}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
     getSociety: (id: string) => request<SocietyDto>(`/v1/societies/${id}`),
     listSocietyTeam: (societyId: string) =>
       request<TeamMemberDto[]>(`/v1/manage/societies/${societyId}/team`),
@@ -662,9 +675,86 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
       }),
     listManageSocietyFlats: (societyId: string) =>
       request<FlatDto[]>(`/v1/manage/societies/${societyId}/flats`),
+    listManageSocietyBuildings: (societyId: string) =>
+      request<
+        Array<{ id: string; name: string; wingCount: number; flatCount: number }>
+      >(`/v1/manage/societies/${societyId}/buildings`),
+    addManageSocietyBuilding: (societyId: string, body: { name: string }) =>
+      request<{ id: string; name: string }>(
+        `/v1/manage/societies/${societyId}/buildings`,
+        {
+          method: "POST",
+          body: JSON.stringify(body),
+        },
+      ),
+    renameManageSocietyBuilding: (
+      societyId: string,
+      buildingId: string,
+      body: { name: string },
+    ) =>
+      request<{ id: string; name: string }>(
+        `/v1/manage/societies/${societyId}/buildings/${buildingId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        },
+      ),
+    deleteManageSocietyBuilding: (societyId: string, buildingId: string) =>
+      request<{ ok: true }>(
+        `/v1/manage/societies/${societyId}/buildings/${buildingId}`,
+        { method: "DELETE" },
+      ),
+    listManageSocietyWings: (societyId: string, buildingId: string) =>
+      request<
+        Array<{
+          id: string;
+          name: string;
+          buildingId: string;
+          flatCount: number;
+        }>
+      >(`/v1/manage/societies/${societyId}/buildings/${buildingId}/wings`),
+    addManageSocietyWing: (
+      societyId: string,
+      buildingId: string,
+      body: { name: string },
+    ) =>
+      request<{
+        id: string;
+        name: string;
+        buildingId: string;
+        flatCount: number;
+      }>(`/v1/manage/societies/${societyId}/buildings/${buildingId}/wings`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    renameManageSocietyWing: (
+      societyId: string,
+      wingId: string,
+      body: { name: string },
+    ) =>
+      request<{
+        id: string;
+        name: string;
+        buildingId: string;
+        flatCount: number;
+      }>(`/v1/manage/societies/${societyId}/wings/${wingId}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    deleteManageSocietyWing: (societyId: string, wingId: string) =>
+      request<{ ok: true }>(
+        `/v1/manage/societies/${societyId}/wings/${wingId}`,
+        { method: "DELETE" },
+      ),
     addManageSocietyFlat: (
       societyId: string,
-      body: { wing: string; floor: number; flatNumber: string },
+      body: {
+        wing: string;
+        floor: number;
+        flatNumber: string;
+        buildingId?: string | null;
+        buildingName?: string | null;
+      },
     ) =>
       request<FlatDto>(`/v1/manage/societies/${societyId}/flats`, {
         method: "POST",
@@ -672,19 +762,29 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
       }),
     importManageSocietyFlats: (
       societyId: string,
-      rows: Array<{ wing: string; floor: number; flatNumber: string }>,
+      body: {
+        rows: Array<{ wing: string; floor: number; flatNumber: string }>;
+        buildingId?: string | null;
+        buildingName?: string | null;
+      },
     ) =>
       request<SocietyFlatImportResultDto>(
         `/v1/manage/societies/${societyId}/flats/import`,
         {
           method: "POST",
-          body: JSON.stringify({ rows }),
+          body: JSON.stringify(body),
         },
       ),
     updateManageSocietyFlat: (
       societyId: string,
       flatId: string,
-      body: { wing: string; floor: number; flatNumber: string },
+      body: {
+        wing: string;
+        floor: number;
+        flatNumber: string;
+        buildingId?: string | null;
+        buildingName?: string | null;
+      },
     ) =>
       request<FlatDto>(`/v1/manage/societies/${societyId}/flats/${flatId}`, {
         method: "PATCH",

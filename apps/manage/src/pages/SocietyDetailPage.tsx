@@ -7,6 +7,7 @@ import { Icon } from "../components/icons";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { SocietyFlatsPanel } from "../components/SocietyFlatsPanel";
 import { SocietyParkingsPanel } from "../components/SocietyParkingsPanel";
+import { SocietyStructurePanel } from "../components/SocietyStructurePanel";
 import { SOCIETY_COMING_SOON } from "../manage-nav";
 
 const APP_URL =
@@ -14,18 +15,27 @@ const APP_URL =
   import.meta.env.VITE_WEB_URL ??
   "http://app.localhost:5173";
 
-type SocietyTab = "team" | "flats" | "parkings" | "controls";
+type SocietyTab = "structure" | "team" | "flats" | "parkings" | "controls";
 
 const SOCIETY_TABS: Array<{ id: SocietyTab; label: string }> = [
-  { id: "team", label: "Team" },
+  { id: "structure", label: "Structure" },
   { id: "flats", label: "Flats" },
   { id: "parkings", label: "Parkings" },
+  { id: "team", label: "Team" },
   { id: "controls", label: "Controls" },
 ];
 
 export function parseSocietyTab(value: string | null): SocietyTab {
-  if (value === "flats" || value === "parkings" || value === "controls") return value;
-  return "team";
+  if (
+    value === "flats" ||
+    value === "parkings" ||
+    value === "controls" ||
+    value === "team" ||
+    value === "structure"
+  ) {
+    return value;
+  }
+  return "structure";
 }
 
 const TEAM_ROLES = [
@@ -325,10 +335,18 @@ export function SocietyDetailPage() {
 
   function setTab(next: SocietyTab) {
     const nextParams = new URLSearchParams(searchParams);
-    if (next === "team") nextParams.delete("tab");
+    if (next === "structure") nextParams.delete("tab");
     else nextParams.set("tab", next);
     setSearchParams(nextParams, { replace: true });
   }
+
+  const loadSociety = useCallback(() => {
+    if (!id) return Promise.resolve();
+    return client
+      .getSociety(id)
+      .then(setSociety)
+      .catch(() => setSociety(null));
+  }, [client, id]);
 
   const loadTeam = useCallback(() => {
     if (!id) return Promise.resolve();
@@ -344,9 +362,9 @@ export function SocietyDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    client.getSociety(id).then(setSociety).catch(() => undefined);
+    void loadSociety();
     void loadTeam();
-  }, [client, id, loadTeam]);
+  }, [id, loadSociety, loadTeam]);
 
   if (user?.role !== "superadmin") {
     return <Navigate to="/login" replace />;
@@ -428,6 +446,23 @@ export function SocietyDetailPage() {
           </button>
         ))}
       </div>
+
+      {tab === "structure" && (
+        <div
+          role="tabpanel"
+          id="society-panel-structure"
+          aria-labelledby="society-tab-structure"
+          data-testid="society-panel-structure"
+          className="flex min-h-0 flex-1 flex-col overflow-auto"
+        >
+          <SocietyStructurePanel
+            societyId={societyId}
+            society={society}
+            onSocietyUpdated={loadSociety}
+            onGoToFlats={() => setTab("flats")}
+          />
+        </div>
+      )}
 
       {tab === "team" && (
         <div

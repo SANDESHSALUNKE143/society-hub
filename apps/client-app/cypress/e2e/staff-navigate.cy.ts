@@ -36,7 +36,7 @@ describe("Client App staff (Admin mode) navigation", () => {
     cy.get('nav a[href="/residents"]').should("be.visible");
     cy.get('nav a[href="/onboard"]').should("not.exist");
     cy.get('nav a[href="/invites"]').should("not.exist");
-    cy.get('nav a[href="/flats"]').scrollIntoView().should("be.visible");
+    cy.get('nav a[href="/flats"]').should("not.exist");
     cy.get('nav a[href="/team"]').scrollIntoView().should("be.visible");
     cy.get('nav a[href="/audit"]').scrollIntoView().should("exist");
     cy.contains('nav a[href="/complaints"]', "Complaints").scrollIntoView().should("be.visible");
@@ -205,14 +205,23 @@ describe("Client App staff (Admin mode) navigation", () => {
       },
     }).as("residents");
 
+    cy.intercept("GET", "**/v1/admin/occupancy/flats*", {
+      statusCode: 200,
+      body: { items: [], page: 1, limit: 20, total: 0 },
+    });
     cy.visit("/residents");
     cy.wait("@residents");
     cy.get('[data-testid="residents-page"]').should("be.visible");
     cy.get('[data-testid="residents-table"]').should("be.visible");
     cy.contains("td", "Demo Resident").should("be.visible");
     cy.contains("td", "A-101").should("be.visible");
-    cy.get('[data-testid="residents-add"]').should("be.visible").and("contain", "Add resident");
+    cy.get('[data-testid="residents-blade-tabs"]').should("be.visible");
     cy.get('[data-testid="residents-tabs"]').should("be.visible");
+    cy.get('[data-testid="residents-blade-tabs"]').contains("Flats").click();
+    cy.url().should("include", "tab=flats");
+    cy.get('[data-testid="flats-blade"]').should("be.visible");
+    cy.get('[data-testid="residents-blade-tabs"]').contains("People").click();
+    cy.get('[data-testid="residents-add"]').should("be.visible").and("contain", "Add resident");
     cy.get('[data-testid="residents-add"]').click();
     cy.get('[data-testid="residents-add-dialog"]').should("be.visible");
     cy.get('[data-testid="onboard-form"]').should("be.visible");

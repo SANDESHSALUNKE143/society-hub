@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import type {
   FlatDetailDto,
@@ -10,6 +10,7 @@ import {
   OCCUPANCY_LABELS,
   RESIDENT_STATUS_LABELS,
   RESIDENT_TYPE_LABELS,
+  ShDataTable,
   ShDetailGrid,
   ShDetailItem,
   ShPage,
@@ -22,40 +23,56 @@ import {
   occupancyPeriod,
   residentStatusBadgeClass,
   verificationBadgeClass,
+  type ShColumn,
 } from "@society-hub/ui";
 import { useAuth } from "../auth";
 import { canUseAdminMode } from "../app-mode";
 
-function OccupantRow({ occupant }: { occupant: FlatOccupantDto }) {
-  return (
-    <li
-      className="flex flex-wrap items-center gap-2 border-b border-[var(--sand)]/60 py-2 last:border-0"
-      data-testid={`occupant-${occupant.residentId}`}
-    >
-      <Link
-        to={`/residents/${occupant.residentId}`}
-        className="font-medium text-[var(--leaf-dark)]"
-      >
-        {occupant.name ?? "Unnamed"}
-      </Link>
-      <span className="badge">{RESIDENT_TYPE_LABELS[occupant.residentType]}</span>
-      {occupant.isPrimary && <span className="badge badge-success">Primary</span>}
-      <span className={residentStatusBadgeClass(occupant.status)}>
-        {RESIDENT_STATUS_LABELS[occupant.status]}
-      </span>
-      <span className={verificationBadgeClass(occupant.verificationStatus)}>
-        {VERIFICATION_STATUS_LABELS[occupant.verificationStatus]}
-      </span>
-      {occupant.familyCount > 0 && (
-        <span className="text-xs text-black/45">
-          +{occupant.familyCount} family
+function occupantColumns(): ShColumn<FlatOccupantDto>[] {
+  return [
+    {
+      key: "name",
+      header: "Name",
+      render: (o) => (
+        <Link
+          to={`/residents/${o.residentId}`}
+          className="font-medium text-[var(--leaf-dark)]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {o.name ?? "Unnamed"}
+        </Link>
+      ),
+    },
+    {
+      key: "type",
+      header: "Type",
+      render: (o) => (
+        <span className="badge">
+          {RESIDENT_TYPE_LABELS[o.residentType]}
+          {o.isPrimary ? " · Primary" : ""}
         </span>
-      )}
-      <span className="ml-auto text-xs text-black/45">
-        {occupancyPeriod(occupant.moveInDate, occupant.moveOutDate)}
-      </span>
-    </li>
-  );
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (o) => (
+        <span className={residentStatusBadgeClass(o.status)}>
+          {RESIDENT_STATUS_LABELS[o.status]}
+        </span>
+      ),
+    },
+    {
+      key: "phone",
+      header: "Phone",
+      render: (o) => o.phone ?? "—",
+    },
+    {
+      key: "period",
+      header: "Period",
+      render: (o) => occupancyPeriod(o.moveInDate, o.moveOutDate),
+    },
+  ];
 }
 
 export function FlatDetailPage() {
@@ -94,6 +111,8 @@ export function FlatDetailPage() {
       .catch(() => setHistory([]));
   }, [client, id, tab, allowed]);
 
+  const columns = useMemo(() => occupantColumns(), []);
+
   if (!allowed) return <Navigate to="/dashboard" replace />;
   if (loading) return <p className="p-8">Loading…</p>;
   if (error || !flat) {
@@ -109,6 +128,12 @@ export function FlatDetailPage() {
       </ShPage>
     );
   }
+
+  const activeOccupants = flat.currentOccupants.filter((o) => o.status === "active");
+  const ownerRows = [
+    ...(flat.primaryOwner ? [flat.primaryOwner] : []),
+    ...flat.coOwners,
+  ];
 
   return (
     <ShPage wide>
@@ -141,7 +166,7 @@ export function FlatDetailPage() {
           {
             id: "ownership",
             label: "Ownership",
-            count: (flat.primaryOwner ? 1 : 0) + flat.coOwners.length,
+            count: ownerRows.length,
           },
           { id: "vehicles", label: "Vehicles", count: flat.vehicles.length },
           { id: "history", label: "History" },
@@ -149,7 +174,7 @@ export function FlatDetailPage() {
       />
 
       {tab === "overview" && (
-        <div className="space-y-3">
+        <div className="mt-4 space-y-3">
           <ShSection title="Flat" testId="flat-overview">
             <ShDetailGrid>
               <ShDetailItem label="Building">{flat.buildingName ?? "—"}</ShDetailItem>
@@ -160,140 +185,151 @@ export function FlatDetailPage() {
               <ShDetailItem label="Occupancy" testId="flat-occupancy">
                 {OCCUPANCY_LABELS[flat.occupancyStatus]}
               </ShDetailItem>
-              <ShDetailItem label="Occupants">
-                {flat.currentOccupants.length}
+              <ShDetailItem label="Active occupants">
+                {activeOccupants.length}
               </ShDetailItem>
               <ShDetailItem label="Vehicles">{flat.vehicles.length}</ShDetailItem>
               <ShDetailItem label="Documents">{flat.documentCount}</ShDetailItem>
             </ShDetailGrid>
           </ShSection>
 
-          <ShSection title="Ownership" testId="flat-ownership-summary">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-black/40">
-              Primary owner
+          <ShSection
+            title="Ownership"
+            description="Active memberships only. Pending or suspended people appear under Residents."
+            testId="flat-ownership-summary"
+          >
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-black/40">
+              Owners
             </p>
-            <p className="font-medium" data-testid="flat-primary-owner">
-              {flat.primaryOwner?.name ?? "None recorded"}
+            <ShDataTable
+              testId="flat-owners-table"
+              columns={columns}
+              rows={ownerRows}
+              rowKey={(o) => o.residentId}
+              emptyMessage="No active owner recorded."
+            />
+
+            <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wide text-black/40">
+              Active tenants
             </p>
-            <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-black/40">
-              Co-owners
-            </p>
-            <p className="font-medium">
-              {flat.coOwners.length
-                ? flat.coOwners.map((o) => o.name ?? "Unnamed").join(", ")
-                : "None"}
-            </p>
-            <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-black/40">
-              Tenants
-            </p>
-            <p className="font-medium" data-testid="flat-tenants">
-              {flat.tenants.length
-                ? flat.tenants.map((o) => o.name ?? "Unnamed").join(", ")
-                : "None"}
-            </p>
+            <ShDataTable
+              testId="flat-tenants"
+              columns={columns}
+              rows={flat.tenants}
+              rowKey={(o) => o.residentId}
+              emptyMessage="No active tenants on this flat."
+            />
           </ShSection>
         </div>
       )}
 
       {tab === "residents" && (
-        <ShSection
-          title="Current occupants"
-          description="Everyone with a live membership on this flat."
-          testId="flat-residents"
-        >
-          {flat.currentOccupants.length === 0 ? (
-            <p className="empty-state">This flat is vacant.</p>
-          ) : (
-            <ul>
-              {flat.currentOccupants.map((o) => (
-                <OccupantRow key={o.residentId} occupant={o} />
-              ))}
-            </ul>
-          )}
-        </ShSection>
+        <div className="mt-4">
+          <ShSection
+            title="Current occupants"
+            description="Live memberships on this flat (active, pending verification, or suspended)."
+            testId="flat-residents"
+          >
+            <ShDataTable
+              testId="flat-residents-table"
+              columns={[
+                ...columns,
+                {
+                  key: "verification",
+                  header: "Verification",
+                  render: (o) => (
+                    <span className={verificationBadgeClass(o.verificationStatus)}>
+                      {VERIFICATION_STATUS_LABELS[o.verificationStatus]}
+                    </span>
+                  ),
+                },
+              ]}
+              rows={flat.currentOccupants}
+              rowKey={(o) => o.residentId}
+              emptyMessage="This flat is vacant."
+            />
+          </ShSection>
+        </div>
       )}
 
       {tab === "ownership" && (
-        <ShSection title="Owners" testId="flat-ownership">
-          {!flat.primaryOwner && flat.coOwners.length === 0 ? (
-            <p className="empty-state">No owner recorded for this flat.</p>
-          ) : (
-            <ul>
-              {flat.primaryOwner && <OccupantRow occupant={flat.primaryOwner} />}
-              {flat.coOwners.map((o) => (
-                <OccupantRow key={o.residentId} occupant={o} />
-              ))}
-            </ul>
-          )}
-        </ShSection>
+        <div className="mt-4">
+          <ShSection title="Owners" testId="flat-ownership">
+            <ShDataTable
+              testId="flat-ownership-table"
+              columns={columns}
+              rows={ownerRows}
+              rowKey={(o) => o.residentId}
+              emptyMessage="No owner recorded for this flat."
+            />
+          </ShSection>
+        </div>
       )}
 
       {tab === "vehicles" && (
-        <ShSection
-          title="Vehicles"
-          description="Two-wheelers and four-wheelers recorded for this household."
-          testId="flat-vehicles"
-        >
-          {flat.vehicles.length === 0 ? (
-            <p className="empty-state">No vehicles recorded.</p>
-          ) : (
-            <ul className="space-y-1.5 text-sm">
-              {flat.vehicles.map((v, i) => (
-                <li key={`${v.kind}-${v.registrationNumber ?? i}`} className="flex items-center gap-2">
-                  <span className="badge">
-                    {v.kind === "two_wheeler" ? "Two-wheeler" : "Four-wheeler"}
-                  </span>
-                  <span className="font-medium">{v.registrationNumber ?? "No number"}</span>
-                  {v.parkingSlot ? (
-                    <span className="text-black/45">Slot {v.parkingSlot}</span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </ShSection>
+        <div className="mt-4">
+          <ShSection
+            title="Vehicles"
+            description="Two-wheelers and four-wheelers recorded for this household."
+            testId="flat-vehicles"
+          >
+            {flat.vehicles.length === 0 ? (
+              <p className="empty-state">No vehicles recorded.</p>
+            ) : (
+              <ul className="space-y-1.5 text-sm">
+                {flat.vehicles.map((v, i) => (
+                  <li key={`${v.kind}-${v.registrationNumber ?? i}`} className="flex items-center gap-2">
+                    <span className="badge">
+                      {v.kind === "two_wheeler" ? "Two-wheeler" : "Four-wheeler"}
+                    </span>
+                    <span className="font-medium">{v.registrationNumber ?? "No number"}</span>
+                    {v.parkingSlot ? (
+                      <span className="text-black/45">Slot {v.parkingSlot}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ShSection>
+        </div>
       )}
 
       {tab === "history" && (
-        <ShSection
-          title="Occupancy history"
-          description="Every period this flat has been occupied, newest first."
-          testId="flat-history"
-        >
-          {history.length === 0 ? (
-            <p className="empty-state">No occupancy recorded yet.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {history.map((entry) => (
-                <li
-                  key={entry.residentId}
-                  className="rounded-lg border border-[var(--sand)] p-2.5"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-medium text-black/60">
-                      {occupancyPeriod(entry.moveInDate, entry.moveOutDate)}
-                    </span>
-                    {entry.isCurrent && <span className="badge badge-success">Current</span>}
-                  </div>
-                  <p className="mt-1">
-                    <span className="badge">{RESIDENT_TYPE_LABELS[entry.residentType]}</span>{" "}
+        <div className="mt-4">
+          <ShSection
+            title="Occupancy history"
+            description="Every period this flat has been occupied, newest first."
+            testId="flat-history"
+          >
+            {history.length === 0 ? (
+              <p className="empty-state">No occupancy recorded yet.</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {history.map((entry) => (
+                  <li
+                    key={entry.residentId}
+                    className="flex flex-wrap items-center gap-2 border-b border-[var(--sand)]/60 py-2 last:border-0"
+                  >
                     <Link
                       to={`/residents/${entry.residentId}`}
                       className="font-medium text-[var(--leaf-dark)]"
                     >
                       {entry.name ?? "Unnamed"}
                     </Link>
-                  </p>
-                  {entry.moveOutReason && (
-                    <p className="mt-0.5 text-xs text-black/45">
-                      Reason: {entry.moveOutReason}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </ShSection>
+                    <span className="badge">{RESIDENT_TYPE_LABELS[entry.residentType]}</span>
+                    <span className={residentStatusBadgeClass(entry.status)}>
+                      {RESIDENT_STATUS_LABELS[entry.status]}
+                    </span>
+                    {entry.isCurrent && <span className="badge badge-success">Current</span>}
+                    <span className="ml-auto text-xs text-black/45">
+                      {occupancyPeriod(entry.moveInDate, entry.moveOutDate)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ShSection>
+        </div>
       )}
     </ShPage>
   );

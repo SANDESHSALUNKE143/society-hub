@@ -41,8 +41,6 @@ const adminSections: NavSection[] = [
   {
     title: "Society",
     items: [
-      { to: "/structure", label: "Structure", icon: "structure" },
-      { to: "/flats", label: "Flats", icon: "structure" },
       { to: "/visitors", label: "Visitors", icon: "visitors" },
       { to: "/parking", label: "Parking", icon: "parking" },
       { to: "/bookings", label: "Bookings", icon: "bookings" },

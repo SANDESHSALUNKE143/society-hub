@@ -89,25 +89,25 @@ export function DashboardPage() {
           <h2 className="mb-2 font-semibold">Occupancy</h2>
           <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
             <OccupancyTile
-              to="/flats"
+              to="/residents?tab=flats"
               label="Total flats"
               value={stats.occupancy.totalFlats}
               testId="occupancy-total-flats"
             />
             <OccupancyTile
-              to="/flats?occupancy=owner_occupied"
+              to="/residents?tab=flats&occupancy=owner_occupied"
               label="Owner occupied"
               value={stats.occupancy.ownerOccupiedFlats}
               testId="occupancy-owner-occupied"
             />
             <OccupancyTile
-              to="/flats?occupancy=tenant_occupied"
+              to="/residents?tab=flats&occupancy=tenant_occupied"
               label="Tenant occupied"
               value={stats.occupancy.tenantOccupiedFlats}
               testId="occupancy-tenant-occupied"
             />
             <OccupancyTile
-              to="/flats?occupancy=vacant"
+              to="/residents?tab=flats&occupancy=vacant"
               label="Vacant"
               value={stats.occupancy.vacantFlats}
               testId="occupancy-vacant"

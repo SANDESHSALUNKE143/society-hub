@@ -1364,7 +1364,48 @@ describe("api integration", () => {
     );
     expect(existingFlats.ok).toBe(true);
     const seedFlats = (await existingFlats.json()) as { number: string }[];
-    expect(seedFlats.some((f) => f.number === "101")).toBe(true);
+    expect(seedFlats).toHaveLength(0);
+
+    const addTower = await fetch(
+      `${base}/v1/manage/societies/${society.id}/buildings`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ name: "Tower A" }),
+      },
+    );
+    expect(addTower.ok).toBe(true);
+    const tower = (await addTower.json()) as { id: string; name: string };
+    expect(tower.name).toBe("Tower A");
+
+    const renameTower = await fetch(
+      `${base}/v1/manage/societies/${society.id}/buildings/${tower.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ name: "Tower Alpha" }),
+      },
+    );
+    expect(renameTower.ok).toBe(true);
+
+    const addWing = await fetch(
+      `${base}/v1/manage/societies/${society.id}/buildings/${tower.id}/wings`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.tokens.accessToken}`,
+        },
+        body: JSON.stringify({ name: "A" }),
+      },
+    );
+    expect(addWing.ok).toBe(true);
 
     const addFlat = await fetch(
       `${base}/v1/manage/societies/${society.id}/flats`,
@@ -1374,7 +1415,12 @@ describe("api integration", () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.tokens.accessToken}`,
         },
-        body: JSON.stringify({ wing: "A", floor: 3, flatNumber: "M-101" }),
+        body: JSON.stringify({
+          buildingId: tower.id,
+          wing: "A",
+          floor: 3,
+          flatNumber: "M-101",
+        }),
       },
     );
     expect(addFlat.ok).toBe(true);
@@ -1433,6 +1479,7 @@ describe("api integration", () => {
           Authorization: `Bearer ${session.tokens.accessToken}`,
         },
         body: JSON.stringify({
+          buildingName: "Main",
           rows: [
             { wing: "B", floor: 1, flatNumber: "M-201" },
             { wing: "A", floor: 4, flatNumber: "M-101" },
@@ -2757,6 +2804,57 @@ describe("api integration", () => {
       headers: auth,
     });
     expect(adminStructure.ok).toBe(true);
+
+    // Inventory create/import is Manage-only (platform).
+    const platform = await passwordLogin(
+      "superadmin@societyhub.local",
+      process.env.SUPERADMIN_PASSWORD ?? "Test@1234",
+    );
+    const platformAuth = {
+      Authorization: `Bearer ${platform.tokens.accessToken}`,
+    };
+    const meRes = await fetch(`${base}/v1/auth/me`, { headers: auth });
+    expect(meRes.ok).toBe(true);
+    const meBody = (await meRes.json()) as { tenantId: string };
+    const tenantId = meBody.tenantId;
+    expect(tenantId).toBeTruthy();
+
+    const flatImport = await fetch(
+      `${base}/v1/manage/societies/${tenantId}/flats/import`,
+      {
+        method: "POST",
+        headers: { ...platformAuth, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          buildingName: "Tower CSV",
+          rows: [
+            {
+              wing: "Z",
+              floor: 9,
+              flatNumber: `Z-CSV-${Date.now().toString().slice(-6)}`,
+            },
+          ],
+        }),
+      },
+    );
+    expect(flatImport.ok).toBe(true);
+    const flatImportBody = (await flatImport.json()) as { created: number };
+    expect(flatImportBody.created).toBeGreaterThanOrEqual(1);
+
+    const parkingImport = await fetch(
+      `${base}/v1/manage/societies/${tenantId}/parkings/import`,
+      {
+        method: "POST",
+        headers: { ...platformAuth, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rows: [
+            { kind: "open", slotNumber: `OP-${Date.now().toString().slice(-6)}` },
+          ],
+        }),
+      },
+    );
+    expect(parkingImport.ok).toBe(true);
+    const parkingImportBody = (await parkingImport.json()) as { created: number };
+    expect(parkingImportBody.created).toBeGreaterThanOrEqual(1);
 
     const adminTeam = await fetch(`${base}/v1/admin/team`, { headers: auth });
     expect(adminTeam.ok).toBe(true);

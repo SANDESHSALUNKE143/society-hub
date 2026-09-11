@@ -353,15 +353,46 @@ export const createFlatSchema = z.object({
   details: z.record(z.string(), z.string()).optional().nullable(),
 });
 
-/** Platform Manage: one flat identified by wing + floor + number (FR-ONB-3). */
+/** Platform Manage: one flat under a tower (building), wing + floor + number (FR-ONB-3). */
 export const createSocietyFlatSchema = z.object({
+  /** Existing tower/building id. Prefer this when selecting from the Manage UI. */
+  buildingId: z.string().uuid().optional().nullable(),
+  /** Create or reuse a tower by name when `buildingId` is omitted. */
+  buildingName: z.string().trim().min(1).max(120).optional().nullable(),
   wing: z.string().trim().min(1).max(120),
   floor: z.coerce.number().int().min(0).max(200),
   flatNumber: z.string().trim().min(1).max(32),
 });
 
 export const importSocietyFlatsSchema = z.object({
-  rows: z.array(createSocietyFlatSchema).min(1).max(2000),
+  /** Tower for the whole CSV batch — required in Manage UI (select or create). */
+  buildingId: z.string().uuid().optional().nullable(),
+  buildingName: z.string().trim().min(1).max(120).optional().nullable(),
+  rows: z
+    .array(
+      z.object({
+        wing: z.string().trim().min(1).max(120),
+        floor: z.coerce.number().int().min(0).max(200),
+        flatNumber: z.string().trim().min(1).max(32),
+      }),
+    )
+    .min(1)
+    .max(2000),
+});
+
+export const createSocietyBuildingSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+});
+
+export const createSocietyWingSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+});
+
+export const updateSocietyBasicsSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  address: z.string().trim().max(500).optional().nullable(),
+  city: z.string().trim().max(120).optional().nullable(),
+  pincode: z.string().trim().max(20).optional().nullable(),
 });
 
 export const PARKING_KINDS = ["puzzle", "open"] as const;

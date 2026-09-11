@@ -1,0 +1,13 @@
+name,phone,email,flatNumber,wingName,floor,parkingSlot,isOwner,emergencyContact,vehicleNumber,twoWheelers,fourWheelers,pngGasConnection,adults,children,seniorCitizens
+Sandesh Salunke,8169404247,sandeshsalunke55@gmail.com,1204,C,12,P-1204,true,9999999001,MH12AB1204,MH12TW1201,,true,2,1,0
+Rohan Vichare,7506480277,rohanvichare125@gmail.com,308,C,3,P-308,true,9999999002,MH12CD0308,MH12TW1202;MH12TW1203,MH12CD0308,true,2,0,1
+Mahendra Sonwane,9773047931,mahendra.sonwane@gmail.com,1706,C,17,P-1706,true,9999999003,MH12EF1706,MH12TW1204,,false,2,2,0
+Sarvesh Dev,9960142927,Sarveshdev92@gmail.com,502,C,5,P-502,true,9999999004,MH12GH0502,,MH12GH0502,true,3,1,0
+Amar Patil,9967320376,amar141989@gmail.com,2103,C,21,P-2103,true,9999999005,MH12IJ2103,MH12TW1205;MH12TW1206,,true,2,1,1
+Trupti Nagekar,8779798677,trupti.nagekar23@gmail.com,705,C,7,P-705,true,9999999006,MH12KL0705,MH12TW1207,,true,2,0,0
+Dinesh Patil,9987220538,dptnag87@gmail.com,1408,C,14,P-1408,true,9999999007,MH12MN1408,,MH12MN1408,false,3,2,0
+Vaishnavi Joshi,7715873799,vaishnavi05am@gmail.com,1902,C,19,P-1902,true,9999999008,MH12OP1902,MH12TW1208;MH12TW1209,,true,2,1,0
+Tejas Sutar,7776946907,tejassutar8087@gmail.com,1105,C,11,P-1105,true,9999999009,MH12QR1105,MH12TW1210,,true,2,0,1
+Sagar More,8103012948,sm3sagar@gmail.com,2207,C,22,P-2207,true,9999999010,MH12ST2207,,MH12ST2207,true,3,1,0
+Neha Singh,9321525310,nehasingh525310@gmail.com,401,C,4,P-401,true,9999999011,MH12UV0401,MH12TW1211;MH12TW1212,,true,2,0,0
+Sanket Salunke,9004634588,sanketsalunke034@gmail.com,1603,C,16,P-1603,true,9999999012,MH12WX1603,MH12TW1213,,false,2,1,0

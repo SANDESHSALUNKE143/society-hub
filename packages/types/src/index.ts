@@ -112,6 +112,8 @@ export type FlatDto = {
   number: string;
   wingName: string | null;
   wingId?: string;
+  buildingId?: string | null;
+  buildingName?: string | null;
   floor?: number | null;
   parkingSlot?: string | null;
   pngGasConnection?: boolean;

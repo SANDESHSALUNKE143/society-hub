@@ -15,7 +15,8 @@
     "db:migrate": "bun run src/db/migrate.ts",
     "db:seed": "bun run src/db/seed.ts",
     "db:seed-demo": "bun run src/db/seed-demo.ts",
-    "db:cleanup-test": "bun run src/db/cleanup-test-data.ts"
+    "db:cleanup-test": "bun run src/db/cleanup-test-data.ts",
+    "db:reset-pilot": "bun run src/db/reset-pilot.ts"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.3.3",

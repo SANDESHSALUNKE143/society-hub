@@ -156,6 +156,8 @@ CREATE DATABASE IF NOT EXISTS societyhub
 bun run db:migrate   # creates tables via Drizzle migrations
 bun run db:seed      # Keshav Heights + superadmin
 bun run db:cleanup-test  # soft-delete extra societies from API integration tests (keeps Keshav Heights)
+bun run db:reset-pilot   # wipe corrupted CSV/test residue inside Keshav Heights; restore flat 101 + 2 people + a few parking lots
+bun run db:seed-demo     # realistic Green Meadows society for UI demos
 ```
 
 Cypress E2E mocks the API and does **not** write societies to MySQL. Extra names like `Coverage Society …` / `Other Soc …` come from `bun run test:integration`. Cleanup keeps pilot **Keshav Heights** (`11111111-1111-1111-1111-111111111111`) by default:

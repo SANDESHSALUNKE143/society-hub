@@ -2,20 +2,46 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { FlatDto } from "@society-hub/types";
 import { ApiClientError } from "@society-hub/sdk";
 import { useAuth } from "../auth";
-import { FLAT_CSV_TEMPLATE, parseFlatCsv } from "../lib/flat-csv";
+import { FLAT_CSV_TEMPLATE, parseFlatCsv, type ParsedFlatRow } from "../lib/flat-csv";
 import { paginateItems } from "../lib/flat-list";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { CsvImportPreviewDialog } from "./CsvImportPreviewDialog";
 
 function errMessage(err: unknown, fallback: string) {
   return err instanceof ApiClientError ? err.body.message : fallback;
 }
 
+type BuildingOption = { id: string; name: string };
+
+const NEW_TOWER_VALUE = "__new__";
+
+const FLAT_PREVIEW_COLUMNS = [
+  {
+    key: "wing",
+    header: "Wing",
+    render: (row: Record<string, unknown>) => String(row.wing ?? ""),
+  },
+  {
+    key: "floor",
+    header: "Floor",
+    render: (row: Record<string, unknown>) => String(row.floor ?? ""),
+  },
+  {
+    key: "flatNumber",
+    header: "Flat",
+    render: (row: Record<string, unknown>) => String(row.flatNumber ?? ""),
+  },
+];
+
 export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
   const { client } = useAuth();
   const [rows, setRows] = useState<FlatDto[] | null>(null);
+  const [buildings, setBuildings] = useState<BuildingOption[]>([]);
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [buildingChoice, setBuildingChoice] = useState("");
+  const [newBuildingName, setNewBuildingName] = useState("");
   const [wing, setWing] = useState("");
   const [floor, setFloor] = useState("");
   const [flatNumber, setFlatNumber] = useState("");
@@ -24,12 +50,24 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<FlatDto | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFileName, setPreviewFileName] = useState<string | null>(null);
+  const [previewRows, setPreviewRows] = useState<ParsedFlatRow[]>([]);
+  const [parseErrors, setParseErrors] = useState<Array<{ row: number; message: string }>>([]);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const paged = useMemo(() => paginateItems(rows ?? [], page), [rows, page]);
 
   useEffect(() => {
     setPage((current) => Math.min(current, paged.pageCount));
   }, [paged.pageCount]);
+
+  const loadBuildings = useCallback(() => {
+    return client
+      .listManageSocietyBuildings(societyId)
+      .then(setBuildings)
+      .catch(() => setBuildings([]));
+  }, [client, societyId]);
 
   const load = useCallback(() => {
     return client
@@ -43,10 +81,13 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadBuildings();
+  }, [load, loadBuildings]);
 
   function clearForm() {
     setEditingId(null);
+    setBuildingChoice(buildings[0]?.id ?? "");
+    setNewBuildingName("");
     setWing("");
     setFloor("");
     setFlatNumber("");
@@ -60,6 +101,7 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
 
   function openAdd() {
     clearForm();
+    setBuildingChoice(buildings[0]?.id ?? NEW_TOWER_VALUE);
     setError(null);
     setMessage(null);
     setDialogOpen(true);
@@ -67,6 +109,8 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
 
   function startEdit(row: FlatDto) {
     setEditingId(row.id);
+    setBuildingChoice(row.buildingId ?? buildings[0]?.id ?? NEW_TOWER_VALUE);
+    setNewBuildingName("");
     setWing(row.wingName ?? "");
     setFloor(row.floor == null ? "" : String(row.floor));
     setFlatNumber(row.number);
@@ -89,12 +133,31 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
     };
   }, [dialogOpen, busy]);
 
+  function resolveBuildingPayload():
+    | { buildingId: string }
+    | { buildingName: string }
+    | null {
+    if (buildingChoice === NEW_TOWER_VALUE) {
+      const name = newBuildingName.trim();
+      if (!name) return null;
+      return { buildingName: name };
+    }
+    if (!buildingChoice) return null;
+    return { buildingId: buildingChoice };
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    const tower = resolveBuildingPayload();
+    if (!tower) {
+      setError("Select a tower or enter a new tower name.");
+      return;
+    }
     setBusy(true);
     setError(null);
     setMessage(null);
     const body = {
+      ...tower,
       wing: wing.trim(),
       floor: Number(floor),
       flatNumber: flatNumber.trim(),
@@ -109,7 +172,7 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
       }
       clearForm();
       setDialogOpen(false);
-      await load();
+      await Promise.all([load(), loadBuildings()]);
     } catch (err) {
       setError(errMessage(err, editingId ? "Failed to update flat" : "Failed to add flat"));
     } finally {
@@ -152,35 +215,72 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
     }
   }
 
-  async function onCsv(file: File | null) {
+  async function onCsvSelected(file: File | null) {
     if (!file) return;
+    const tower = resolveBuildingPayload();
+    if (!tower) {
+      setError("Select a tower before uploading the CSV.");
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    setPreviewError(null);
+    try {
+      const parsed = parseFlatCsv(await file.text());
+      setParseErrors(parsed.errors);
+      setPreviewRows(parsed.rows);
+      setPreviewFileName(file.name);
+      setPreviewOpen(true);
+      if (parsed.rows.length === 0 && parsed.errors.length > 0) {
+        setPreviewError("No valid rows to import. Fix the CSV and try again.");
+      }
+    } catch {
+      setError("Could not read that CSV file");
+    }
+  }
+
+  function closePreview() {
+    if (busy) return;
+    setPreviewOpen(false);
+    setPreviewRows([]);
+    setPreviewFileName(null);
+    setPreviewError(null);
+  }
+
+  async function confirmCsvImport() {
+    if (previewRows.length === 0) return;
+    const tower = resolveBuildingPayload();
+    if (!tower) {
+      setPreviewError("Select a tower before importing.");
+      return;
+    }
     setBusy(true);
+    setPreviewError(null);
     setError(null);
     setMessage(null);
     try {
-      const parsed = parseFlatCsv(await file.text());
-      if (parsed.rows.length === 0) {
-        setError(
-          parsed.errors[0]?.message ?? "No valid rows. Use wing, floor, flatNumber.",
-        );
-        return;
-      }
-      const result = await client.importManageSocietyFlats(societyId, parsed.rows);
-      const extra = parsed.errors.length
-        ? ` CSV parse skipped ${parsed.errors.length} row(s).`
+      const result = await client.importManageSocietyFlats(societyId, {
+        ...tower,
+        rows: previewRows,
+      });
+      const extra = parseErrors.length
+        ? ` CSV parse skipped ${parseErrors.length} row(s).`
         : "";
       setMessage(
         `Created ${result.created} · Updated ${result.updated} · Unchanged ${result.skipped} · Errors ${result.errors.length}.${extra}`,
       );
       if (result.errors[0]) {
-        setError(`Row ${result.errors[0].row}: ${result.errors[0].message}`);
+        setPreviewError(`Row ${result.errors[0].row}: ${result.errors[0].message}`);
       } else {
+        setPreviewOpen(false);
+        setPreviewRows([]);
+        setPreviewFileName(null);
         setDialogOpen(false);
         clearForm();
       }
-      await load();
+      await Promise.all([load(), loadBuildings()]);
     } catch (err) {
-      setError(errMessage(err, "Failed to import flats"));
+      setPreviewError(errMessage(err, "Failed to import flats"));
     } finally {
       setBusy(false);
     }
@@ -192,8 +292,8 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
         <div>
           <h2 className="font-semibold">Flats</h2>
           <p className="mt-1 text-sm text-black/55">
-            Society staff pick these flats when onboarding residents. Flat numbers
-            must be unique in this society.
+            Add flat numbers under a tower from Structure. Society staff pick these
+            flats when onboarding. Flat numbers must be unique in this society.
           </p>
         </div>
         <button
@@ -218,7 +318,7 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
         <p className="text-sm text-black/50">Loading flats…</p>
       ) : rows.length === 0 ? (
         <div className="empty-state flex-1" data-testid="society-flats-empty">
-          No flats yet. Use Add flat to create one or upload a CSV.
+          No flats yet. Use Add flat to create one or upload a CSV under a tower.
         </div>
       ) : (
         <>
@@ -227,6 +327,7 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
               <thead>
                 <tr>
                   <th>No.</th>
+                  <th>Tower</th>
                   <th>Wing</th>
                   <th>Floor</th>
                   <th>Flat</th>
@@ -242,6 +343,7 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
                     <td className="tabular-nums text-black/50" data-testid="flat-serial">
                       {paged.from + index}
                     </td>
+                    <td>{row.buildingName ?? "—"}</td>
                     <td>{row.wingName ?? "—"}</td>
                     <td>{row.floor ?? "—"}</td>
                     <td>{row.number}</td>
@@ -336,10 +438,52 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
             </div>
 
             <form
-              className="grid gap-4 sm:grid-cols-3"
+              className="grid gap-4 sm:grid-cols-2"
               data-testid="add-flat-form"
               onSubmit={onSubmit}
             >
+              <div className="sm:col-span-2">
+                <label className="label" htmlFor="flat-tower">
+                  Tower
+                </label>
+                <select
+                  id="flat-tower"
+                  data-testid="add-flat-tower"
+                  className="input"
+                  value={buildingChoice}
+                  onChange={(e) => setBuildingChoice(e.target.value)}
+                  required
+                >
+                  {buildings.length === 0 && (
+                    <option value={NEW_TOWER_VALUE}>Create new tower…</option>
+                  )}
+                  {buildings.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                  {buildings.length > 0 && (
+                    <option value={NEW_TOWER_VALUE}>Create new tower…</option>
+                  )}
+                </select>
+              </div>
+              {buildingChoice === NEW_TOWER_VALUE && (
+                <div className="sm:col-span-2">
+                  <label className="label" htmlFor="flat-tower-name">
+                    New tower name
+                  </label>
+                  <input
+                    id="flat-tower-name"
+                    data-testid="add-flat-tower-name"
+                    className="input"
+                    value={newBuildingName}
+                    onChange={(e) => setNewBuildingName(e.target.value)}
+                    placeholder="Tower A"
+                    autoFocus
+                    required
+                  />
+                </div>
+              )}
               <div>
                 <label className="label" htmlFor="flat-wing">
                   Wing
@@ -351,7 +495,7 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
                   value={wing}
                   onChange={(e) => setWing(e.target.value)}
                   placeholder="A"
-                  autoFocus
+                  autoFocus={buildingChoice !== NEW_TOWER_VALUE}
                   required
                 />
               </div>
@@ -371,7 +515,7 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
                   required
                 />
               </div>
-              <div>
+              <div className="sm:col-span-2">
                 <label className="label" htmlFor="flat-number">
                   Flat number
                 </label>
@@ -385,7 +529,7 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
                   required
                 />
               </div>
-              <div className="flex flex-wrap items-end gap-2 sm:col-span-3">
+              <div className="flex flex-wrap items-end gap-2 sm:col-span-2">
                 <button
                   className="btn btn-primary"
                   data-testid="add-flat-submit"
@@ -410,7 +554,8 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
               <div className="mt-5 border-t border-[var(--sand)] pt-4">
                 <p className="text-sm font-medium">Bulk upload</p>
                 <p className="mt-1 text-xs text-black/50">
-                  CSV columns: wing, floor, flatNumber. Existing wing names are reused.
+                  Choose the tower above first. CSV columns: wing, floor,
+                  flatNumber (no tower column). All rows land under that tower.
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <a
@@ -429,7 +574,7 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
                     onChange={(e) => {
                       const file = e.target.files?.[0] ?? null;
                       e.target.value = "";
-                      void onCsv(file);
+                      void onCsvSelected(file);
                     }}
                   />
                 </div>
@@ -448,12 +593,27 @@ export function SocietyFlatsPanel({ societyId }: { societyId: string }) {
         </div>
       )}
 
+      <CsvImportPreviewDialog
+        open={previewOpen}
+        title="Review flats CSV"
+        fileName={previewFileName}
+        columns={FLAT_PREVIEW_COLUMNS}
+        rows={previewRows as unknown as Array<Record<string, unknown>>}
+        parseErrors={parseErrors}
+        busy={busy}
+        error={previewError}
+        confirmLabel={`Import ${previewRows.length} flat${previewRows.length === 1 ? "" : "s"}`}
+        onCancel={closePreview}
+        onConfirm={() => void confirmCsvImport()}
+        testId="flat-csv-preview"
+      />
+
       <ConfirmDialog
         open={pendingDelete !== null}
         title="Delete flat"
         message={
           pendingDelete
-            ? `Delete flat ${pendingDelete.wingName ?? "—"}-${pendingDelete.number}? This removes it from Client App onboard.`
+            ? `Delete flat ${pendingDelete.buildingName ? `${pendingDelete.buildingName} · ` : ""}${pendingDelete.wingName ?? "—"}-${pendingDelete.number}? This removes it from Client App onboard.`
             : ""
         }
         confirmLabel="Delete"

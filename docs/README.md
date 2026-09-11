@@ -27,6 +27,7 @@ Functional and technical specification for SocietyHub.
 | [11-Engineers-Bay-Workspace](11-Engineers-Bay-Workspace.md) | **Company domain live:** `engineersbay.in`, Base plan, mail setup status |
 | [12-CICD](12-CICD.md) | **Current pipelines:** git flow, CI, Promote preview, Mobile AAB, Render, secrets |
 | [Play CI/CD Drive note](SocietyHub-Play-CICD-GDrive-Note.txt) | **Operator cheat-sheet** for Play internal + GitHub secrets (copy to Drive; no keys) |
+| [test-docs/](test-docs/README.md) | **Manual UAT pack:** demo society CSVs + closed tester list |
 | [PRODUCT-SUMMARY](PRODUCT-SUMMARY.md) | What exists today, verified against the codebase |
 | [implementation/phase-1-domain](implementation/phase-1-domain.md) | **Society & Resident Management domain** — user vs membership vs occupancy, lifecycle, verification, invitations |
 | [implementation/phase-1-resident-management-assessment](implementation/phase-1-resident-management-assessment.md) | Pre-implementation survey of what already existed |

@@ -302,9 +302,18 @@ describe("sdk client", () => {
       floor: 3,
       flatNumber: "101",
     });
-    await client.importManageSocietyFlats("s1", [
-      { wing: "B", floor: 1, flatNumber: "201" },
-    ]);
+    await client.importManageSocietyFlats("s1", {
+      buildingName: "Tower A",
+      rows: [{ wing: "B", floor: 1, flatNumber: "201" }],
+    });
+    await client.listManageSocietyBuildings("s1");
+    await client.addManageSocietyBuilding("s1", { name: "Tower B" });
+    await client.renameManageSocietyBuilding("s1", "b1", { name: "Tower B2" });
+    await client.listManageSocietyWings("s1", "b1");
+    await client.addManageSocietyWing("s1", "b1", { name: "A" });
+    await client.renameManageSocietyWing("s1", "w1", { name: "B" });
+    await client.deleteManageSocietyWing("s1", "w1");
+    await client.deleteManageSocietyBuilding("s1", "b1");
     await client.updateManageSocietyFlat("s1", "f1", {
       wing: "A",
       floor: 4,
@@ -332,7 +341,7 @@ describe("sdk client", () => {
     await client.createWing("b1", "A");
     await client.listFlatsForWing("w1");
     await client.createFlat("w1", "101");
-    expect(paths.length).toBe(23);
+    expect(paths.length).toBe(31);
     expect(paths.some((p) => p.includes("/v1/manage/societies/s1/team"))).toBe(true);
     expect(paths.some((p) => p.includes("/v1/manage/societies/s1/flats"))).toBe(true);
     expect(paths.some((p) => p.includes("/v1/manage/societies/s1/parkings"))).toBe(true);

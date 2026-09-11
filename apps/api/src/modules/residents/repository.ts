@@ -408,7 +408,7 @@ const occupantSelection = {
   moveOutDate: residents.moveOutDate,
 };
 
-/** Current occupants of a flat — `active_key = 'Y'` is the occupancy predicate. */
+/** Current occupants of a flat — live membership only (`active_key` + not moved out/rejected). */
 export async function listFlatOccupants(
   tenantId: string,
   flatId: string,
@@ -423,6 +423,11 @@ export async function listFlatOccupants(
         eq(residents.flatId, flatId),
         eq(residents.isDeleted, false),
         isNotNull(residents.activeKey),
+        inArray(residents.status, [
+          "active",
+          "pending_verification",
+          "suspended",
+        ]),
       ),
     )
     .orderBy(desc(residents.isPrimary), asc(users.name));
@@ -576,6 +581,11 @@ export async function occupancyStats(tenantId: string) {
           eq(residents.isDeleted, false),
           eq(flats.isDeleted, false),
           isNotNull(residents.activeKey),
+          inArray(residents.status, [
+            "active",
+            "pending_verification",
+            "suspended",
+          ]),
         ),
       )
       .groupBy(residents.flatId),
@@ -656,6 +666,11 @@ export async function listFlatsWithOccupancy(
         eq(residents.tenantId, tenantId),
         eq(residents.isDeleted, false),
         isNotNull(residents.activeKey),
+        inArray(residents.status, [
+          "active",
+          "pending_verification",
+          "suspended",
+        ]),
       ),
     )
     .groupBy(residents.flatId)

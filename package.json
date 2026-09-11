@@ -26,6 +26,7 @@
     "db:seed": "bun run --filter=@society-hub/api db:seed",
     "db:seed-demo": "bun run --filter=@society-hub/api db:seed-demo",
     "db:cleanup-test": "bun run --filter=@society-hub/api db:cleanup-test",
+    "db:reset-pilot": "bun run --filter=@society-hub/api db:reset-pilot",
     "db:up": "docker compose -f devops/docker/docker-compose.yml up mysql -d"
   },
   "devDependencies": {

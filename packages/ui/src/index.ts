@@ -92,6 +92,10 @@ export {
 export { WingFlatSelect } from "./wing-flat-select";
 export { ShTabPanel, ShTabs } from "./tabs";
 export {
+  CsvImportPreviewDialog,
+  type CsvPreviewColumn,
+} from "./csv-import-preview";
+export {
   HOUSEHOLD_TABS,
   householdSubmitLabel,
   type HouseholdTabId,
