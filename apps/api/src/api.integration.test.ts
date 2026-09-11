@@ -1529,7 +1529,7 @@ describe("api integration", () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.tokens.accessToken}`,
         },
-        body: JSON.stringify({ wing: "A", floor: 1, flatNumber: "101" }),
+        body: JSON.stringify({ wing: "A", floor: 1, flatNumber: "M-101" }),
       },
     );
     expect(clashPatch.status).toBe(409);

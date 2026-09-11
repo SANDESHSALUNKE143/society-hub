@@ -114,22 +114,46 @@ async function createSociety(platform: Session, label: string): Promise<Society>
   const chair = await otpLogin(chairPhone);
   expect(chair.user.tenantId).toBe(tenantId);
 
-  // `POST /v1/societies` seeds Tower A / wing A / flat 101.
-  const structure = await api<{
-    buildings: Array<{
-      id: string;
-      wings: Array<{ id: string; flats: Array<{ id: string; number: string }> }>;
-    }>;
-  }>("/v1/admin/structure", { session: chair });
-  const wing = structure.body.buildings[0]!.wings[0]!;
-  const flat = wing.flats[0]!;
+  // Societies start empty — seed Tower A / wing A / flat 101 via Manage APIs.
+  const tower = await api<{ id: string }>(
+    `/v1/manage/societies/${tenantId}/buildings`,
+    {
+      method: "POST",
+      session: platform,
+      body: JSON.stringify({ name: "Tower A" }),
+    },
+  );
+  expect(tower.status).toBe(200);
+  const wingRes = await api<{ id: string }>(
+    `/v1/manage/societies/${tenantId}/buildings/${tower.body.id}/wings`,
+    {
+      method: "POST",
+      session: platform,
+      body: JSON.stringify({ name: "A" }),
+    },
+  );
+  expect(wingRes.status).toBe(200);
+  const flatRes = await api<{ id: string; number: string }>(
+    `/v1/manage/societies/${tenantId}/flats`,
+    {
+      method: "POST",
+      session: platform,
+      body: JSON.stringify({
+        buildingId: tower.body.id,
+        wing: "A",
+        floor: 1,
+        flatNumber: "101",
+      }),
+    },
+  );
+  expect(flatRes.status).toBe(200);
 
   return {
     tenantId,
     chair,
-    flatId: flat.id,
-    flatNumber: flat.number,
-    wingId: wing.id,
+    flatId: flatRes.body.id,
+    flatNumber: flatRes.body.number,
+    wingId: wingRes.body.id,
   };
 }
 
