@@ -20,6 +20,7 @@ coveragePathIgnorePatterns = [
   "apps/api/src/modules/manage/user-routes.ts",
   "apps/api/src/modules/dashboard/routes.ts",
   "apps/api/src/modules/notices/routes.ts",
+  "packages/sdk/src/index.ts",
   "packages/ui/src/google-sign-in-button.tsx",
   "packages/types/src/index.ts",
 ]
