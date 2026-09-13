@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
-import { and, desc, eq } from "drizzle-orm";
-import type { NotificationDto } from "@society-hub/types";
+import { and, count, desc, eq, isNull } from "drizzle-orm";
+import type { NotificationDto, Paginated } from "@society-hub/types";
+import { listQuerySchema } from "@society-hub/validation";
 import { db } from "../../db/client";
 import { notifications } from "../../db/schema";
 import { AppError } from "../../lib/errors";
@@ -24,21 +25,62 @@ function toDto(row: typeof notifications.$inferSelect): NotificationDto {
 
 export const notificationRoutes = new Elysia({ prefix: "/v1/notifications" })
   .use(authPlugin)
-  .get("/", async ({ auth }) => {
+  .get("/", async ({ auth, query }) => {
     const claims = requireAuth(auth);
+    const parsed = listQuerySchema.parse(query);
+    const where = and(
+      eq(notifications.tenantId, claims.tenantId),
+      eq(notifications.userId, claims.sub),
+      eq(notifications.isDeleted, false),
+    );
+    const [totalRow] = await db
+      .select({ total: count() })
+      .from(notifications)
+      .where(where);
     const rows = await db
       .select()
+      .from(notifications)
+      .where(where)
+      .orderBy(desc(notifications.createdAt))
+      .limit(parsed.limit)
+      .offset((parsed.page - 1) * parsed.limit);
+    const result: Paginated<NotificationDto> = {
+      items: rows.map(toDto),
+      page: parsed.page,
+      limit: parsed.limit,
+      total: Number(totalRow?.total ?? 0),
+    };
+    return result;
+  })
+  .get("/unread-count", async ({ auth }) => {
+    const claims = requireAuth(auth);
+    const [unreadRow] = await db
+      .select({ total: count() })
       .from(notifications)
       .where(
         and(
           eq(notifications.tenantId, claims.tenantId),
           eq(notifications.userId, claims.sub),
           eq(notifications.isDeleted, false),
+          isNull(notifications.readAt),
         ),
-      )
-      .orderBy(desc(notifications.createdAt))
-      .limit(100);
-    return rows.map(toDto);
+      );
+    return { unread: Number(unreadRow?.total ?? 0) };
+  })
+  .post("/read-all", async ({ auth }) => {
+    const claims = requireAuth(auth);
+    await db
+      .update(notifications)
+      .set({ readAt: nowMysql(), updatedBy: claims.sub })
+      .where(
+        and(
+          eq(notifications.tenantId, claims.tenantId),
+          eq(notifications.userId, claims.sub),
+          eq(notifications.isDeleted, false),
+          isNull(notifications.readAt),
+        ),
+      );
+    return { ok: true as const };
   })
   .post("/:id/read", async ({ auth, params }) => {
     const claims = requireAuth(auth);
@@ -49,6 +91,7 @@ export const notificationRoutes = new Elysia({ prefix: "/v1/notifications" })
         and(
           eq(notifications.id, params.id),
           eq(notifications.userId, claims.sub),
+          eq(notifications.tenantId, claims.tenantId),
           eq(notifications.isDeleted, false),
         ),
       )

@@ -11,7 +11,7 @@ export function AssetsPage() {
       testId="assets"
       emptyLabel="No assets recorded yet."
       createLabel="Add asset"
-      onList={() => client.listAssets()}
+      onList={() => client.listAssets().then(p => p.items)}
       onCreate={(v) =>
         client.createAsset({
           name: v.name,

@@ -9,11 +9,24 @@ import 'features/auth/presentation/select_society_page.dart';
 import 'features/complaints/presentation/complaints_pages.dart';
 import 'features/dashboard/presentation/dashboard_page.dart';
 import 'features/residents/presentation/residents_page.dart';
+import 'features/ops/presentation/api_list_page.dart';
 import 'features/shell/presentation/app_shell.dart';
 import 'features/team/presentation/team_page.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final refresh = _SessionListenable(ref);
+
+  const adminOnlyPrefixes = [
+    '/home/residents',
+    '/home/team',
+    '/home/structure',
+    '/home/assets',
+    '/home/vendors',
+    '/home/events',
+    '/home/audit',
+    '/home/onboard',
+    '/home/invites',
+  ];
 
   return GoRouter(
     initialLocation: '/login',
@@ -28,6 +41,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (loading) return null;
       if (!loggedIn && !onLogin) return '/login';
       if (loggedIn && onLogin) return '/select-society';
+
+      final needsAdmin = adminOnlyPrefixes.any((p) => loc == p || loc.startsWith('$p/'));
+      if (needsAdmin &&
+          !(canUseAdminMode(session.user?.role) &&
+              session.mode == AppMode.admin)) {
+        return '/home/dashboard';
+      }
       return null;
     },
     routes: [
@@ -80,23 +100,38 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/home/bills',
-            builder: (context, state) =>
-                const ComingSoonPage(title: 'Bills'),
+            builder: (context, state) => const ApiListPage(
+              title: 'Bills',
+              path: '/v1/bills?page=1&limit=50',
+              titleField: 'periodYm',
+              subtitleField: 'status',
+            ),
           ),
           GoRoute(
             path: '/home/payments',
-            builder: (context, state) =>
-                const ComingSoonPage(title: 'Payments'),
+            builder: (context, state) => const ApiListPage(
+              title: 'Payments',
+              path: '/v1/payments?page=1&limit=50',
+              titleField: 'method',
+              subtitleField: 'status',
+            ),
           ),
           GoRoute(
             path: '/home/notices',
-            builder: (context, state) =>
-                const ComingSoonPage(title: 'Notices'),
+            builder: (context, state) => const ApiListPage(
+              title: 'Notices',
+              path: '/v1/notices?page=1&limit=50',
+              titleField: 'title',
+            ),
           ),
           GoRoute(
             path: '/home/notifications',
-            builder: (context, state) =>
-                const ComingSoonPage(title: 'Notifications'),
+            builder: (context, state) => const ApiListPage(
+              title: 'Notifications',
+              path: '/v1/notifications?page=1&limit=50',
+              titleField: 'title',
+              subtitleField: 'body',
+            ),
           ),
           GoRoute(
             path: '/home/invites',
@@ -110,42 +145,71 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/home/structure',
             builder: (context, state) =>
-                const ComingSoonPage(title: 'Structure'),
+                const ResidentsRedirectPage(tab: 'flats'),
           ),
           GoRoute(
             path: '/home/visitors',
-            builder: (context, state) =>
-                const ComingSoonPage(title: 'Visitors'),
+            builder: (context, state) => const ApiListPage(
+              title: 'Visitors',
+              path: '/v1/visitors?page=1&limit=50',
+              titleField: 'visitorName',
+              subtitleField: 'purpose',
+            ),
           ),
           GoRoute(
             path: '/home/parking',
-            builder: (context, state) =>
-                const ComingSoonPage(title: 'Parking'),
+            builder: (context, state) => const ApiListPage(
+              title: 'Parking',
+              path: '/v1/parking?page=1&limit=50',
+              titleField: 'slotNumber',
+              subtitleField: 'vehicleNumber',
+            ),
           ),
           GoRoute(
             path: '/home/bookings',
-            builder: (context, state) =>
-                const ComingSoonPage(title: 'Bookings'),
+            builder: (context, state) => const ApiListPage(
+              title: 'Bookings',
+              path: '/v1/bookings?page=1&limit=50',
+              titleField: 'facilityName',
+              subtitleField: 'status',
+            ),
           ),
           GoRoute(
             path: '/home/assets',
-            builder: (context, state) =>
-                const ComingSoonPage(title: 'Assets'),
+            builder: (context, state) => const ApiListPage(
+              title: 'Assets',
+              path: '/v1/assets?page=1&limit=50',
+              titleField: 'name',
+              subtitleField: 'category',
+            ),
           ),
           GoRoute(
             path: '/home/vendors',
-            builder: (context, state) =>
-                const ComingSoonPage(title: 'Vendors'),
+            builder: (context, state) => const ApiListPage(
+              title: 'Vendors',
+              path: '/v1/vendors?page=1&limit=50',
+              titleField: 'name',
+              subtitleField: 'phone',
+            ),
           ),
           GoRoute(
             path: '/home/events',
-            builder: (context, state) =>
-                const ComingSoonPage(title: 'Events'),
+            builder: (context, state) => const ApiListPage(
+              title: 'Events',
+              path: '/v1/events?page=1&limit=50',
+              titleField: 'title',
+              subtitleField: 'location',
+            ),
           ),
           GoRoute(
             path: '/home/audit',
-            builder: (context, state) =>
-                const ComingSoonPage(title: 'Audit log'),
+            builder: (context, state) => const ApiListPage(
+              title: 'Audit log',
+              path: '/v1/audit-logs',
+              itemsKey: '',
+              titleField: 'action',
+              subtitleField: 'entityType',
+            ),
           ),
         ],
       ),

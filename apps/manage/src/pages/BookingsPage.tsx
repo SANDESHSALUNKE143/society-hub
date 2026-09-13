@@ -11,7 +11,7 @@ export function BookingsPage() {
       testId="bookings"
       emptyLabel="No bookings yet."
       createLabel="New booking"
-      onList={() => client.listBookings()}
+      onList={() => client.listBookings().then(p => p.items)}
       onCreate={(v) =>
         client.createBooking({
           facilityName: v.facilityName,

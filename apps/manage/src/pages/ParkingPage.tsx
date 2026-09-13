@@ -11,7 +11,7 @@ export function ParkingPage() {
       testId="parking"
       emptyLabel="No parking slots added yet."
       createLabel="Add slot"
-      onList={() => client.listParkingSlots()}
+      onList={() => client.listParkingSlots().then(p => p.items)}
       onCreate={(v) =>
         client.createParkingSlot({
           slotNumber: v.slotNumber,

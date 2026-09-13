@@ -295,38 +295,48 @@ Per-society profile for a user: structured emergency contact
 
 ### bills
 
-- `flat_id`, `period_start`, `period_end`, `due_date`
-- `status`: Unpaid | Partial | Paid | Overdue | Void
-- Unique constraint: one non-void bill per flat per period (per tenant)
-
-### societies (payment account)
-
-- `upi_id`, `account_name`, `account_number`, `ifsc` — shown to residents for offline pay
-- `qr_blob_path`, `qr_content_type` — optional society QR image
+- `flat_id`, `period_ym` (YYYY-MM), `amount_paise`, line items table
+- `status`: draft | issued | paid | void | corrected
 
 ### payments
 
-- `bill_id`, `amount`, `method`: upi | cash | cheque | neft | razorpay (razorpay unused until Phase 2 checkout)
-- `status`: pending (screenshot submitted) | success (acknowledged / staff-recorded) | failed (rejected)
+- `bill_id`, `amount_paise`, `method`: upi | cash | cheque | neft | razorpay
+- `status`: pending | success | failed
 - `proof_blob_path` / `proof_content_type` for resident UPI screenshot
-- `review_note` when staff acknowledge or reject
-- `provider_payment_id` / `provider_order_id` reserved for future Razorpay
-- `receipt_number` issued on success
+- `review_note`; `receipt_number` on success
 
-### notices
+### notices / notice_attachments / notice_reads / notifications / audit_logs
 
-- `audience`: all | wing | flat (+ `wing_id` / `flat_id` as needed)
-- `published_at`, `unpublished_at`
+As before — notices audience all|wing|flat; notifications in-app; audit_logs for mutations.
 
-### notice_attachments
+### societies (payment account + platform)
 
-- `content_kind`: `image` | `video`
-- `content_type` MIME
-- `blob_path`, `byte_size`
+- `upi_id`, `account_name`, `account_number`, `ifsc` — shown to residents for offline pay
+- `qr_blob_path`, `qr_content_type` — optional society QR image
+- `status`: `active` | `suspended` — suspended societies cannot be selected at login
+- `feature_flags_json` — optional JSON allow-list of Client App module keys
+- `plan_id` nullable — FK to `platform_plans` when commercial layer is used
 
-### audit_logs
+### Platform commercial (Manage)
 
-- `entity_type`, `entity_id`, `action`, `actor_user_id`, `before_json`, `after_json` (or compact action payload)
+| Table | Purpose |
+|-------|---------|
+| `platform_plans` | Starter / Growth / Enterprise — name, monthly fee paise, modules JSON, flat hint |
+| `platform_subscriptions` | One row per society — plan, cycle, starts/ends, status |
+| `platform_discounts` | Percent or flat off; optional code; date window; subscription id |
+| `platform_bills` | SocietyHub subscription invoice to a society |
+| `platform_payments` | Offline mark-paid against a platform bill |
+| `platform_announcements` | Broadcast title/body; audience all or tenant list |
+| `support_tickets` | Society staff → platform inbox; status open/closed |
+
+### events (RSVP)
+
+- `capacity` nullable int
+- `event_rsvps` — `(event_id, user_id)` unique; soft-deleteable
+
+### assets
+
+- `next_service_at` nullable datetime — optional AMC hint
 
 ## 6. Indexing guidance
 

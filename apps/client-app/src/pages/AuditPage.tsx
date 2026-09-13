@@ -1,14 +1,12 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import type { AuditLogDto } from "@society-hub/types";
-import { ApiClientError } from "@society-hub/sdk";
 import { useAuth } from "../auth";
 import { canUseAdminMode } from "../app-mode";
 
 export function AuditPage() {
   const { client, user } = useAuth();
   const [items, setItems] = useState<AuditLogDto[] | null>(null);
-  const [notReady, setNotReady] = useState(false);
   const [q, setQ] = useState("");
   const [error, setError] = useState<string | null>(null);
   const allowed = canUseAdminMode(user?.role);
@@ -20,8 +18,7 @@ export function AuditPage() {
       .then((rows) => setItems(rows))
       .catch((err) => {
         setItems([]);
-        if (err instanceof ApiClientError && err.status === 404) setNotReady(true);
-        else setError(err instanceof Error ? err.message : "Failed to load");
+        setError(err instanceof Error ? err.message : "Failed to load");
       });
   }, [client, allowed]);
 
@@ -50,11 +47,6 @@ export function AuditPage() {
       </div>
 
       {error && <p className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
-      {notReady && (
-        <p className="mb-4 text-sm text-[var(--alert)]">
-          Audit log API isn't live yet — this screen will populate automatically once it is.
-        </p>
-      )}
 
       {items === null ? (
         <p className="text-sm text-black/50">Loading…</p>

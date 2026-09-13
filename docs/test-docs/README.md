@@ -167,3 +167,9 @@ Suggested checks for them: login → raise complaint → Account / Household →
 | Parking not linked | `parkingSlot` in residents must equal a Manage lot `slotNumber` (e.g. `P-1204`) |
 | Staff can’t open Admin | Add them on Manage → Team with a staff role + phone |
 | OTP fails locally | Confirm API is up; use seed OTP `123456` when MSG91 is not live |
+
+## User manuals & UAT
+
+- [User manuals](../user-manual/README.md) — Manage / Admin / Resident
+- [UAT matrix](uat/README.md) — per-module demo checklists
+

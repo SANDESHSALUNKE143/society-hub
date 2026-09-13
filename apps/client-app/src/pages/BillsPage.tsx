@@ -322,7 +322,6 @@ function StaffBillsView() {
   const { client } = useAuth();
   const [items, setItems] = useState<BillDto[] | null>(null);
   const [flats, setFlats] = useState<FlatDto[]>([]);
-  const [notReady, setNotReady] = useState(false);
   const [showGenerate, setShowGenerate] = useState(false);
   const [periodYm, setPeriodYm] = useState(new Date().toISOString().slice(0, 7));
   const [amount, setAmount] = useState("2500");
@@ -344,8 +343,7 @@ function StaffBillsView() {
       .then((res) => setItems(res.items))
       .catch((err) => {
         setItems([]);
-        if (err instanceof ApiClientError && err.status === 404) setNotReady(true);
-        else setError(err instanceof Error ? err.message : "Failed to load");
+        setError(err instanceof Error ? err.message : "Failed to load");
       });
     client.listFlats().then(setFlats).catch(() => setFlats([]));
   }
@@ -454,11 +452,6 @@ function StaffBillsView() {
 
       {message && <p className="mb-4 text-sm text-[var(--leaf)]">{message}</p>}
       {error && <p className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
-      {notReady && (
-        <p className="mb-4 text-sm text-[var(--alert)]">
-          Billing API isn't live yet — this screen will populate automatically once it is.
-        </p>
-      )}
 
       {items === null ? (
         <p className="text-sm text-black/50">Loading…</p>
@@ -749,7 +742,6 @@ function ResidentBillsView() {
   const [items, setItems] = useState<BillDto[] | null>(null);
   const [payments, setPayments] = useState<PaymentDto[]>([]);
   const [account, setAccount] = useState<PaymentAccountDto | null>(null);
-  const [notReady, setNotReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState<string | null>(null);
   const [payBillId, setPayBillId] = useState<string | null>(null);
@@ -763,8 +755,7 @@ function ResidentBillsView() {
       .then((rows) => setItems(rows))
       .catch((err) => {
         setItems([]);
-        if (err instanceof ApiClientError && err.status === 404) setNotReady(true);
-        else setError(err instanceof Error ? err.message : "Failed to load");
+        setError(err instanceof Error ? err.message : "Failed to load");
       });
     client.myPayments().then(setPayments).catch(() => setPayments([]));
     client.getPaymentAccount().then(setAccount).catch(() => setAccount(null));
@@ -806,11 +797,6 @@ function ResidentBillsView() {
 
       {message && <p className="mb-4 text-sm text-[var(--leaf)]">{message}</p>}
       {error && <p className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
-      {notReady && (
-        <p className="mb-4 text-sm text-[var(--alert)]">
-          Billing isn't live yet — this screen will populate automatically once it is.
-        </p>
-      )}
 
       {items === null ? (
         <p className="text-sm text-black/50">Loading…</p>

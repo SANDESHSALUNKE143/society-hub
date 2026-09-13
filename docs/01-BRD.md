@@ -119,9 +119,13 @@ Explicitly retained from the original broad MVP (detailed FR-* in [PRD](02-PRD.m
 - Notifications (in-app, email, web push)
 - Ops + finance dashboards; audit log UI
 
+### Phase 2 ops (promoted for demo)
+
+Visitor pre-register + check-in/out, parking lot assign/release, clubhouse booking with confirm/cancel, asset register, vendor directory, society events with RSVP. Platform commercial: plans, subscriptions, feature flags, platform invoices, announcements, support inbox.
+
 ### Out of scope (future — after Phase 2)
 
-Visitor management, parking, clubhouse booking, staff attendance, CCTV requests, asset management, full vendor management, events, marketplace, AI assistant, builder edition, municipal extensions, native Flutter apps, WhatsApp notification channel.
+Staff attendance, CCTV requests, advanced vendor procurement, marketplace, AI assistant, builder edition, municipal extensions, WhatsApp inbound complaint channel, Razorpay live checkout.
 
 ## 9. Constraints and assumptions
 

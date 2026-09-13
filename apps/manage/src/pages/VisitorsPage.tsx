@@ -11,7 +11,7 @@ export function VisitorsPage() {
       testId="visitors"
       emptyLabel="No visitors logged yet."
       createLabel="Log visitor"
-      onList={() => client.listVisitors()}
+      onList={() => client.listVisitors().then(p => p.items)}
       onCreate={(v) =>
         client.createVisitor({
           visitorName: v.visitorName,

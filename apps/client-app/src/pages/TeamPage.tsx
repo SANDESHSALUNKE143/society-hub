@@ -27,7 +27,6 @@ export function TeamPage() {
   const [items, setItems] = useState<TeamMemberDto[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
-  const [notReady, setNotReady] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -51,14 +50,10 @@ export function TeamPage() {
       .listTeam()
       .then((rows) => {
         setItems(rows);
-        setNotReady(false);
       })
       .catch((err) => {
         setItems([]);
-        if (err instanceof ApiClientError && err.status === 404) setNotReady(true);
-        else {
-          setListError(errMessage(err, "Could not load the team"));
-        }
+        setListError(errMessage(err, "Could not load the team"));
       })
       .finally(() => setLoading(false));
   }, [client]);
@@ -272,11 +267,6 @@ export function TeamPage() {
           </form>
           {message && <p className="mt-2 text-sm text-[var(--leaf)]">{message}</p>}
           {error && <p className="mt-2 text-sm text-[var(--danger)]">{error}</p>}
-          {notReady && (
-            <p className="mt-2 text-sm text-[var(--alert)]">
-              Team API isn't live yet — this screen will populate automatically once it is.
-            </p>
-          )}
         </ShSection>
 
         <div className="mt-4">

@@ -31,6 +31,7 @@ import {
   type HouseholdTabId,
 } from "@society-hub/ui";
 import { useAuth } from "../auth";
+import { canUseAdminMode } from "../app-mode";
 import { AllottedParkingFields } from "../components/AllottedParkingFields";
 import { FamilyMembersEditor } from "../components/FamilyMembersEditor";
 import { HouseholdAgeCounts } from "../components/HouseholdAgeCounts";
@@ -102,6 +103,7 @@ function vehiclesForAccountSave(
 
 export function AccountPage() {
   const { client, user, setSession } = useAuth();
+  const isStaff = canUseAdminMode(user?.role);
   const [pin, setPin] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -118,6 +120,8 @@ export function AccountPage() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [supportSubject, setSupportSubject] = useState("");
+  const [supportBody, setSupportBody] = useState("");
   const [household, setHousehold] = useState<SocietyResidentDto[]>([]);
   const [familyBusy, setFamilyBusy] = useState(false);
   const [familyMessage, setFamilyMessage] = useState<string | null>(null);
@@ -178,7 +182,7 @@ export function AccountPage() {
       .catch(() => undefined);
     client
       .listParkingSlots()
-      .then(setParkings)
+      .then((p) => setParkings(p.items))
       .catch(() => setParkings([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -270,6 +274,23 @@ export function AccountPage() {
     }
   }
 
+  async function submitSupport(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setMessage(null);
+    try {
+      await client.createSupportTicket({
+        subject: supportSubject.trim(),
+        body: supportBody.trim(),
+      });
+      setMessage("Support ticket sent to SocietyHub.");
+      setSupportSubject("");
+      setSupportBody("");
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.body.message : "Failed to send ticket");
+    }
+  }
+
   async function saveProfile(e: FormEvent) {
     e.preventDefault();
     setProfileError(null);
@@ -302,7 +323,7 @@ export function AccountPage() {
         });
         applyProfile(next);
         try {
-          setParkings(await client.listParkingSlots());
+          setParkings((await client.listParkingSlots()).items);
         } catch {
           /* profile already saved */
         }
@@ -812,6 +833,37 @@ export function AccountPage() {
                 </button>
               </div>
             </form>
+            {isStaff ? (
+              <form className="space-y-2.5" onSubmit={submitSupport} data-testid="account-support-form">
+                <h2 className="text-sm font-semibold">Platform support</h2>
+                <p className="text-xs text-black/50">
+                  Open a ticket for SocietyHub Super Admin (billing, access, platform issues).
+                </p>
+                <ShField label="Subject" htmlFor="supportSubject">
+                  <input
+                    id="supportSubject"
+                    className="input"
+                    value={supportSubject}
+                    onChange={(e) => setSupportSubject(e.target.value)}
+                    required
+                    minLength={3}
+                  />
+                </ShField>
+                <ShField label="Details" htmlFor="supportBody">
+                  <textarea
+                    id="supportBody"
+                    className="input min-h-[5rem]"
+                    value={supportBody}
+                    onChange={(e) => setSupportBody(e.target.value)}
+                    required
+                    minLength={10}
+                  />
+                </ShField>
+                <button className="btn btn-primary" type="submit">
+                  Send ticket
+                </button>
+              </form>
+            ) : null}
           </div>
         ) : null}
 

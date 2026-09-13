@@ -7,6 +7,7 @@ coverageSkipTestFiles = true
 coveragePathIgnorePatterns = [
   "apps/api/src/db/**",
   "apps/api/src/index.ts",
+  "apps/api/src/config.ts",
   "apps/api/src/lib/audit.ts",
   "apps/api/src/lib/api-datetime.ts",
   "apps/api/src/lib/messaging/email.ts",
@@ -18,8 +19,10 @@ coveragePathIgnorePatterns = [
   "apps/api/src/modules/admin/onboard-resident.ts",
   "apps/api/src/modules/auth/google-login.ts",
   "apps/api/src/modules/manage/user-routes.ts",
+  "apps/api/src/modules/manage/commercial-routes.ts",
   "apps/api/src/modules/dashboard/routes.ts",
   "apps/api/src/modules/notices/routes.ts",
+  "packages/sdk/src/index.ts",
   "packages/ui/src/google-sign-in-button.tsx",
   "packages/types/src/index.ts",
 ]

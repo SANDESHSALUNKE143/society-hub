@@ -76,6 +76,10 @@ async function buildSocietyDto(societyId: string): Promise<SocietyDto> {
     chairpersonEmail: chair?.email ?? null,
     chairpersonPhone: chair?.phone ?? null,
     timezone: society.timezone,
+    status: society.status,
+    slaDays: society.slaDays,
+    featureFlagsJson: society.featureFlagsJson,
+    planId: society.planId,
     createdAt: society.createdAt,
   };
 }

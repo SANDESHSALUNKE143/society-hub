@@ -1,4 +1,4 @@
-/** Who may enter the Manage app (platform Super Admin + society Admin). */
+/** Who may enter the Manage app — SocietyHub platform employees only (Spec). */
 export function canUseManageApp(role: string | undefined): boolean {
-  return role === "superadmin" || role === "chairperson" || role === "admin";
+  return role === "superadmin";
 }

@@ -23,8 +23,8 @@
 | Surface | Audience | Status |
 |---|---|---|
 | Client App | A society's own Admin (committee) and Residents | Broad and working |
-| Manage | SocietyHub's own employees (platform back-office) | Core live, commercial layer unbuilt |
-| Mobile (Flutter) | Mirrors Client App for Android/iOS | Partial, in progress |
+| Manage | SocietyHub's own employees (platform back-office) | Core live + commercial (plans, flags, platform bills, support) |
+| Mobile (Flutter) | Mirrors Client App for Android/iOS | List parity for bills/notices/ops; deep flows on web |
 
 **Stack.**
 
@@ -100,21 +100,21 @@ This is the only module built to production depth:
 
 ### Society operations
 
-Visitors, parking slots, clubhouse bookings, assets, vendors, and events. All six are **shallow CRUD** built on a shared generic `SimpleCrudPage` component — real endpoints and real persistence, but list-and-create only. No workflow, approvals, scheduling logic, or notifications.
+Visitors (pre-register + check-in/out), parking assign/release, clubhouse bookings (request/confirm/conflict), assets, vendors, and events (RSVP + capacity). Real Admin + Resident workflows with pagination — not SimpleCrud.
 
 ### Also present
 
-Audit log viewer; account page with profile and flat details; PIN setup; society switcher for multi-society users; role- and mode-aware dashboard.
+Audit log viewer; society settings (SLA + UPI details); account page with household/security + staff support tickets; PIN setup; society switcher; role- and mode-aware dashboard; feature-flag–aware nav.
 
 ### Honest maturity assessment
 
 | Depth | Modules |
 |---|---|
-| Production-grade | Complaints, authentication, **society & resident management** (directory, lifecycle, verification, documents, family, occupancy, invitations, team), society structure |
-| Functional but thin | Bills, payments, notices, notifications |
-| Skeleton CRUD only | Visitors, parking, bookings, assets, vendors, events |
+| Production-grade | Complaints, authentication, **society & resident management**, society structure |
+| Demo-complete (Phase 2) | Bills, payments, notices, notifications, dashboard, audit, team, visitors–events |
+| Manage commercial | Plans, subscriptions, discounts, flags, platform bills/payments, announcements, support, integrations health |
 
-Note: earlier revisions of this document and of `AGENTS.md` described everything except Complaints as "Coming soon" in this app. **That is out of date** — the modules above are implemented and wired to live endpoints.
+Note: earlier revisions described Phase-2 modules as Coming soon / SimpleCrud. **That is out of date.**
 
 ---
 
@@ -135,26 +135,24 @@ Manage is where SocietyHub's own staff operate the platform: create tenant socie
 | Users | Cross-tenant search and administration of platform employees and society members; invite, suspend, reset access |
 | Audit log | Immutable trail of platform actions, plus a per-society activity timeline |
 
-### Nav placeholders with no implementation
+### Commercial layer (live — demo)
 
-These render a "Coming soon" page and have **no backing API, no database tables, and no domain model**:
-
-| Placeholder | Intended purpose |
+| Area | Capability |
 |---|---|
-| Feature flags | Enable/disable modules per society |
-| Society settings | Suspend a society, SLA defaults, branding, support contacts |
-| **Subscriptions** | **Plan tiers (Starter / Growth / Enterprise), seats, module packs, billing cycles** |
-| **Discounts** | **Coupons, pilot pricing, time-bound promotions** |
-| **Platform bills** | **Generate SocietyHub subscription invoices to societies** |
-| **Platform payments** | **Reconcile Razorpay/manual platform fees, refunds, receipts** |
-| Announcements | Platform-wide or segmented broadcasts |
-| Integrations | Per-environment credentials for MSG91, Resend, Firebase, Razorpay, Azure Blob |
-| Support | Support inbox for society admins, escalation and tracking |
-| Usage & limits | Flats, storage, SMS, and push quota against the subscribed plan |
+| Feature flags | Per-society module allow-list JSON |
+| Society settings | SLA days, active/suspended |
+| Subscriptions | Assign Starter / Growth / Enterprise |
+| Discounts | Percent or flat off |
+| Platform bills / payments | Generate invoice; mark paid offline |
+| Announcements | Broadcast to society staff (in-app notify) |
+| Integrations | Read-only env health (no secrets in DB) |
+| Support | Society staff tickets → Manage inbox |
+
+Society maintenance `bills`/`payments` remain separate from platform invoices.
 
 ### The single most important fact for planning
 
-**The entire commercial layer of this SaaS is unbuilt.** There is no concept of a plan, a subscription, a seat, a quota, a discount, or a platform invoice anywhere in the schema — only the nav labels above. The product can currently onboard and serve societies, but it cannot **charge** them or **limit** them. Note the distinction: the `bills`/`payments` tables that *do* exist are for a society billing its own residents for maintenance, which is a completely separate concern from SocietyHub billing the society.
+The commercial layer now exists for **manual Super Admin** assignment (no self-serve signup, no Razorpay-for-platform). Usage metering / SMS quotas remain future.
 
 ---
 
@@ -164,9 +162,10 @@ Facts relevant to any scaling or feature plan.
 
 ### Commercial
 
-- No subscription, plan, seat, quota, or entitlement model
-- No per-tenant feature flags — every society gets every module
-- No usage metering of any kind
+- Manual Super Admin plan assignment exists (no self-serve signup)
+- Per-tenant feature flags exist; Client App nav hides disabled modules
+- Usage metering / SMS quotas remain future
+- Platform invoices are offline mark-paid (no Razorpay-for-platform yet)
 - No self-service signup; societies are created manually by a platform employee
 
 ### Architecture & scale
