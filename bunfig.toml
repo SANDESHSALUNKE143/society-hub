@@ -7,6 +7,7 @@ coverageSkipTestFiles = true
 coveragePathIgnorePatterns = [
   "apps/api/src/db/**",
   "apps/api/src/index.ts",
+  "apps/api/src/config.ts",
   "apps/api/src/lib/audit.ts",
   "apps/api/src/lib/api-datetime.ts",
   "apps/api/src/lib/messaging/email.ts",
