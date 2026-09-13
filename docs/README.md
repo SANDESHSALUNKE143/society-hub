@@ -5,9 +5,8 @@ Functional and technical specification for SocietyHub.
 **How to read:** follow `00` → `12`. Product behavior is in the PRD; stack overview in Tech Stack; system design in Architecture; schemas in Database; **HTTP API** in [09-API](09-API.md). **Local run:** [08-Local-Development](08-Local-Development.md). **Pipelines:** [12-CICD](12-CICD.md). Agents treat this folder as source of truth ([prompts/cursor-system.md](prompts/cursor-system.md), root [AGENTS.md](../AGENTS.md)).
 
 **Pilot:** Keshav Heights Society  
-**Phase 1:** two responsive web apps — **`apps/client-app`** (residents) + **`apps/manage`** (admin) — working **Complaints** + auth/onboard, plus **Society & Resident Management 2.0** (directory, membership lifecycle, verification, documents, family, flat occupancy, invitations, society team — see [implementation/phase-1-domain](implementation/phase-1-domain.md)); other planned modules shown as **Coming soon**.  
-**Phase 2:** implement Coming soon for real (billing, payments, notices, …) — see [PRD](02-PRD.md).  
-**Native mobile:** Flutter in `apps/mobile/` — **Android on Play** (internal/closed, package `com.societyhub.societyhub_mobile`); **iOS Simulator locally** (bundle `com.societyhub.societyhubMobile`, App Store listing next). Web MVP unchanged. Preview URLs and run commands: root [README.md](../README.md).
+**Phase 1:** two responsive web apps — **`apps/client-app`** (residents) + **`apps/manage`** (admin) — working **Complaints** + auth/onboard, plus **Society & Resident Management**; **Phase 2 demo** completes Client App finance/comms/ops and Manage commercial — see [implementation/phase-2-demo-backlog](implementation/phase-2-demo-backlog.md) and [user-manual](user-manual/README.md).  
+**Native mobile:** Flutter in `apps/mobile/` — mirrors Client App; bulk CSV stays web-only.
 
 ## Document index
 

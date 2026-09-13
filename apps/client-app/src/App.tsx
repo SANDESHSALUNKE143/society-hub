@@ -30,6 +30,7 @@ import { StructurePage } from "./pages/StructurePage";
 import { AssetsPage } from "./pages/AssetsPage";
 import { VendorsPage } from "./pages/VendorsPage";
 import { EventsPage } from "./pages/EventsPage";
+import { SocietySettingsPage } from "./pages/SocietySettingsPage";
 import { LegalPage } from "./pages/LegalPage";
 import { LEGAL_LINKS } from "./lib/legal-links";
 
@@ -91,6 +92,7 @@ export function App() {
         <Route path="assets" element={<AssetsPage />} />
         <Route path="vendors" element={<VendorsPage />} />
         <Route path="events" element={<EventsPage />} />
+        <Route path="settings" element={<SocietySettingsPage />} />
         <Route path="account" element={<AccountPage />} />
         <Route path="pin" element={<Navigate to="/account" replace />} />
       </Route>

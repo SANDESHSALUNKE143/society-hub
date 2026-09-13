@@ -239,7 +239,6 @@ function StaffNoticesView() {
   const { client } = useAuth();
   const [params, setParams] = useSearchParams();
   const [data, setData] = useState<Paginated<NoticeDto> | null>(null);
-  const [notReady, setNotReady] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -270,8 +269,7 @@ function StaffNoticesView() {
       .then(setData)
       .catch((err) => {
         setData({ items: [], page: query.page, limit: query.limit, total: 0 });
-        if (err instanceof ApiClientError && err.status === 404) setNotReady(true);
-        else setError(err instanceof Error ? err.message : "Failed to load");
+        setError(err instanceof Error ? err.message : "Failed to load");
       });
   }, [client, query]);
 
@@ -522,11 +520,6 @@ function StaffNoticesView() {
 
       {message && <p className="mb-4 text-sm text-[var(--leaf)]">{message}</p>}
       {error && <p className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
-      {notReady && (
-        <p className="mb-4 text-sm text-[var(--alert)]">
-          Notices API isn't live yet — this screen will populate automatically once it is.
-        </p>
-      )}
 
       {items === null ? (
         <p className="text-sm text-black/50">Loading…</p>
@@ -596,7 +589,6 @@ function ResidentNoticesView() {
   const { client } = useAuth();
   const [params, setParams] = useSearchParams();
   const [data, setData] = useState<Paginated<NoticeDto> | null>(null);
-  const [notReady, setNotReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchDraft, setSearchDraft] = useState(params.get("search") ?? "");
 
@@ -623,8 +615,7 @@ function ResidentNoticesView() {
       })
       .catch((err) => {
         setData({ items: [], page: query.page, limit: query.limit, total: 0 });
-        if (err instanceof ApiClientError && err.status === 404) setNotReady(true);
-        else setError(err instanceof Error ? err.message : "Failed to load");
+        setError(err instanceof Error ? err.message : "Failed to load");
       });
   }, [client, query]);
 
@@ -694,11 +685,6 @@ function ResidentNoticesView() {
       </ShFilterBar>
 
       {error && <p className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
-      {notReady && (
-        <p className="mb-4 text-sm text-[var(--alert)]">
-          Notices aren't live yet — this screen will populate automatically once they are.
-        </p>
-      )}
 
       {items === null ? (
         <p className="text-sm text-black/50">Loading…</p>

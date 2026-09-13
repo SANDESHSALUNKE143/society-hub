@@ -11,7 +11,7 @@ export function EventsPage() {
       testId="events"
       emptyLabel="No events scheduled yet."
       createLabel="Add event"
-      onList={() => client.listEvents()}
+      onList={() => client.listEvents().then(p => p.items)}
       onCreate={(v) =>
         client.createEvent({
           title: v.title,

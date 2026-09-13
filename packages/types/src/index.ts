@@ -192,6 +192,7 @@ export type MembershipDto = {
   societyName: string;
   role: Role;
   canUseAdminMode: boolean;
+  suspended?: boolean;
 };
 
 export type SocietyDto = {
@@ -204,6 +205,10 @@ export type SocietyDto = {
   chairpersonEmail: string | null;
   chairpersonPhone: string | null;
   timezone: string;
+  status?: "active" | "suspended";
+  slaDays?: number;
+  featureFlagsJson?: string | null;
+  planId?: string | null;
   createdAt: string;
 };
 
@@ -762,6 +767,7 @@ export type AssetDto = {
   category: string | null;
   location: string | null;
   purchaseDate: string | null;
+  nextServiceAt?: string | null;
   value: number | null;
   notes: string | null;
   createdAt: string;
@@ -784,7 +790,81 @@ export type EventDto = {
   startAt: string | null;
   endAt: string | null;
   location: string | null;
+  capacity?: number | null;
+  rsvpCount?: number;
+  iAmGoing?: boolean;
   createdAt: string;
+};
+
+export type PlatformPlanDto = {
+  id: string;
+  code: string;
+  name: string;
+  monthlyFeePaise: number;
+  modulesJson: string | null;
+  flatHint: number | null;
+};
+
+export type PlatformSubscriptionDto = {
+  id: string;
+  tenantId: string;
+  planId: string;
+  planName?: string;
+  cycle: "monthly" | "yearly";
+  status: "active" | "cancelled" | "expired";
+  startsAt: string;
+  endsAt: string | null;
+};
+
+export type PlatformDiscountDto = {
+  id: string;
+  tenantId: string | null;
+  subscriptionId: string | null;
+  code: string | null;
+  percentOff: number | null;
+  flatOffPaise: number | null;
+  startsAt: string | null;
+  endsAt: string | null;
+};
+
+export type PlatformBillDto = {
+  id: string;
+  tenantId: string;
+  societyName?: string;
+  periodYm: string;
+  amountPaise: number;
+  status: "issued" | "paid" | "void";
+  notes: string | null;
+  createdAt: string;
+};
+
+export type PlatformAnnouncementDto = {
+  id: string;
+  title: string;
+  body: string;
+  audience: "all" | "tenants";
+  publishedAt: string | null;
+  createdAt: string;
+};
+
+export type SupportTicketDto = {
+  id: string;
+  tenantId: string;
+  societyName?: string;
+  subject: string;
+  body: string;
+  status: "open" | "closed";
+  reply: string | null;
+  openedByUserId: string;
+  createdAt: string;
+};
+
+export type IntegrationHealthDto = {
+  otpConfigured: boolean;
+  emailConfigured: boolean;
+  storageLocal: boolean;
+  razorpayWebhookConfigured: boolean;
+  googleSsoConfigured: boolean;
 };
 
 export type DashboardStatsDto = {

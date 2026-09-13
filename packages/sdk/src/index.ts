@@ -38,6 +38,13 @@ import type {
   ResidentType,
   ResidentStatus,
   VerificationStatus,
+  PlatformPlanDto,
+  PlatformSubscriptionDto,
+  PlatformDiscountDto,
+  PlatformBillDto,
+  PlatformAnnouncementDto,
+  SupportTicketDto,
+  IntegrationHealthDto,
   ResidentDocumentType,
   FamilyRelationship,
   FlatDetailDto,
@@ -1078,7 +1085,14 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
     markNoticeRead: (id: string) =>
       request<{ ok: true }>(`/v1/notices/${id}/read`, { method: "POST" }),
 
-    listNotifications: () => request<NotificationDto[]>("/v1/notifications"),
+    listNotifications: (page = 1, limit = 20) =>
+      request<Paginated<NotificationDto>>(
+        `/v1/notifications?page=${page}&limit=${limit}`,
+      ),
+    notificationsUnreadCount: () =>
+      request<{ unread: number }>("/v1/notifications/unread-count"),
+    markAllNotificationsRead: () =>
+      request<{ ok: true }>("/v1/notifications/read-all", { method: "POST" }),
     markNotificationRead: (id: string) =>
       request<NotificationDto>(`/v1/notifications/${id}/read`, {
         method: "POST",
@@ -1088,6 +1102,32 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
       request<DashboardStatsDto>(
         `/v1/dashboard/stats${opts?.mine ? "?mine=1" : ""}`,
       ),
+
+    getSocietySettings: () =>
+      request<{
+        id: string;
+        name: string;
+        slaDays: number;
+        billingDefaults: string | null;
+        status: "active" | "suspended";
+        featureFlagsJson: string | null;
+        planId: string | null;
+      }>("/v1/society/settings"),
+    updateSocietySettings: (body: {
+      slaDays?: number;
+      billingDefaults?: string | null;
+    }) =>
+      request<{ ok: true }>("/v1/society/settings", {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+
+    listSupportTickets: () => request<SupportTicketDto[]>("/v1/support/tickets"),
+    createSupportTicket: (body: { subject: string; body: string }) =>
+      request<SupportTicketDto>("/v1/support/tickets", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
 
     listAuditLogs: (search?: string) => {
       const query = search ? `?q=${encodeURIComponent(search)}` : "";
@@ -1143,9 +1183,11 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
     removeTeamMember: (userId: string) =>
       request<{ ok: true }>(`/v1/team/${userId}`, { method: "DELETE" }),
 
-    listVisitors: () => request<VisitorDto[]>("/v1/visitors"),
+    listVisitors: (page = 1, limit = 20) =>
+      request<Paginated<VisitorDto>>(`/v1/visitors?page=${page}&limit=${limit}`),
     createVisitor: (body: {
       visitorName: string;
+      flatId?: string;
       phone?: string | null;
       purpose?: string | null;
       expectedAt?: string | null;
@@ -1154,43 +1196,80 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         method: "POST",
         body: JSON.stringify(body),
       }),
+    checkInVisitor: (id: string) =>
+      request<VisitorDto>(`/v1/visitors/${id}/check-in`, { method: "POST" }),
+    checkOutVisitor: (id: string) =>
+      request<VisitorDto>(`/v1/visitors/${id}/check-out`, { method: "POST" }),
+    deleteVisitor: (id: string) =>
+      request<{ ok: true }>(`/v1/visitors/${id}`, { method: "DELETE" }),
 
-    listParkingSlots: () => request<ParkingSlotDto[]>("/v1/parking"),
+    listParkingSlots: (page = 1, limit = 50) =>
+      request<Paginated<ParkingSlotDto>>(`/v1/parking?page=${page}&limit=${limit}`),
     createParkingSlot: (body: {
       slotNumber: string;
       type?: string;
       vehicleNumber?: string | null;
+      flatId?: string | null;
     }) =>
       request<ParkingSlotDto>("/v1/parking", {
         method: "POST",
         body: JSON.stringify(body),
       }),
+    assignParking: (id: string, flatId: string) =>
+      request<ParkingSlotDto>(`/v1/parking/${id}/assign`, {
+        method: "POST",
+        body: JSON.stringify({ flatId }),
+      }),
+    releaseParking: (id: string) =>
+      request<ParkingSlotDto>(`/v1/parking/${id}/release`, { method: "POST" }),
 
-    listBookings: () => request<BookingDto[]>("/v1/bookings"),
+    listBookings: (page = 1, limit = 20) =>
+      request<Paginated<BookingDto>>(`/v1/bookings?page=${page}&limit=${limit}`),
     createBooking: (body: {
       facilityName: string;
       startAt: string;
       endAt: string;
+      flatId?: string;
     }) =>
       request<BookingDto>("/v1/bookings", {
         method: "POST",
         body: JSON.stringify(body),
       }),
+    updateBookingStatus: (
+      id: string,
+      status: "pending" | "confirmed" | "cancelled",
+    ) =>
+      request<BookingDto>(`/v1/bookings/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      }),
+    deleteBooking: (id: string) =>
+      request<{ ok: true }>(`/v1/bookings/${id}`, { method: "DELETE" }),
 
-    listAssets: () => request<AssetDto[]>("/v1/assets"),
+    listAssets: (page = 1, limit = 20) =>
+      request<Paginated<AssetDto>>(`/v1/assets?page=${page}&limit=${limit}`),
     createAsset: (body: {
       name: string;
       category?: string | null;
       location?: string | null;
       value?: number | null;
       notes?: string | null;
+      nextServiceAt?: string | null;
     }) =>
       request<AssetDto>("/v1/assets", {
         method: "POST",
         body: JSON.stringify(body),
       }),
+    updateAsset: (id: string, body: Record<string, unknown>) =>
+      request<AssetDto>(`/v1/assets/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    deleteAsset: (id: string) =>
+      request<{ ok: true }>(`/v1/assets/${id}`, { method: "DELETE" }),
 
-    listVendors: () => request<VendorDto[]>("/v1/vendors"),
+    listVendors: (page = 1, limit = 20) =>
+      request<Paginated<VendorDto>>(`/v1/vendors?page=${page}&limit=${limit}`),
     createVendor: (body: {
       name: string;
       category?: string | null;
@@ -1202,17 +1281,109 @@ export function createSocietyHubClient(opts: SocietyHubClientOptions) {
         method: "POST",
         body: JSON.stringify(body),
       }),
+    updateVendor: (id: string, body: Record<string, unknown>) =>
+      request<VendorDto>(`/v1/vendors/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    deleteVendor: (id: string) =>
+      request<{ ok: true }>(`/v1/vendors/${id}`, { method: "DELETE" }),
 
-    listEvents: () => request<EventDto[]>("/v1/events"),
+    listEvents: (page = 1, limit = 20) =>
+      request<Paginated<EventDto>>(`/v1/events?page=${page}&limit=${limit}`),
     createEvent: (body: {
       title: string;
       description?: string | null;
       startAt?: string | null;
       endAt?: string | null;
       location?: string | null;
+      capacity?: number | null;
     }) =>
       request<EventDto>("/v1/events", {
         method: "POST",
+        body: JSON.stringify(body),
+      }),
+    updateEvent: (id: string, body: Record<string, unknown>) =>
+      request<EventDto>(`/v1/events/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    rsvpEvent: (id: string) =>
+      request<EventDto>(`/v1/events/${id}/rsvp`, { method: "POST" }),
+    cancelEventRsvp: (id: string) =>
+      request<{ ok: true }>(`/v1/events/${id}/rsvp`, { method: "DELETE" }),
+    deleteEvent: (id: string) =>
+      request<{ ok: true }>(`/v1/events/${id}`, { method: "DELETE" }),
+
+    // Manage commercial
+    listPlatformPlans: () => request<PlatformPlanDto[]>("/v1/manage/plans"),
+    listPlatformSubscriptions: () =>
+      request<PlatformSubscriptionDto[]>("/v1/manage/subscriptions"),
+    assignPlatformSubscription: (body: {
+      tenantId: string;
+      planId: string;
+      cycle?: "monthly" | "yearly";
+    }) =>
+      request<PlatformSubscriptionDto>("/v1/manage/subscriptions", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    listPlatformDiscounts: () =>
+      request<PlatformDiscountDto[]>("/v1/manage/discounts"),
+    createPlatformDiscount: (body: Record<string, unknown>) =>
+      request<PlatformDiscountDto>("/v1/manage/discounts", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    listPlatformBills: () => request<PlatformBillDto[]>("/v1/manage/platform-bills"),
+    generatePlatformBill: (body: {
+      tenantId: string;
+      periodYm: string;
+      amountPaise?: number;
+      notes?: string | null;
+    }) =>
+      request<PlatformBillDto>("/v1/manage/platform-bills/generate", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    markPlatformBillPaid: (id: string) =>
+      request<{ ok: true }>(`/v1/manage/platform-bills/${id}/mark-paid`, {
+        method: "POST",
+      }),
+    listPlatformAnnouncements: () =>
+      request<PlatformAnnouncementDto[]>("/v1/manage/announcements"),
+    createPlatformAnnouncement: (body: {
+      title: string;
+      body: string;
+      audience?: "all" | "tenants";
+      tenantIds?: string[];
+      publishNow?: boolean;
+    }) =>
+      request<PlatformAnnouncementDto>("/v1/manage/announcements", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    listManageSupportTickets: () =>
+      request<SupportTicketDto[]>("/v1/manage/support-tickets"),
+    replySupportTicket: (id: string, body: { reply: string; close?: boolean }) =>
+      request<{ ok: true }>(`/v1/manage/support-tickets/${id}/reply`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    getIntegrationsHealth: () =>
+      request<IntegrationHealthDto>("/v1/manage/integrations/health"),
+    updateManageSocietySettings: (
+      id: string,
+      body: {
+        slaDays?: number;
+        billingDefaults?: string | null;
+        status?: "active" | "suspended";
+        featureFlagsJson?: string | null;
+        planId?: string | null;
+      },
+    ) =>
+      request<{ ok: true }>(`/v1/manage/societies/${id}/settings`, {
+        method: "PATCH",
         body: JSON.stringify(body),
       }),
   };

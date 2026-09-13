@@ -127,6 +127,11 @@ class SocietyHubApi {
     }
   }
 
+  /// Raw JSON for lightweight list screens.
+  Future<dynamic> getJson(String path) {
+    return _request(path, parse: (json) => json);
+  }
+
   ApiException _mapError(DioException e) {
     final data = e.response?.data;
     if (data is Map) {

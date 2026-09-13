@@ -15,6 +15,19 @@ const APP_URL =
   import.meta.env.VITE_WEB_URL ??
   "http://app.localhost:5173";
 
+const CONTROL_MODULES = [
+  "complaints",
+  "bills",
+  "payments",
+  "notices",
+  "visitors",
+  "parking",
+  "bookings",
+  "assets",
+  "vendors",
+  "events",
+] as const;
+
 type SocietyTab = "structure" | "team" | "flats" | "parkings" | "controls";
 
 const SOCIETY_TABS: Array<{ id: SocietyTab; label: string }> = [
@@ -332,6 +345,11 @@ export function SocietyDetailPage() {
   const [pendingRemove, setPendingRemove] = useState<TeamMemberDto | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [controlSla, setControlSla] = useState(3);
+  const [controlStatus, setControlStatus] = useState<"active" | "suspended">("active");
+  const [controlFlags, setControlFlags] = useState<Record<string, boolean>>({});
+  const [controlMsg, setControlMsg] = useState<string | null>(null);
+  const [controlError, setControlError] = useState<string | null>(null);
 
   function setTab(next: SocietyTab) {
     const nextParams = new URLSearchParams(searchParams);
@@ -365,6 +383,42 @@ export function SocietyDetailPage() {
     void loadSociety();
     void loadTeam();
   }, [id, loadSociety, loadTeam]);
+
+  useEffect(() => {
+    if (!society) return;
+    setControlSla(society.slaDays ?? 3);
+    setControlStatus(society.status ?? "active");
+    let list: string[] = [...CONTROL_MODULES];
+    if (society.featureFlagsJson) {
+      try {
+        const parsed = JSON.parse(society.featureFlagsJson) as unknown;
+        if (Array.isArray(parsed)) list = parsed.filter((x): x is string => typeof x === "string");
+      } catch {
+        /* keep defaults */
+      }
+    }
+    const next: Record<string, boolean> = {};
+    for (const m of CONTROL_MODULES) next[m] = list.includes(m);
+    setControlFlags(next);
+  }, [society]);
+
+  async function saveControls() {
+    if (!id) return;
+    setControlMsg(null);
+    setControlError(null);
+    try {
+      const enabled = CONTROL_MODULES.filter((m) => controlFlags[m]);
+      await client.updateManageSocietySettings(id, {
+        slaDays: controlSla,
+        status: controlStatus,
+        featureFlagsJson: JSON.stringify(enabled),
+      });
+      setControlMsg("Controls saved");
+      await loadSociety();
+    } catch (err) {
+      setControlError(errMessage(err, "Failed to save controls"));
+    }
+  }
 
   if (user?.role !== "superadmin") {
     return <Navigate to="/login" replace />;
@@ -566,52 +620,77 @@ export function SocietyDetailPage() {
           role="tabpanel"
           id="society-panel-controls"
           aria-labelledby="society-tab-controls"
-          data-testid="society-planned-controls"
+          data-testid="society-panel-controls"
           className="min-h-0 flex-1 overflow-auto"
         >
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <h2 className="font-semibold">Platform controls for this society</h2>
-            <span className="rounded-full bg-[var(--sand)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black/50">
-              Coming soon
-            </span>
           </div>
           <p className="mb-4 text-sm text-black/55">
-            Planned per-society controls. Shown for roadmap visibility — toggles are disabled
-            and do not save.
+            Suspend access, set complaint SLA, and choose which Client App modules are enabled.
           </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {SOCIETY_COMING_SOON.map((row) => (
-              <div
-                key={row.title}
-                className="card flex items-start justify-between gap-3 p-4 opacity-80"
+          <div className="card mb-4 grid max-w-lg gap-3 p-4">
+            <div>
+              <label className="label" htmlFor="control-sla">
+                Complaint SLA (days)
+              </label>
+              <input
+                id="control-sla"
+                className="input"
+                type="number"
+                min={1}
+                value={controlSla}
+                onChange={(e) => setControlSla(Number(e.target.value))}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="control-status">
+                Society status
+              </label>
+              <select
+                id="control-status"
+                className="input"
+                value={controlStatus}
+                onChange={(e) => setControlStatus(e.target.value as "active" | "suspended")}
               >
-                <div>
-                  <p className="text-sm font-medium">{row.title}</p>
-                  <p className="mt-1 text-xs text-black/50">{row.detail}</p>
-                </div>
-                <button
-                  type="button"
-                  className="relative h-6 w-11 shrink-0 rounded-full bg-black/15"
-                  disabled
-                  aria-disabled="true"
-                  title="Coming soon"
-                >
-                  <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow" />
-                </button>
-              </div>
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+          </div>
+          <ul className="card mb-4 divide-y divide-[var(--sand)] p-2">
+            {CONTROL_MODULES.map((m) => (
+              <li key={m} className="flex items-center justify-between px-3 py-2">
+                <span className="capitalize">{m}</span>
+                <input
+                  type="checkbox"
+                  checked={Boolean(controlFlags[m])}
+                  onChange={(e) =>
+                    setControlFlags((f) => ({ ...f, [m]: e.target.checked }))
+                  }
+                />
+              </li>
             ))}
-          </div>
+          </ul>
+          <button type="button" className="btn btn-primary" onClick={() => void saveControls()}>
+            Save controls
+          </button>
+          {controlMsg && <p className="mt-2 text-sm text-[var(--leaf)]">{controlMsg}</p>}
+          {controlError && <p className="mt-2 text-sm text-[var(--danger)]">{controlError}</p>}
           <div className="mt-4 flex flex-wrap gap-2">
-            <Link to="/feature-flags" className="btn btn-ghost text-sm">
-              Global feature flags
-            </Link>
             <Link to="/subscriptions" className="btn btn-ghost text-sm">
-              Subscriptions
+              Assign subscription
             </Link>
-            <Link to="/payments" className="btn btn-ghost text-sm">
-              Payments
+            <Link to="/bills" className="btn btn-ghost text-sm">
+              Platform bills
+            </Link>
+            <Link to="/support" className="btn btn-ghost text-sm">
+              Support inbox
             </Link>
           </div>
+          <p className="mt-6 text-xs text-black/40">
+            Usage metering ({SOCIETY_COMING_SOON.find((r) => /usage/i.test(r.title))?.detail}) remains future.
+          </p>
         </div>
       )}
     </div>

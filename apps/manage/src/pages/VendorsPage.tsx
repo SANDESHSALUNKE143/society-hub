@@ -11,7 +11,7 @@ export function VendorsPage() {
       testId="vendors"
       emptyLabel="No vendors added yet."
       createLabel="Add vendor"
-      onList={() => client.listVendors()}
+      onList={() => client.listVendors().then(p => p.items)}
       onCreate={(v) =>
         client.createVendor({
           name: v.name,

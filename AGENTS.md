@@ -22,7 +22,7 @@ Build SocietyHub per the Spec. **Docs are source of truth.** Never invent busine
 
 - **MVP clients = two simple responsive React web apps** (phone browser + desktop): `apps/client-app` (residents) and `apps/manage` (Admin / Super Admin). Keep UI/UX simple: few screens, one primary action, no clutter.
 - **Native mobile (in progress):** Flutter Client App under `apps/mobile/` — mirrors client-app UX; bulk CSV stays on web. Use `.cursor/skills/societyhub-flutter-future`.
-- **MVP product:** **Complaints** (auth + onboard + raise/track) and **Society & Resident Management** (directory, membership lifecycle, verification, documents, family, occupancy, invitations, society team) — see [docs/implementation/phase-1-domain.md](docs/implementation/phase-1-domain.md). Show other **planned** features in nav as **Coming soon** (PRD §5.2)—do not implement their APIs until Phase 2. Do not invent extra modules.
+- **Product (Phase 1 + Phase 2 demo):** **Complaints**, **Society & Resident Management**, plus Client App **Bills / Payments / Notices / Notifications / Dashboard / Audit** and society ops (**Visitors, Parking, Bookings, Assets, Vendors, Events**). Manage commercial layer (plans, flags, platform invoices, support) is in scope per [docs/02-PRD.md](docs/02-PRD.md). Do not invent modules outside the Spec.
 - **Residents:** `residents` is the **membership + occupancy period**, not a flat pointer. Move-out closes a row; move-in inserts a new one; **never overwrite or delete occupancy history**. `active_key IS NOT NULL` is the one predicate for "currently occupies". Flat occupancy is **derived**, never stored.
 - **Multi-tenant:** every query and blob path scoped by `tenant_id`. A resource in another society must return **404**, not a partial read. Add a negative cross-tenant test for every new tenant-owned route.
 - **RBAC:** enforce Admin vs Resident on the server (MVP). Extend the role predicates in `apps/api/src/lib/auth-helpers.ts` — do **not** add a second authorization mechanism.
@@ -52,4 +52,4 @@ Build SocietyHub per the Spec. **Docs are source of truth.** Never invent busine
 
 ## Out of scope unless Spec updated
 
-WhatsApp notifications, microservices split, modules listed as future in the PRD. Flutter Client App is under active build in `apps/mobile/` (bulk CSV remains web-only).
+WhatsApp inbound complaint bot, marketplace, AI assistant, builder edition, staff attendance, CCTV, Razorpay live checkout, Redis/BullMQ SLA jobs, email/push fan-out beyond in-app. Flutter Client App is under active build in `apps/mobile/` (bulk CSV and Manage stay web-only).

@@ -77,7 +77,6 @@ function StaffPaymentsView() {
   const [items, setItems] = useState<PaymentDto[] | null>(null);
   const [flats, setFlats] = useState<FlatDto[]>([]);
   const [account, setAccount] = useState<PaymentAccountDto | null>(null);
-  const [notReady, setNotReady] = useState(false);
   const [showRecord, setShowRecord] = useState(false);
   const [editAccount, setEditAccount] = useState(false);
   const [flatId, setFlatId] = useState("");
@@ -118,8 +117,7 @@ function StaffPaymentsView() {
       .then((res) => setItems(res.items))
       .catch((err) => {
         setItems([]);
-        if (err instanceof ApiClientError && err.status === 404) setNotReady(true);
-        else setError(err instanceof Error ? err.message : "Failed to load");
+        setError(err instanceof Error ? err.message : "Failed to load");
       });
     client
       .getPaymentAccount()
@@ -244,11 +242,6 @@ function StaffPaymentsView() {
 
       {message && <p className="text-sm text-[var(--leaf)]">{message}</p>}
       {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
-      {notReady && (
-        <p className="text-sm text-[var(--alert)]">
-          Payments API isn't live yet — this screen will populate automatically once it is.
-        </p>
-      )}
 
       {!ready && (
         <p className="rounded-lg border border-[var(--alert)]/30 bg-[color-mix(in_srgb,var(--alert)_8%,transparent)] px-4 py-3 text-sm text-[var(--leaf-dark)]">
@@ -624,7 +617,6 @@ function ResidentPaymentsView() {
   const { client } = useAuth();
   const [items, setItems] = useState<PaymentDto[] | null>(null);
   const [account, setAccount] = useState<PaymentAccountDto | null>(null);
-  const [notReady, setNotReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -633,8 +625,7 @@ function ResidentPaymentsView() {
       .then((rows) => setItems(rows))
       .catch((err) => {
         setItems([]);
-        if (err instanceof ApiClientError && err.status === 404) setNotReady(true);
-        else setError(err instanceof Error ? err.message : "Failed to load");
+        setError(err instanceof Error ? err.message : "Failed to load");
       });
     client.getPaymentAccount().then(setAccount).catch(() => setAccount(null));
   }, [client]);
@@ -657,11 +648,6 @@ function ResidentPaymentsView() {
       </div>
 
       {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
-      {notReady && (
-        <p className="text-sm text-[var(--alert)]">
-          Payment history isn't live yet — this screen will populate automatically once it is.
-        </p>
-      )}
 
       {awaiting > 0 && (
         <p className="rounded-lg border border-[var(--saffron)]/25 bg-[color-mix(in_srgb,var(--saffron)_10%,transparent)] px-4 py-3 text-sm">

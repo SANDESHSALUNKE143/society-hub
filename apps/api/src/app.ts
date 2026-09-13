@@ -39,6 +39,11 @@ import {
   manageUserRoutes,
 } from "./modules/manage/user-routes";
 import {
+  manageCommercialRoutes,
+  societyFlagsRoutes,
+  supportRoutes,
+} from "./modules/manage/commercial-routes";
+import {
   assetRoutes,
   bookingRoutes,
   eventRoutes,
@@ -124,6 +129,9 @@ export function createApp() {
     .use(manageStructureRoutes)
     .use(manageUserRoutes)
     .use(manageActivityRoutes)
+    .use(manageCommercialRoutes)
+    .use(supportRoutes)
+    .use(societyFlagsRoutes)
     .use(buildingRoutes)
     .use(wingRoutes)
     .use(flatRoutes)

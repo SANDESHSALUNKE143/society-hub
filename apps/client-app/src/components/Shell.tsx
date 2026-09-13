@@ -51,7 +51,10 @@ const adminSections: NavSection[] = [
   },
   {
     title: "System",
-    items: [{ to: "/audit", label: "Audit log", icon: "audit" }],
+    items: [
+      { to: "/settings", label: "Society settings", icon: "settings" },
+      { to: "/audit", label: "Audit log", icon: "audit" },
+    ],
   },
 ];
 
@@ -89,6 +92,44 @@ const residentSections: NavSection[] = [
 ];
 
 const MANAGE_URL = import.meta.env.VITE_MANAGE_URL ?? "http://manage.localhost:5174";
+
+/** Map Client App path → Manage feature-flag module key. Unlisted paths always show. */
+const PATH_MODULE: Record<string, string> = {
+  "/complaints": "complaints",
+  "/bills": "bills",
+  "/payments": "payments",
+  "/notices": "notices",
+  "/visitors": "visitors",
+  "/parking": "parking",
+  "/bookings": "bookings",
+  "/assets": "assets",
+  "/vendors": "vendors",
+  "/events": "events",
+};
+
+function parseEnabledModules(raw: string | null | undefined): Set<string> | null {
+  if (!raw) return null;
+  try {
+    const list = JSON.parse(raw) as unknown;
+    if (!Array.isArray(list)) return null;
+    return new Set(list.filter((x): x is string => typeof x === "string"));
+  } catch {
+    return null;
+  }
+}
+
+function filterSections(sections: NavSection[], enabled: Set<string> | null): NavSection[] {
+  if (!enabled) return sections;
+  return sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => {
+        const mod = PATH_MODULE[item.to];
+        return !mod || enabled.has(mod);
+      }),
+    }))
+    .filter((section) => section.items.length > 0);
+}
 
 function NavRow({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
   return (
@@ -153,11 +194,21 @@ function ModeToggle() {
 }
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-  const { user, clearSession } = useAuth();
+  const { user, clearSession, client } = useAuth();
   const { mode } = useAppMode();
   const showToggle = canUseAdminMode(user?.role);
   const effectiveMode = showToggle ? mode : "resident";
-  const sections = effectiveMode === "admin" ? adminSections : residentSections;
+  const baseSections = effectiveMode === "admin" ? adminSections : residentSections;
+  const [enabledModules, setEnabledModules] = useState<Set<string> | null>(null);
+
+  useEffect(() => {
+    client
+      .getSocietySettings()
+      .then((s) => setEnabledModules(parseEnabledModules(s.featureFlagsJson)))
+      .catch(() => setEnabledModules(null));
+  }, [client, user?.tenantId]);
+
+  const sections = filterSections(baseSections, enabledModules);
 
   return (
     <div className="flex h-full flex-col">
