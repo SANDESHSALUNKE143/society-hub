@@ -3125,7 +3125,7 @@ describe("api integration", () => {
 
     const delVisitor = await fetch(`${base}/v1/visitors/${visitorBody.id}`, {
       method: "DELETE",
-      headers: { Authorization: rAuth.Authorization },
+      headers: { Authorization: sAuth.Authorization },
     });
     expect(delVisitor.ok).toBe(true);
 
@@ -3490,10 +3490,13 @@ describe("api integration", () => {
       headers: { Authorization: rAuth.Authorization },
     });
     expect(notifs.ok).toBe(true);
-    const notificationList = (await notifs.json()) as { id: string }[];
-    expect(notificationList.length).toBeGreaterThan(0);
+    const notificationPage = (await notifs.json()) as {
+      items: { id: string }[];
+      total: number;
+    };
+    expect(notificationPage.items.length).toBeGreaterThan(0);
     const mark = await fetch(
-      `${base}/v1/notifications/${notificationList[0]!.id}/read`,
+      `${base}/v1/notifications/${notificationPage.items[0]!.id}/read`,
       { method: "POST", headers: { Authorization: rAuth.Authorization } },
     );
     expect(mark.ok).toBe(true);
@@ -3501,7 +3504,7 @@ describe("api integration", () => {
     expect(
       (
         await fetch(
-          `${base}/v1/notifications/${notificationList[0]!.id}/read`,
+          `${base}/v1/notifications/${notificationPage.items[0]!.id}/read`,
           { method: "POST", headers: { Authorization: rAuth.Authorization } },
         )
       ).ok,

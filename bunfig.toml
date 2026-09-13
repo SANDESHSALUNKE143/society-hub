@@ -18,6 +18,7 @@ coveragePathIgnorePatterns = [
   "apps/api/src/modules/admin/onboard-resident.ts",
   "apps/api/src/modules/auth/google-login.ts",
   "apps/api/src/modules/manage/user-routes.ts",
+  "apps/api/src/modules/manage/commercial-routes.ts",
   "apps/api/src/modules/dashboard/routes.ts",
   "apps/api/src/modules/notices/routes.ts",
   "packages/sdk/src/index.ts",
