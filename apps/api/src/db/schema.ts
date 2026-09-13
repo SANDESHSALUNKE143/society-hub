@@ -35,6 +35,9 @@ export const societies = mysqlTable("societies", {
   timezone: varchar("timezone", { length: 64 }).notNull().default("Asia/Kolkata"),
   slaDays: int("sla_days").notNull().default(3),
   billingDefaults: text("billing_defaults"),
+  status: mysqlEnum("status", ["active", "suspended"]).notNull().default("active"),
+  featureFlagsJson: text("feature_flags_json"),
+  planId: char("plan_id", { length: 36 }),
   /** Offline UPI / bank details residents use to pay (Razorpay is future). */
   upiId: varchar("upi_id", { length: 80 }),
   accountName: varchar("account_name", { length: 120 }),
@@ -724,6 +727,7 @@ export const assets = mysqlTable(
     category: varchar("category", { length: 80 }),
     location: varchar("location", { length: 200 }),
     purchaseDate: datetime("purchase_date", { mode: "string", fsp: 3 }),
+    nextServiceAt: datetime("next_service_at", { mode: "string", fsp: 3 }),
     value: int("value_paise"),
     notes: text("notes"),
     ...timestamps,
@@ -756,7 +760,123 @@ export const events = mysqlTable(
     startAt: datetime("start_at", { mode: "string", fsp: 3 }),
     endAt: datetime("end_at", { mode: "string", fsp: 3 }),
     location: varchar("location", { length: 200 }),
+    capacity: int("capacity"),
     ...timestamps,
   },
   (t) => [index("events_tenant_idx").on(t.tenantId)],
+);
+
+export const eventRsvps = mysqlTable(
+  "event_rsvps",
+  {
+    id: id(),
+    tenantId: tenantId(),
+    eventId: char("event_id", { length: 36 }).notNull(),
+    userId: char("user_id", { length: 36 }).notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    index("event_rsvps_tenant_idx").on(t.tenantId),
+    uniqueIndex("event_rsvps_event_user_uidx").on(t.eventId, t.userId),
+  ],
+);
+
+/** SocietyHub SaaS plans (Manage commercial). */
+export const platformPlans = mysqlTable("platform_plans", {
+  id: id(),
+  code: varchar("code", { length: 40 }).notNull(),
+  name: varchar("name", { length: 120 }).notNull(),
+  monthlyFeePaise: int("monthly_fee_paise").notNull().default(0),
+  modulesJson: text("modules_json"),
+  flatHint: int("flat_hint"),
+  ...timestamps,
+});
+
+export const platformSubscriptions = mysqlTable(
+  "platform_subscriptions",
+  {
+    id: id(),
+    tenantId: tenantId(),
+    planId: char("plan_id", { length: 36 }).notNull(),
+    cycle: mysqlEnum("cycle", ["monthly", "yearly"]).notNull().default("monthly"),
+    status: mysqlEnum("status", ["active", "cancelled", "expired"])
+      .notNull()
+      .default("active"),
+    startsAt: datetime("starts_at", { mode: "string", fsp: 3 }).notNull(),
+    endsAt: datetime("ends_at", { mode: "string", fsp: 3 }),
+    ...timestamps,
+  },
+  (t) => [index("platform_subscriptions_tenant_idx").on(t.tenantId)],
+);
+
+export const platformDiscounts = mysqlTable(
+  "platform_discounts",
+  {
+    id: id(),
+    tenantId: char("tenant_id", { length: 36 }),
+    subscriptionId: char("subscription_id", { length: 36 }),
+    code: varchar("code", { length: 40 }),
+    percentOff: int("percent_off"),
+    flatOffPaise: int("flat_off_paise"),
+    startsAt: datetime("starts_at", { mode: "string", fsp: 3 }),
+    endsAt: datetime("ends_at", { mode: "string", fsp: 3 }),
+    ...timestamps,
+  },
+  (t) => [index("platform_discounts_tenant_idx").on(t.tenantId)],
+);
+
+export const platformBills = mysqlTable(
+  "platform_bills",
+  {
+    id: id(),
+    tenantId: tenantId(),
+    subscriptionId: char("subscription_id", { length: 36 }),
+    periodYm: varchar("period_ym", { length: 7 }).notNull(),
+    amountPaise: int("amount_paise").notNull(),
+    status: mysqlEnum("status", ["issued", "paid", "void"]).notNull().default("issued"),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (t) => [index("platform_bills_tenant_idx").on(t.tenantId)],
+);
+
+export const platformPayments = mysqlTable(
+  "platform_payments",
+  {
+    id: id(),
+    tenantId: tenantId(),
+    billId: char("bill_id", { length: 36 }).notNull(),
+    amountPaise: int("amount_paise").notNull(),
+    method: varchar("method", { length: 40 }).notNull().default("offline"),
+    status: mysqlEnum("status", ["success", "failed"]).notNull().default("success"),
+    receiptNumber: varchar("receipt_number", { length: 64 }),
+    ...timestamps,
+  },
+  (t) => [index("platform_payments_tenant_idx").on(t.tenantId)],
+);
+
+export const platformAnnouncements = mysqlTable("platform_announcements", {
+  id: id(),
+  title: varchar("title", { length: 200 }).notNull(),
+  body: text("body").notNull(),
+  audience: mysqlEnum("audience", ["all", "tenants"]).notNull().default("all"),
+  tenantIdsJson: text("tenant_ids_json"),
+  publishedAt: datetime("published_at", { mode: "string", fsp: 3 }),
+  ...timestamps,
+});
+
+export const supportTickets = mysqlTable(
+  "support_tickets",
+  {
+    id: id(),
+    tenantId: tenantId(),
+    openedByUserId: char("opened_by_user_id", { length: 36 }).notNull(),
+    subject: varchar("subject", { length: 200 }).notNull(),
+    body: text("body").notNull(),
+    status: mysqlEnum("status", ["open", "closed"]).notNull().default("open"),
+    reply: text("reply"),
+    closedAt: datetime("closed_at", { mode: "string", fsp: 3 }),
+    ...timestamps,
+  },
+  (t) => [index("support_tickets_tenant_idx").on(t.tenantId)],
 );

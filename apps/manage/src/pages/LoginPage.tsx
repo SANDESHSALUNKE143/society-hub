@@ -40,7 +40,9 @@ export function LoginPage() {
         setSession(res.user, res.tokens);
         navigate("/dashboard", { replace: true });
       } catch {
-        setError(`Residents use the Client App instead: ${WEB_URL}`);
+        setError(
+          `Manage is for SocietyHub platform employees (superadmin) only. Society chairperson / admin use the Client App: ${WEB_URL}`,
+        );
       }
     } catch (err) {
       setError(err instanceof ApiClientError ? err.body.message : "Failed");
@@ -115,7 +117,8 @@ export function LoginPage() {
           </div>
         </div>
         <p className="mt-4 text-center text-sm text-black/60">
-          SocietyHub platform team sign-in. Manage societies and platform team access.
+          SocietyHub platform team sign-in (superadmin). Society chairperson and
+          residents use the Client App instead.
         </p>
 
         <div className="mt-6 flex flex-wrap justify-center gap-2">

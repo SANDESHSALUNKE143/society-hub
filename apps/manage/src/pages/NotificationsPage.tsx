@@ -12,7 +12,7 @@ export function NotificationsPage() {
   function load() {
     client
       .listNotifications()
-      .then((rows) => setItems(rows))
+      .then((rows) => setItems(rows.items))
       .catch((err) => {
         setItems([]);
         if (err instanceof ApiClientError && err.status === 404) setNotReady(true);

@@ -41,7 +41,7 @@ export const MANAGE_NAV: ManageNavItem[] = [
     to: "/feature-flags",
     label: "Feature flags",
     icon: "toggle",
-    status: "soon",
+    status: "live",
     blurb:
       "Turn modules on or off per society (complaints, bills, payments, visitors, bookings, and more).",
   },
@@ -49,7 +49,7 @@ export const MANAGE_NAV: ManageNavItem[] = [
     to: "/society-settings",
     label: "Society settings",
     icon: "settings",
-    status: "soon",
+    status: "live",
     blurb:
       "Enable or disable a society on the platform, set SLA defaults, branding, and support contacts.",
   },
@@ -57,7 +57,7 @@ export const MANAGE_NAV: ManageNavItem[] = [
     to: "/subscriptions",
     label: "Subscriptions",
     icon: "subscription",
-    status: "soon",
+    status: "live",
     blurb:
       "Assign plans (Starter / Growth / Enterprise), seats, module packs, and billing cycles per society.",
   },
@@ -65,14 +65,14 @@ export const MANAGE_NAV: ManageNavItem[] = [
     to: "/discounts",
     label: "Discounts",
     icon: "discount",
-    status: "soon",
+    status: "live",
     blurb: "Pilot discounts, coupon codes, and time-bound promotional pricing for societies.",
   },
   {
     to: "/bills",
     label: "Generate bills",
     icon: "bills",
-    status: "soon",
+    status: "live",
     blurb:
       "Generate platform subscription invoices for societies and mark platform fees as paid.",
   },
@@ -80,7 +80,7 @@ export const MANAGE_NAV: ManageNavItem[] = [
     to: "/payments",
     label: "Payments",
     icon: "payments",
-    status: "soon",
+    status: "live",
     blurb:
       "View and reconcile Razorpay / manual platform payments by society; refunds and receipts.",
   },
@@ -88,7 +88,7 @@ export const MANAGE_NAV: ManageNavItem[] = [
     to: "/announcements",
     label: "Announcements",
     icon: "notices",
-    status: "soon",
+    status: "live",
     blurb: "Broadcast platform-wide or segmented notices to society admins and residents.",
   },
   {
@@ -102,14 +102,14 @@ export const MANAGE_NAV: ManageNavItem[] = [
     to: "/integrations",
     label: "Integrations",
     icon: "integrations",
-    status: "soon",
+    status: "live",
     blurb: "MSG91 OTP, Resend email, Firebase push, Razorpay, and Azure Blob credentials per env.",
   },
   {
     to: "/support",
     label: "Support",
     icon: "support",
-    status: "soon",
+    status: "live",
     blurb: "Platform support inbox for society admins; escalate and track resolution.",
   },
 ];
@@ -118,31 +118,8 @@ export function manageNavByPath(path: string): ManageNavItem | undefined {
   return MANAGE_NAV.find((item) => item.to === path);
 }
 
+/** Remaining future ideas shown on society Controls (not nav Coming soon). */
 export const SOCIETY_COMING_SOON = [
-  {
-    title: "Feature flags",
-    detail: "Toggle Complaints, Bills, Payments, Visitors, Bookings, and more for this society.",
-  },
-  {
-    title: "Society on / off",
-    detail: "Suspend access for all members without deleting data.",
-  },
-  {
-    title: "Subscription & plan",
-    detail: "Assign plan tier, billing cycle, seat limits, and module pack.",
-  },
-  {
-    title: "Discounts",
-    detail: "Apply pilot or promotional discount against platform fees.",
-  },
-  {
-    title: "Platform bills",
-    detail: "Generate and download SocietyHub subscription invoices.",
-  },
-  {
-    title: "Payments ledger",
-    detail: "See Razorpay and offline platform payments for this society.",
-  },
   {
     title: "Usage & limits",
     detail: "Flats, storage, SMS, and push quota against the subscribed plan.",

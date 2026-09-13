@@ -135,6 +135,7 @@ export async function listMemberships(userId: string) {
       tenantId: userRoles.tenantId,
       role: userRoles.role,
       societyName: societies.name,
+      societyStatus: societies.status,
     })
     .from(userRoles)
     .innerJoin(societies, eq(societies.id, userRoles.tenantId))
@@ -150,7 +151,7 @@ export async function listMemberships(userId: string) {
   if (platformMembership) {
     const platformRole = normalizeRole(platformMembership.role as Role);
     const allSocieties = await db
-      .select({ id: societies.id, name: societies.name })
+      .select({ id: societies.id, name: societies.name, status: societies.status })
       .from(societies)
       .where(eq(societies.isDeleted, false));
     return allSocieties.map((s) => ({
@@ -158,19 +159,23 @@ export async function listMemberships(userId: string) {
       societyName: s.name,
       role: platformRole,
       canUseAdminMode: true,
+      suspended: s.status === "suspended",
     }));
   }
 
   return collapseMembershipsByTenant(
-    rows.map((r) => {
-      const role = normalizeRole(r.role as Role);
-      return {
-        tenantId: r.tenantId,
-        societyName: r.societyName,
-        role,
-        canUseAdminMode: canUseAdminMode(role),
-      };
-    }),
+    rows
+      .filter((r) => r.societyStatus !== "suspended")
+      .map((r) => {
+        const role = normalizeRole(r.role as Role);
+        return {
+          tenantId: r.tenantId,
+          societyName: r.societyName,
+          role,
+          canUseAdminMode: canUseAdminMode(role),
+          suspended: false,
+        };
+      }),
   );
 }
 

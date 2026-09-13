@@ -9,8 +9,8 @@
 
 | Field | Value |
 |-------|--------|
-| Status | Phase 1 = working Complaints; other planned features = Coming soon in UI |
-| Version | 1.4 |
+| Status | Phase 2 demo program — Client App modules live; Manage commercial in progress |
+| Version | 1.5 |
 | MVP clients | **Two** simple responsive React apps: **client-app** (residents) + **manage** (Admin / Super Admin); phone + desktop browsers |
 | Pilot | Keshav Heights Society |
 | Source inputs | PSD, Vision, BRD, stakeholder MVP refinement |
@@ -19,7 +19,7 @@
 
 SocietyHub is a multi-tenant SaaS for housing societies. The **product roadmap includes all planned modules** (complaints, billing, payments, notices, notifications, dashboards, etc.).  
 
-**Phase 1 ships working Complaints** (plus auth and onboard). Other planned modules appear in the simple responsive UIs as **Coming soon** placeholders—so residents and admins see the full product direction without implementing those backends yet.
+**Phase 1** shipped Complaints + Society & Resident Management. **Phase 2 demo** completes Client App Bills, Payments, Notices, Notifications, Dashboard, Audit, and society ops (Visitors, Parking, Bookings, Assets, Vendors, Events), plus Manage commercial controls (plans, flags, platform invoices, support). WhatsApp inbound, marketplace, and Razorpay live checkout remain Future.
 
 **Clients (Fassport-style split):**
 
@@ -149,9 +149,24 @@ Phase 2 builds on the complaint portal. It is **in product roadmap**, not droppe
 | **Dashboards** | Secretary ops; Treasurer finance (collection %, outstanding); Committee read-only; richer resident home |
 | **Audit** | Audit log UI for bill/complaint/payment/role mutations |
 
+### 6.2a Phase 2 society ops (demo — Client App)
+
+| Area | Behavior |
+|------|----------|
+| **Visitors** | Resident pre-registers; staff check-in/out; expected vs on-site vs history |
+| **Parking** | Assign/release Manage inventory lots to flats; residents see own lots/vehicles |
+| **Bookings** | Request facility + time; conflict detection; staff confirm/cancel |
+| **Assets** | Staff register/edit assets (location, optional next-service date) |
+| **Vendors** | Staff directory (category, phone, notes) |
+| **Events** | Staff publish; residents RSVP with optional capacity |
+
+### 6.2b Phase 2 Manage commercial (demo)
+
+Plans (Starter/Growth/Enterprise), per-society subscription + feature flags, discounts, platform subscription invoices (offline mark paid), platform announcements, support tickets, integrations **health** (read-only — secrets stay in env).
+
 ### 6.3 Future (after Phase 2)
 
-Visitor, parking, clubhouse, staff attendance, CCTV requests, assets, full vendor module, events, marketplace, AI assistant, builder edition, municipal extensions, **iOS App Store listing** (same Flutter app as Android), WhatsApp notification channel.
+Staff attendance, CCTV requests, advanced vendor procurement, marketplace, AI assistant, builder edition, municipal extensions, **iOS App Store listing**, WhatsApp inbound complaint channel, Razorpay live checkout + signed webhooks.
 
 **Native Android (now):** Flutter Client App in [`apps/mobile/`](../../apps/mobile/) — Play Store; mirrors `apps/client-app` (no bulk CSV, no manage portal).
 

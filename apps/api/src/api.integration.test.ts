@@ -3123,9 +3123,20 @@ describe("api integration", () => {
     });
     expect(visitors.ok).toBe(true);
 
+    const checkIn = await fetch(`${base}/v1/visitors/${visitorBody.id}/check-in`, {
+      method: "POST",
+      headers: { Authorization: sAuth.Authorization },
+    });
+    expect(checkIn.ok).toBe(true);
+    const checkOut = await fetch(`${base}/v1/visitors/${visitorBody.id}/check-out`, {
+      method: "POST",
+      headers: { Authorization: sAuth.Authorization },
+    });
+    expect(checkOut.ok).toBe(true);
+
     const delVisitor = await fetch(`${base}/v1/visitors/${visitorBody.id}`, {
       method: "DELETE",
-      headers: { Authorization: rAuth.Authorization },
+      headers: { Authorization: sAuth.Authorization },
     });
     expect(delVisitor.ok).toBe(true);
 
@@ -3136,6 +3147,20 @@ describe("api integration", () => {
     });
     expect(parking.ok).toBe(true);
     const parkingBody = (await parking.json()) as { id: string };
+    const assign = await fetch(`${base}/v1/parking/${parkingBody.id}/assign`, {
+      method: "POST",
+      headers: sAuth,
+      body: JSON.stringify({ flatId: resident.user.flatId }),
+    });
+    expect(assign.ok).toBe(true);
+    expect(
+      (
+        await fetch(`${base}/v1/parking/${parkingBody.id}/release`, {
+          method: "POST",
+          headers: { Authorization: sAuth.Authorization },
+        })
+      ).ok,
+    ).toBe(true);
     expect(
       (
         await fetch(`${base}/v1/parking`, {
@@ -3171,6 +3196,15 @@ describe("api integration", () => {
     });
     expect(booking.ok).toBe(true);
     const bookingBody = (await booking.json()) as { id: string };
+    expect(
+      (
+        await fetch(`${base}/v1/bookings/${bookingBody.id}/status`, {
+          method: "PATCH",
+          headers: sAuth,
+          body: JSON.stringify({ status: "confirmed" }),
+        })
+      ).ok,
+    ).toBe(true);
     expect(
       (
         await fetch(`${base}/v1/bookings`, {
@@ -3243,6 +3277,22 @@ describe("api integration", () => {
     });
     expect(event.ok).toBe(true);
     const eventBody = (await event.json()) as { id: string };
+    expect(
+      (
+        await fetch(`${base}/v1/events/${eventBody.id}/rsvp`, {
+          method: "POST",
+          headers: { Authorization: rAuth.Authorization },
+        })
+      ).ok,
+    ).toBe(true);
+    expect(
+      (
+        await fetch(`${base}/v1/events/${eventBody.id}/rsvp`, {
+          method: "DELETE",
+          headers: { Authorization: rAuth.Authorization },
+        })
+      ).ok,
+    ).toBe(true);
     expect(
       (
         await fetch(`${base}/v1/events`, {
@@ -3490,10 +3540,25 @@ describe("api integration", () => {
       headers: { Authorization: rAuth.Authorization },
     });
     expect(notifs.ok).toBe(true);
-    const notificationList = (await notifs.json()) as { id: string }[];
-    expect(notificationList.length).toBeGreaterThan(0);
+    const notificationPage = (await notifs.json()) as {
+      items: { id: string }[];
+      total: number;
+    };
+    expect(notificationPage.items.length).toBeGreaterThan(0);
+    const unread = await fetch(`${base}/v1/notifications/unread-count`, {
+      headers: { Authorization: rAuth.Authorization },
+    });
+    expect(unread.ok).toBe(true);
+    expect(
+      (
+        await fetch(`${base}/v1/notifications/read-all`, {
+          method: "POST",
+          headers: { Authorization: rAuth.Authorization },
+        })
+      ).ok,
+    ).toBe(true);
     const mark = await fetch(
-      `${base}/v1/notifications/${notificationList[0]!.id}/read`,
+      `${base}/v1/notifications/${notificationPage.items[0]!.id}/read`,
       { method: "POST", headers: { Authorization: rAuth.Authorization } },
     );
     expect(mark.ok).toBe(true);
@@ -3501,7 +3566,7 @@ describe("api integration", () => {
     expect(
       (
         await fetch(
-          `${base}/v1/notifications/${notificationList[0]!.id}/read`,
+          `${base}/v1/notifications/${notificationPage.items[0]!.id}/read`,
           { method: "POST", headers: { Authorization: rAuth.Authorization } },
         )
       ).ok,
@@ -3691,7 +3756,7 @@ describe("api integration", () => {
       method: "POST",
       headers: sAuth,
       body: JSON.stringify({
-        facilityName: "Hall",
+        facilityName: `Hall-${Date.now().toString().slice(-6)}`,
         startAt: "2030-01-01 10:00:00",
         endAt: "2030-01-01 11:00:00",
       }),
@@ -3704,7 +3769,7 @@ describe("api integration", () => {
       status: string;
     };
     expect(bookingBody).toMatchObject({
-      facilityName: "Hall",
+      facilityName: expect.stringMatching(/^Hall-/),
       flatId: expect.any(String),
       status: "confirmed",
     });

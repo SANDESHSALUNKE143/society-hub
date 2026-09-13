@@ -462,6 +462,13 @@ export const authRoutes = new Elysia({ prefix: "/v1/auth" })
     if (!society) {
       throw new AppError(404, "society_not_found", "Society not found");
     }
+    if (society.status === "suspended" && claims.role !== "superadmin") {
+      throw new AppError(
+        403,
+        "society_suspended",
+        "This society is suspended. Contact SocietyHub support.",
+      );
+    }
 
     let role = claims.role;
     if (claims.role !== "superadmin") {

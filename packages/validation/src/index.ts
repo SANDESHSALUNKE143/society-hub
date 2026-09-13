@@ -639,9 +639,12 @@ export const createAssetSchema = z.object({
   category: z.string().max(80).optional().nullable(),
   location: z.string().max(200).optional().nullable(),
   purchaseDate: z.string().optional().nullable(),
+  nextServiceAt: z.string().optional().nullable(),
   value: z.number().int().optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
 });
+
+export const updateAssetSchema = createAssetSchema.partial();
 
 export const createVendorSchema = z.object({
   name: z.string().min(1).max(200),
@@ -651,10 +654,68 @@ export const createVendorSchema = z.object({
   notes: z.string().max(1000).optional().nullable(),
 });
 
+export const updateVendorSchema = createVendorSchema.partial();
+
 export const createEventSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(2000).optional().nullable(),
   startAt: z.string().optional().nullable(),
   endAt: z.string().optional().nullable(),
   location: z.string().max(200).optional().nullable(),
+  capacity: z.number().int().min(1).optional().nullable(),
+});
+
+export const updateEventSchema = createEventSchema.partial();
+
+export const updateBookingStatusSchema = z.object({
+  status: z.enum(["pending", "confirmed", "cancelled"]),
+});
+
+export const updateSocietySettingsSchema = z.object({
+  slaDays: z.number().int().min(1).max(90).optional(),
+  billingDefaults: z.string().max(2000).optional().nullable(),
+  status: z.enum(["active", "suspended"]).optional(),
+  featureFlagsJson: z.string().max(4000).optional().nullable(),
+  planId: z.string().uuid().optional().nullable(),
+});
+
+export const assignSubscriptionSchema = z.object({
+  tenantId: z.string().uuid(),
+  planId: z.string().uuid(),
+  cycle: z.enum(["monthly", "yearly"]).default("monthly"),
+});
+
+export const createDiscountSchema = z.object({
+  tenantId: z.string().uuid().optional().nullable(),
+  subscriptionId: z.string().uuid().optional().nullable(),
+  code: z.string().max(40).optional().nullable(),
+  percentOff: z.number().int().min(1).max(100).optional().nullable(),
+  flatOffPaise: z.number().int().min(1).optional().nullable(),
+  startsAt: z.string().optional().nullable(),
+  endsAt: z.string().optional().nullable(),
+});
+
+export const generatePlatformBillSchema = z.object({
+  tenantId: z.string().uuid(),
+  periodYm: z.string().regex(/^\d{4}-\d{2}$/),
+  amountPaise: z.number().int().min(1).optional(),
+  notes: z.string().max(1000).optional().nullable(),
+});
+
+export const createAnnouncementSchema = z.object({
+  title: z.string().min(1).max(200),
+  body: z.string().min(1).max(5000),
+  audience: z.enum(["all", "tenants"]).default("all"),
+  tenantIds: z.array(z.string().uuid()).optional(),
+  publishNow: z.boolean().optional(),
+});
+
+export const createSupportTicketSchema = z.object({
+  subject: z.string().min(1).max(200),
+  body: z.string().min(1).max(5000),
+});
+
+export const replySupportTicketSchema = z.object({
+  reply: z.string().min(1).max(5000),
+  close: z.boolean().optional(),
 });

@@ -28,7 +28,8 @@ export type IconName =
   | "search"
   | "plus"
   | "back"
-  | "mic";
+  | "mic"
+  | "settings";
 
 const paths: Record<IconName, ReactElement> = {
   dashboard: (
@@ -186,6 +187,12 @@ const paths: Record<IconName, ReactElement> = {
       <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z" />
       <path d="M19 10v1a7 7 0 0 1-14 0v-1" strokeLinecap="round" />
       <path d="M12 18v3M8 21h8" strokeLinecap="round" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
     </>
   ),
 };

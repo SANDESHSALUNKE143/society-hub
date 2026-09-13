@@ -358,6 +358,13 @@ export const paymentRoutes = new Elysia({ prefix: "/v1/payments" })
     return toPaymentDto(row!, flat.number);
   })
   .post("/mock", async ({ auth, body }) => {
+    if (env.isProduction) {
+      throw new AppError(
+        403,
+        "mock_disabled",
+        "Mock payment is disabled in production. Use offline UPI proof or staff cash/cheque/NEFT.",
+      );
+    }
     const claims = requireAuth(auth);
     const payload = body as { billId?: string };
     if (!payload?.billId) {
@@ -584,10 +591,26 @@ export const paymentRoutes = new Elysia({ prefix: "/v1/payments" })
       paidAt: row.payment.createdAt,
     };
   })
-  .post("/razorpay/webhook", async ({ body }) => {
-    // Dev/staging webhook: production must verify the Razorpay signature
-    // header before trusting this payload (see societyhub-razorpay-payments
-    // skill). This mock accepts { orderId, paymentId, status }.
+  .post("/razorpay/webhook", async ({ body, request }) => {
+    if (env.isProduction) {
+      if (!env.razorpayWebhookSecret) {
+        throw new AppError(
+          503,
+          "webhook_unconfigured",
+          "RAZORPAY_WEBHOOK_SECRET is required in production",
+        );
+      }
+      const signature = request.headers.get("x-razorpay-signature");
+      if (!signature) {
+        throw new AppError(401, "invalid_signature", "Missing webhook signature");
+      }
+      throw new AppError(
+        501,
+        "not_implemented",
+        "Live Razorpay webhook verification is not enabled. Use offline UPI proof.",
+      );
+    }
+    // Dev/staging mock: accepts { orderId, paymentId, status }.
     const payload = body as {
       orderId?: string;
       paymentId?: string;

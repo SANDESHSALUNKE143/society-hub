@@ -11,8 +11,17 @@ import { SocietyDetailPage } from "./pages/SocietyDetailPage";
 import { UsersPage } from "./pages/UsersPage";
 import { UserDetailPage } from "./pages/UserDetailPage";
 import { AuditPage } from "./pages/AuditPage";
-import { ComingSoonPage } from "./pages/ComingSoonPage";
-import { MANAGE_NAV } from "./manage-nav";
+import {
+  AnnouncementsPage,
+  DiscountsPage,
+  FeatureFlagsPage,
+  IntegrationsPage,
+  PlatformBillsPage,
+  PlatformPaymentsPage,
+  SocietySettingsManagePage,
+  SubscriptionsPage,
+  SupportInboxPage,
+} from "./pages/CommercialPages";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -20,8 +29,6 @@ function Protected({ children }: { children: React.ReactNode }) {
   if (!user) return <Navigate to="/login" replace />;
   return children;
 }
-
-const soonRoutes = MANAGE_NAV.filter((n) => n.status === "soon");
 
 export function App() {
   return (
@@ -45,13 +52,15 @@ export function App() {
         <Route path="users/:id" element={<UserDetailPage />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="account" element={<AccountPage />} />
-        {soonRoutes.map((item) => (
-          <Route
-            key={item.to}
-            path={item.to.replace(/^\//, "")}
-            element={<ComingSoonPage />}
-          />
-        ))}
+        <Route path="feature-flags" element={<FeatureFlagsPage />} />
+        <Route path="society-settings" element={<SocietySettingsManagePage />} />
+        <Route path="subscriptions" element={<SubscriptionsPage />} />
+        <Route path="discounts" element={<DiscountsPage />} />
+        <Route path="bills" element={<PlatformBillsPage />} />
+        <Route path="payments" element={<PlatformPaymentsPage />} />
+        <Route path="announcements" element={<AnnouncementsPage />} />
+        <Route path="integrations" element={<IntegrationsPage />} />
+        <Route path="support" element={<SupportInboxPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

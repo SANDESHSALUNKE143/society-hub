@@ -57,9 +57,9 @@ export function DashboardPage() {
         </div>
         <div className="kpi-card">
           <p className="text-xs font-semibold uppercase tracking-wide text-black/45">
-            Roadmap items
+            Future metering
           </p>
-          <p className="mt-2 font-display text-3xl text-[var(--leaf-dark)]">{soon.length}</p>
+          <p className="mt-2 font-display text-3xl text-[var(--leaf-dark)]">1</p>
         </div>
       </div>
 
@@ -92,7 +92,7 @@ export function DashboardPage() {
             </Link>
           </div>
           <p className="mt-4 text-xs text-black/45">
-            Buttons that are not live yet open a Coming soon screen.
+            Commercial nav items are live — assign plans, flags, and platform bills from the sidebar.
           </p>
         </div>
 
@@ -128,32 +128,35 @@ export function DashboardPage() {
       </div>
 
       <div className="mt-8">
-        <h2 className="mb-3 font-semibold">Platform roadmap</h2>
+        <h2 className="mb-3 font-semibold">Still future</h2>
         <p className="mb-4 text-sm text-black/55">
-          Planned Manage capabilities. Each item is visible so the team can align on scope —
-          none of these mutate data yet.
+          Usage metering and SMS quotas are not part of the demo commercial layer yet.
         </p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {soon.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className="card block p-4 transition-transform hover:-translate-y-0.5"
-              data-testid={`roadmap-${item.to.slice(1)}`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Icon name={item.icon} className="h-4 w-4 text-[var(--leaf)]" />
-                  <span className="text-sm font-semibold">{item.label}</span>
+        {soon.length === 0 ? (
+          <p className="text-sm text-black/50">All Manage nav modules are live for the demo.</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {soon.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="card block p-4 transition-transform hover:-translate-y-0.5"
+                data-testid={`roadmap-${item.to.slice(1)}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Icon name={item.icon} className="h-4 w-4 text-[var(--leaf)]" />
+                    <span className="text-sm font-semibold">{item.label}</span>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-[var(--sand)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black/50">
+                    Soon
+                  </span>
                 </div>
-                <span className="shrink-0 rounded-full bg-[var(--sand)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black/50">
-                  Soon
-                </span>
-              </div>
-              <p className="mt-2 text-xs leading-relaxed text-black/50">{item.blurb}</p>
-            </Link>
-          ))}
-        </div>
+                <p className="mt-2 text-xs leading-relaxed text-black/50">{item.blurb}</p>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

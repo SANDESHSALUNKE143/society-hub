@@ -35,9 +35,9 @@ describe("manage smoke unit", () => {
     }
   });
 
-  it("nav exposes live Users and Coming soon subscriptions", () => {
+  it("nav exposes live Users and live subscriptions", () => {
     expect(MANAGE_NAV.some((n) => n.to === "/users" && n.status === "live")).toBe(true);
-    expect(MANAGE_NAV.some((n) => n.to === "/subscriptions" && n.status === "soon")).toBe(true);
+    expect(MANAGE_NAV.some((n) => n.to === "/subscriptions" && n.status === "live")).toBe(true);
   });
 
   it("defaults society detail tab to structure", () => {
